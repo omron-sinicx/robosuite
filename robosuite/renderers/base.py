@@ -18,16 +18,7 @@ def load_renderer_config(renderer):
     Returns:
         dict: renderer default config.
     """
-    if renderer == "nvisii":
-        fname = "config/nvisii_config.json"
-    else:
-        raise ValueError(f"renderer type can only be 'nvisii' got '{renderer}'")
-
-    dir_path = os.path.dirname(__file__)
-    with open(os.path.join(dir_path, fname)) as f:
-        config = json.load(f)
-
-    return config
+    return {}
 
 
 class Renderer:

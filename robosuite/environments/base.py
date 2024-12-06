@@ -11,7 +11,7 @@ import robosuite.utils.sim_utils as SU
 from robosuite.renderers.base import load_renderer_config
 from robosuite.utils import OpenCVRenderer, SimulationError, XMLError
 from robosuite.utils.binding_utils import MjRenderContextOffscreen, MjSim
-from robosuite.utils.binding_utils import MjSimInteractive # simulator with interactive GUI
+from robosuite.utils.binding_utils import MjSimInteractive  # simulator with interactive GUI
 
 REGISTERED_ENVS = {}
 
@@ -98,11 +98,11 @@ class MujocoEnv(metaclass=EnvMeta):
         horizon=1000,
         ignore_done=False,
         hard_reset=True,
-        renderer="mujoco",
+        renderer="mjviewer",
         renderer_config=None,
     ):
         self.use_interactive_viewer = False
-        
+
         # If you're using an onscreen renderer, you must be also using an offscreen renderer!
         if has_renderer and not has_offscreen_renderer:
             has_offscreen_renderer = True
@@ -116,7 +116,7 @@ class MujocoEnv(metaclass=EnvMeta):
         self.render_visual_mesh = render_visual_mesh
         self.render_gpu_device_id = render_gpu_device_id
         self.viewer = None
-        
+
         if self.use_interactive_viewer:
             self.has_renderer = False
             self.has_offscreen_renderer = False
@@ -167,6 +167,14 @@ class MujocoEnv(metaclass=EnvMeta):
 
         if self.renderer == "mujoco" or self.renderer == "default":
             pass
+        elif self.renderer == "mjviewer":
+            from robosuite.renderers.mjviewer.mjviewer_renderer import MjviewerRenderer
+
+            if self.render_camera is not None:
+                camera_id = self.sim.model.camera_name2id(self.render_camera)
+            else:
+                camera_id = None
+            self.viewer = MjviewerRenderer(env=self, camera_id=camera_id, **self.renderer_config)
         elif self.renderer == "nvisii":
             from robosuite.renderers.nvisii.nvisii_renderer import NVISIIRenderer
 
@@ -236,7 +244,7 @@ class MujocoEnv(metaclass=EnvMeta):
 
         # Create the simulation instance
         if self.use_interactive_viewer:
-            self.sim = MjSimInteractive.from_xml_string(xml)            
+            self.sim = MjSimInteractive.from_xml_string(xml)
         else:
             self.sim = MjSim.from_xml_string(xml)
 
@@ -545,7 +553,7 @@ class MujocoEnv(metaclass=EnvMeta):
                 continue
             old_path_split = old_path.split("/")
             ind = max(loc for loc, val in enumerate(old_path_split) if val == "robosuite")  # last occurrence index
-            new_path_split = path_split + old_path_split[ind + 1 :]
+            new_path_split = path_split + old_path_split[ind + 1:]
             new_path = "/".join(new_path_split)
             elem.set("file", new_path)
 

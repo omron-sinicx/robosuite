@@ -199,7 +199,7 @@ class TwoArmWiping(TwoArmEnv):
         camera_widths=256,
         camera_depths=False,
         camera_segmentations=None,  # {None, instance, class, element}
-        renderer="mujoco",
+        renderer="mjviewer",
         renderer_config=None,
         task_config=DEFAULT_WIPE_CONFIG,
         ** kwargs,

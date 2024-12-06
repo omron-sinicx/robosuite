@@ -362,12 +362,12 @@ class ComplianceController(Controller):
         pose_error = np.concatenate([position_error, ori_error])
 
         # apply the selection matrix in gripper frame
-        selection_matrix_gripper_frame = np.diag([1, 1, 0, 1, 1, 1])
-        eef_to_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")[:3, :3]  # get just rotation matrix
-        pose_error_sel, force_torque_error_sel = self.apply_selection_matrix_gripper_frame(pose_error, force_torque_error, selection_matrix_gripper_frame, eef_to_base)
+        # selection_matrix_gripper_frame = np.diag([1, 1, 1, 1, 1, 1])
+        # eef_to_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")[:3, :3]  # get just rotation matrix
+        # pose_error_sel, force_torque_error_sel = self.apply_selection_matrix_gripper_frame(pose_error, force_torque_error, selection_matrix_gripper_frame, eef_to_base)
 
         # base frame error
-        error = self.stiffness * pose_error_sel + force_torque_error_sel
+        error = self.stiffness * pose_error + force_torque_error
 
         # Compute necessary error terms for PD controller
         derr = error - self.last_err
