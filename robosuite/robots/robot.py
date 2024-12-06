@@ -70,6 +70,7 @@ class Robot(object):
             self.composite_controller_config = composite_controller_config
         else:
             self.composite_controller_config = load_composite_controller_config(robot=robot_type)
+
         self.part_controller_config = copy.deepcopy(self.composite_controller_config.get("body_parts", {}))
 
         self.gripper = self._input2dict(None)

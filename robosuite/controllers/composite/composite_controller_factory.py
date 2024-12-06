@@ -12,7 +12,7 @@ from robosuite.utils.log_utils import ROBOSUITE_DEFAULT_LOGGER
 
 def validate_composite_controller_config(config: dict):
     # Check top-level keys
-    required_keys = ["type", "body_parts_controller_configs"]
+    required_keys = ["type", "body_parts"]
     for key in required_keys:
         if key not in config:
             ROBOSUITE_DEFAULT_LOGGER.error(f"Missing top-level key: {key}")
@@ -32,7 +32,7 @@ def is_part_controller_config(config: Dict):
     """
 
     PART_CONTROLLER_TYPES = ["JOINT_VELOCITY", "JOINT_TORQUE", "JOINT_POSITION", "OSC_POSITION", "OSC_POSE", "IK_POSE"]
-    if "body_parts_controller_configs" not in config and "type" in config:
+    if "body_parts" not in config and "type" in config:
         return config["type"] in PART_CONTROLLER_TYPES
     return False
 
@@ -126,7 +126,7 @@ def load_composite_controller_config(controller: Optional[str] = None, robot: Op
         raise
 
     validate_composite_controller_config(composite_controller_config)
-    body_parts_controller_configs = composite_controller_config.pop("body_parts_controller_configs", {})
+    body_parts_controller_configs = composite_controller_config.pop("body_parts", {})
     composite_controller_config["body_parts"] = {}
     for part_name, part_config in body_parts_controller_configs.items():
         if part_name == "arms":
