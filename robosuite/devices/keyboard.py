@@ -47,16 +47,13 @@ class Keyboard(Device):
 
         print("")
         print_command("Keys", "Command")
-        print_command("Ctrl+q", "reset simulation")
+        print_command("p", "reset simulation")
         print_command("spacebar", "toggle gripper (open/close)")
         print_command("up-right-down-left", "move horizontally in x-y plane")
         print_command(".-;", "move vertically")
         print_command("o-p", "rotate (yaw)")
         print_command("y-h", "rotate (pitch)")
         print_command("e-r", "rotate (roll)")
-        print_command("b", "toggle arm/base mode (if applicable)")
-        print_command("s", "switch active arm (if multi-armed robot)")
-        print_command("=", "switch active robot (if multi-robot environment)")
         print("")
 
     def _reset_internal_state(self):
@@ -161,25 +158,13 @@ class Keyboard(Device):
         try:
             # controls for grasping
             if key == Key.space:
-                self.grasp_states[self.active_robot][self.active_arm_index] = not self.grasp_states[self.active_robot][
-                    self.active_arm_index
-                ]  # toggle gripper
-
-            # controls for mobile base (only applicable if mobile base present)
-            elif key.char == "b":
-                self.base_modes[self.active_robot] = not self.base_modes[self.active_robot]  # toggle mobile base
+                self.grasp = not self.grasp  # toggle gripper
 
             # user-commanded reset
-            elif key.char == "q":
+            elif key.char == "p":
                 self._reset_state = 1
                 self._enabled = False
                 self._reset_internal_state()
-
-            elif key.char == "s":
-                self.active_arm_index = (self.active_arm_index + 1) % len(self.all_robot_arms[self.active_robot])
-
-            elif key.char == "=":
-                self.active_robot = (self.active_robot + 1) % self.num_robots
 
         except AttributeError as e:
             pass
