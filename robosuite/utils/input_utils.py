@@ -7,7 +7,8 @@ import numpy as np
 import robosuite as suite
 from robosuite.utils.control_utils import set_goal_orientation, set_goal_position
 import robosuite.utils.transform_utils as T
-from robosuite.devices import *
+
+# from robosuite.devices import *
 from robosuite.models.robots import *
 from robosuite.robots import *
 
@@ -79,6 +80,7 @@ def choose_multi_arm_config():
     env_configs = {
         "Opposed": "opposed",
         "Parallel": "parallel",
+        "Single-Robot": "single-robot",
     }
 
     # Select environment configuration
@@ -102,7 +104,7 @@ def choose_multi_arm_config():
     return list(env_configs.values())[k]
 
 
-def choose_robots(exclude_bimanual=False, use_humanoids=False):
+def choose_robots(exclude_bimanual=False, use_humanoids=False, exclude_single_arm=False):
     """
     Prints out robot options, and returns the requested robot. Restricts options to single-armed robots if
     @exclude_bimanual is set to True (False by default). Restrict options to humanoids if @use_humanoids is set to True (Flase by default).
@@ -115,15 +117,18 @@ def choose_robots(exclude_bimanual=False, use_humanoids=False):
         str: Requested robot name
     """
     # Get the list of robots
-    robots = {"Sawyer", "Panda", "Jaco", "Kinova3", "IIWA", "UR5e"}
+    if exclude_single_arm:
+        robots = set()
+    else:
+        robots = {"Sawyer", "Panda", "Jaco", "Kinova3", "IIWA", "UR5e", "SpotWithArmFloating"}
 
     # Add Baxter if bimanual robots are not excluded
     if not exclude_bimanual:
         robots.add("Baxter")
-        robots.add("GR1")
-        robots.add("GR1UpperBody")
+        robots.add("GR1ArmsOnly")
+        robots.add("Tiago")
     if use_humanoids:
-        robots = {"GR1", "GR1UpperBody"}
+        robots.add("GR1ArmsOnly")
 
     # Make sure set is deterministically sorted
     robots = sorted(robots)

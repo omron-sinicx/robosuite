@@ -21,12 +21,12 @@ Welcome to robosuite's documentation!
 
    modules/overview
    modules/robots
-   modules/controllers
    modules/objects
    modules/environments
    modules/sensors
    modules/devices
    modules/renderers
+   modules/controllers
 
 .. toctree::
    :maxdepth: 1
@@ -67,7 +67,6 @@ Welcome to robosuite's documentation!
    algorithms/benchmarking
    algorithms/demonstrations
    algorithms/sim2real
-   algorithms/roboturk
 
 .. toctree::
    :maxdepth: 1
