@@ -1,5 +1,7 @@
 from copy import copy
+from pathlib import Path
 import numpy as np
+import rospkg
 
 from robosuite.utils.binding_utils import MjSim
 from robosuite.utils.buffers import RingBuffer
@@ -11,10 +13,11 @@ from robosuite.controllers.parts.generic.joint_pos import JointPositionControlle
 from robosuite.controllers.parts.generic.joint_vel import JointVelocityController
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 from robosuite.utils.control_utils import *
+from ur_pykdl.ik_solver import IKSolver
+
 
 # Supported impedance modes
 COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_p_gains", "variable_stiffness_full", "variable_stiffness_diag_only"}
-IK_SOLVERS = {"jacobian_transpose", "forward_dynamics"}
 
 
 class ComplianceController(Controller):
@@ -69,6 +72,7 @@ class ComplianceController(Controller):
         joint_indexes,
         actuator_range,
         inner_controller_config,
+        iterations=1,
         error_scale=1.0,
         stiffness=500,
         kp=0.1,
@@ -88,12 +92,13 @@ class ComplianceController(Controller):
         interpolator_ori=None,
         control_delta=True,
         gripper_body_name=None,  # If none, do not compensate payload
-        ik_solver="jacobian_transpose",
         frame_of_reference="eef",  # or "robot_base"
         lite_physics=True,
+        use_kdl=False,
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
-
+        self.use_kdl = use_kdl
+        self.iterations = iterations
         self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
         self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
         self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
@@ -127,22 +132,14 @@ class ComplianceController(Controller):
         inner_controller_config['control_delta'] = True
 
         self.inner_controller = inner_controller_class(
-            sim,
-            ref_name,
-            joint_indexes,
-            actuator_range,
+            sim=sim,
+            ref_name=ref_name,
+            joint_indexes=joint_indexes,
+            actuator_range=actuator_range,
             part_name=self.part_name,
             naming_prefix=self.naming_prefix,
             **inner_controller_config,
         )
-
-        # Make sure that the ik solver is valid
-        if self.inner_controller_type == "JOINT_POSITION" or self.inner_controller_type == "JOINT_VELOCITY":
-            assert ik_solver in IK_SOLVERS, (
-                "Error: Tried to instantiate {} for unsupported "
-                "ik solver! Inputted ik solver: {}, Supported solvers: {}".format(self.inner_controller_type, ik_solver, IK_SOLVERS)
-            )
-        self.ik_solver = ik_solver
 
         # Verify the proposed impedance mode is supported
         assert compliance_mode in COMPLIANCE_MODES, (
@@ -196,7 +193,7 @@ class ComplianceController(Controller):
         self.error_scale = error_scale
 
         self.last_err = np.zeros(6)
-        self.derr_buf = RingBuffer(dim=6, length=5)
+        self.derr_buf = RingBuffer(dim=6, length=2)
         self.last_joint_vel = np.zeros(6)
 
         # limits
@@ -214,6 +211,11 @@ class ComplianceController(Controller):
         # initialize
         self.goal_pose = None  # Goal velocity desired, pre-compensation
         self.desired_force_torque = np.zeros(6)
+
+        if self.use_kdl:
+            self.ik_solver = IKSolver(robot='ur5e_powder_grinding_default', rospackage='osx_powder_grinding',
+                                      base_link='base_link', ee_link='tool0')
+            self.ik_solver.build_generic_model()
 
     def update(self):
         super().update()
@@ -390,10 +392,56 @@ class ComplianceController(Controller):
             - A moving average filter is applied to the derivative error term
             - The controller maintains state between calls through last_err and derr_buf
         """
-
         # 1. Update state
         self.update()
 
+        if self.use_kdl:
+            self.ik_solver.synchronize_joint_positions(self.joint_pos)
+
+        # if self.use_kdl:
+            # print(f"mjc ref{self.ref_pos}")
+            # print(f"mjc ref{self.pose_in_base_from_name(f'{self.ft_prefix}_eef')[:3,3]}")
+            # print(f"kdl ref{self.ik_solver.forward(self.joint_pos)[:3]}")
+            # wrist_rot = self.pose_in_base_from_name(f'gripper0_right_pestle_body')
+            # wrist_rot = T.mat2quat(wrist_rot[:3, :3])
+            # print(f"mjc w3l{wrist_rot}")
+            # print(f"kdl wl3{self.ik_solver.forward(self.joint_pos, tip_link='wrist_3_link')[3:]}")
+            # exit(0)
+            # print(f"diff {self.pose_in_base_from_name(f'{self.ft_prefix}_eef')[:3,3] - self.ik_solver.forward(self.joint_pos)[:3]}")
+            # print(f"diff {self.pose_in_base_from_name(f'gripper0_right_pestle_body')[:3,3] - self.ik_solver.forward(self.joint_pos, tip_link='wrist_3_link')[:3]}")
+
+        period = 0.02
+        for _ in range(self.iterations):
+
+            net_force, eef_to_base = self.compute_compliance_error()
+            # net_force[:3] += [1000.0,  0.00020745, -0.00047066]  # weird offset
+
+            # Compute necessary error terms for PD controller
+            cartesian_input = self.compute_spatial_controller(net_force, period)
+            # print(f"cartesian_input {cartesian_input}")
+
+            if self.frame_of_reference == "eef":
+                # convert the error back to the robot_base frame
+                cartesian_input = self.rotate_by_transformation(cartesian_input, eef_to_base)
+
+            cartesian_input *= self.error_scale  # scale the entire error here
+
+            if self.use_kdl:
+                desired_wrench = self.ik_solver.get_joint_control_cmds(period, cartesian_input)['positions']
+            else:
+                desired_wrench = cartesian_input
+            # print(f"desired_wrench {desired_wrench}")
+        # exit(0)
+        # print("")
+
+        return self.run_inner_controller(desired_wrench)
+
+    def compute_spatial_controller(self, error, period):
+        error = self.kp * error + self.kd * (error - self.last_err) / period
+        self.last_err = error
+        return error
+
+    def compute_motion_error(self):
         desired_pos = None
         # Only linear interpolator is currently supported
         if self.interpolator_pos is not None:
@@ -406,6 +454,11 @@ class ComplianceController(Controller):
         else:
             desired_pos = np.array(self.goal_pos)
 
+        position_error = (desired_pos - self.ref_pos)
+        error_norm = np.linalg.norm(position_error)
+        if error_norm > 1.0:
+            position_error = position_error / error_norm
+
         if self.interpolator_ori is not None:
             # relative orientation based on difference between current ori and ref
             self.relative_ori = orientation_error(self.ref_ori_mat, self.ori_ref)
@@ -415,118 +468,64 @@ class ComplianceController(Controller):
             desired_ori = np.array(self.goal_ori)
             ori_error = orientation_error(desired_ori, self.ref_ori_mat)
 
+        # Get rotation angle and axis from orientation error
+        ori_angle = np.linalg.norm(ori_error)
+        if ori_angle > 1.0:
+            # Scale orientation error to have magnitude of 1 radian
+            ori_error = ori_error / ori_angle
+
         # Compute desired force and torque based on errors
-        position_error = (desired_pos - self.ref_pos)
         pose_error = np.concatenate([position_error, ori_error])
 
+        return pose_error
+
+    def compute_force_error(self):
+        return self.desired_force_torque - self.eef_wrench
+
+    def compute_compliance_error(self):
+        pose_error = self.compute_motion_error()
+
+        eef_to_base = None
         if self.frame_of_reference == "eef":
             # Convert pose error to end effector frame
             eef_to_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")[:3, :3]
             # Assume that the desired force torque is given in the end effector frame
-            wrench_error = self.desired_force_torque - self.eef_wrench
             pose_error = self.rotate_by_transformation(pose_error, eef_to_base.T)
 
         elif self.frame_of_reference == "robot_base":
-            pose_error = (desired_pos - self.ref_pos)
             # Assume that the desired force torque is given in the robot base frame
-            wrench_error = (self.desired_force_torque - self.current_wrench)
-
+            pass
         else:
             raise ValueError("Unsupported frame of reference. Only 'eef' and 'robot_base' are supported.")
 
+        wrench_error = self.compute_force_error()
         pose_error_sel = self.selection_matrix * pose_error
         wrench_error_sel = (np.ones_like(self.selection_matrix) - self.selection_matrix) * wrench_error
 
         # base frame error
-        error = self.stiffness * pose_error_sel + wrench_error_sel
+        net_force = self.stiffness * pose_error_sel + wrench_error_sel
 
-        # Compute necessary error terms for PD controller
-        derr = error - self.last_err
-        self.last_err = error
-        self.derr_buf.push(derr)
-        spatial_controller = self.kp * error + self.kd * self.derr_buf.average / self.period
-
-        if self.frame_of_reference == "eef":
-            # convert the error back to the robot_base frame
-            desired_wrench = self.rotate_by_transformation(spatial_controller, eef_to_base)
-
-        if self.inner_controller_type == "JOINT_POSITION" \
-                or self.inner_controller_type == "JOINT_VELOCITY":
-            return self.use_joint_pos_vel(desired_wrench)
-        elif self.inner_controller_type == "OSC_POSE":
-            return self.use_osc(desired_wrench)
+        return net_force, eef_to_base
 
     def rotate_by_transformation(self, error, A_to_B):
         pos_error = A_to_B @ error[:3]
         ori_error = A_to_B @ error[3:]
         return np.concatenate([pos_error, ori_error])
 
-    def use_osc(self, desired_wrench):
-        self.inner_controller.set_goal(action=desired_wrench)
-        # Always run superclass call for any cleanups at the end
-        super().run_controller()
-
-        # Always run superclass call to compute actual torques from desired positions
-        return self.inner_controller.run_controller()
-
-    def use_joint_pos_vel(self, desired_wrench):
-        # TODO: fix, this does not quite work
-
-        # 2. compute the net force
-        # for-loop of iterations at some internal_period
-        # computeComplianceError() -> net_force = stiffness[m_compliance_ref_link] @ computeMotionError() + computeForceError()
-        # Optionally include selection_matrix
-
-        # 3. computeJointControlCmds(error, period)
-        # m_cartesian_input = m_error_scale * m_spatial_controller(error, period)
-        # m_simulated_joint_motion = getJointControlCmds(period, m_cartesian_input)
-        # buildGenericModel()
-        # mass_matrix, jacobian
-        # Compute joint accelerations according to: \f$ \ddot{q} = H^{-1} ( J^T f) \f$
-        # current_acceleration = inertia.inverse * jacobian.transpose * net_force
-        # current_positions = last_positions + last_velocities * period
-        # current_velocities = last_velocities + current_accelerations * period
-        # current_velocities *= 0.9
-
-        # 4. write final commands to hardware interface
-
-        if self.ik_solver == "jacobian_transpose":
-            self.compute_jacobian_transpose(desired_wrench)
-        elif self.ik_solver == "forward_dynamics":
-            self.compute_forward_dynamics(desired_wrench)
-
-        # print("goal_vel", self.period)
-
+    def run_inner_controller(self, desired_wrench):
         if self.inner_controller_type == "JOINT_POSITION":
-            self.inner_controller.set_goal(action=self.current_joint_positions)
-        else:
-            self.inner_controller.set_goal(velocities=self.current_joint_velocities)
+            # Inner controller expects relative joint positions
+            self.inner_controller.set_goal(desired_wrench - self.joint_pos)
+        elif self.inner_controller_type == "JOINT_VELOCITY":
+            self.inner_controller.set_goal(velocities=desired_wrench)
+        elif self.inner_controller_type == "OSC_POSE":
+            self.inner_controller.set_goal(action=desired_wrench)
 
         # Always run superclass call for any cleanups at the end
         super().run_controller()
 
-        self.last_joint_velocities = copy(self.current_joint_velocities)
-        self.last_joint_positions = copy(self.current_joint_positions)
-
         # Always run superclass call to compute actual torques from desired positions
         return self.inner_controller.run_controller()
-
-    def compute_forward_dynamics(self, desired_wrench):
-        # Compute joint accelerations according to: \f$ \ddot{q} = H^{-1} ( J^T f) \f$
-        self.current_joint_accelerations = np.linalg.inv(self.mass_matrix) @ self.J_full.T @ desired_wrench
-        self.current_joint_positions = self.last_joint_positions + self.last_joint_vel * self.period
-        self.current_joint_velocities = self.last_joint_velocities + self.current_joint_accelerations * self.period
-        self.current_joint_velocities *= 0.9
-
-    def compute_jacobian_transpose(self, desired_wrench):
-        # Compute joint accelerations according to: \f$ \ddot{q} = ( J^T f) \f$
-        # self.current_joint_accelerations = np.linalg.inv(self.J_full) @ desired_wrench # cartesian error to joint error
-        mass_matrix_inv = np.linalg.inv(self.mass_matrix)
-        lambda_full = np.dot(np.dot(self.J_full, mass_matrix_inv), self.J_full.transpose())
-        self.current_joint_accelerations = np.linalg.inv(self.mass_matrix) @ self.J_full.T @ desired_wrench
-        # self.current_joint_accelerations = np.dot(lambda_full, desired_wrench)
-        self.current_joint_velocities = self.last_joint_velocities + 0.5 * self.current_joint_accelerations * self.period
-        # self.current_joint_positions = self.last_joint_positions + 0.5 * self.current_joint_velocities * self.period
 
     def update_origin(self, origin_pos, origin_ori):
         super().update_origin(origin_pos, origin_ori)
@@ -612,15 +611,15 @@ class ComplianceController(Controller):
         pose_in_B = T.make_pose(pos_in_B, rot_in_B)
         return T.pose_in_A_to_pose_in_B(pose_in_A, pose_in_B)
 
-    @ property
+    @property
     def current_wrench(self):
         return self.wrench_in_base_frame_buf.average
 
-    @ property
+    @property
     def eef_wrench(self):
         return self.wrench_in_eef_frame_buf.average
 
-    @ property
+    @property
     def control_limits(self):
         """
         Returns the limits over this controller's action space, overrides the superclass property
@@ -651,6 +650,6 @@ class ComplianceController(Controller):
             # low, high = self.input_min, self.input_max
         return low, high
 
-    @ property
+    @property
     def name(self):
         return "COMPLIANCE"

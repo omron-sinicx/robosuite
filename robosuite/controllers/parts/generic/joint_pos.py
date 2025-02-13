@@ -107,7 +107,6 @@ class JointPositionController(Controller):
         input_type: Literal["delta", "absolute"] = "delta",
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
-
         super().__init__(
             sim,
             ref_name=ref_name,
@@ -155,8 +154,6 @@ class JointPositionController(Controller):
         # Impedance mode
         self.impedance_mode = impedance_mode
 
-        self.control_delta = control_delta
-
         # Add to control dim based on impedance_mode
         if self.impedance_mode == "variable":
             self.control_dim *= 3
@@ -203,7 +200,7 @@ class JointPositionController(Controller):
             # Parse action based on the impedance mode, and update kp / kd as necessary
             jnt_dim = len(self.qpos_index)
             if self.impedance_mode == "variable":
-                damping_ratio, kp, delta = action[:jnt_dim], action[jnt_dim : 2 * jnt_dim], action[2 * jnt_dim :]
+                damping_ratio, kp, delta = action[:jnt_dim], action[jnt_dim: 2 * jnt_dim], action[2 * jnt_dim:]
                 self.kp = np.clip(kp, self.kp_min, self.kp_max)
                 self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio, self.damping_ratio_min, self.damping_ratio_max)
             elif self.impedance_mode == "variable_kp":
