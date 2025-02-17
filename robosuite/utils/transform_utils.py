@@ -1153,3 +1153,19 @@ def rotate_vector_by_quaternion(vector, quaternion):
 
     # Return just the vector part (x, y, z)
     return np.array([result_x, result_y, result_z])
+
+
+def rotate_by_transformation(error, A_to_B):
+    """
+    Rotates a 6D spatial vector from one frame to another.
+
+    Args:
+        error (np.array): 6D spatial vector [linear (3), angular (3)]
+        A_to_B (np.array): 3x3 rotation matrix from frame A to frame B
+
+    Returns:
+        np.array: Rotated 6D spatial vector in new frame
+    """
+    pos_error = A_to_B @ error[:3]
+    ori_error = A_to_B @ error[3:]
+    return np.concatenate([pos_error, ori_error])

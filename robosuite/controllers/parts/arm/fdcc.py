@@ -1,7 +1,5 @@
 from copy import copy
-from pathlib import Path
 import numpy as np
-import rospkg
 
 from robosuite.utils.binding_utils import MjSim
 from robosuite.utils.buffers import RingBuffer
@@ -17,52 +15,88 @@ from ur_pykdl.ik_solver import IKSolver
 
 
 # Supported impedance modes
-COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_p_gains", "variable_stiffness_full", "variable_stiffness_diag_only"}
+COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_and_p_gains"}
 
 
-class ComplianceController(Controller):
+class ForwardDynamicsComplianceController(Controller):
     """
-    Controller for controlling robot arm via operational space control. Allows position and / or orientation control
-    of the robot's end effector. For detailed information as to the mathematical foundation for this controller, please
-    reference http://khatib.stanford.edu/publications/pdfs/Khatib_1987_RA.pdf
+    Controller for hybrid force-position control of robot arms. Combines position/orientation control with force/torque control
+    in operational space.
 
-    NOTE: Control input actions can either be taken to be relative to the current position / orientation of the
-    end effector or absolute values. In either case, a given action to this controller is assumed to be of the form:
-    (x, y, z, ax, ay, az) if controlling pos and ori or simply (x, y, z) if only controlling pos
+    The controller operates in either end-effector ('eef') or robot base ('robot_base') frame and uses:
+    - Position/orientation control through stiffness-based pose error
+    - Force/torque control through wrench error 
+    - PD control for dynamic response
 
     Args:
         sim (MjSim): Simulator instance this controller will pull robot state updates from
 
-        eef_name (str): Name of controlled robot arm's end effector (from robot XML)
+        ref_name (str): Name of controlled robot arm's reference frame (from robot XML)
 
         joint_indexes (dict): Each key contains sim reference indexes to relevant robot joint information, namely:
-
             :`'joints'`: list of indexes to relevant robot joints
             :`'qpos'`: list of indexes to relevant robot joint positions
             :`'qvel'`: list of indexes to relevant robot joint velocities
 
         actuator_range (2-tuple of array of float): 2-Tuple (low, high) representing the robot joint actuator range
 
-        input_max (float or Iterable of float): Maximum above which an inputted action will be clipped. Can be either be
-            a scalar (same value for all action dimensions), or a list (specific values for each dimension). If the
-            latter, dimension should be the same as the control dimension for this controller
+        inner_controller_config (dict): Configuration for the inner controller, containing:
+            :`'type'`: Type of inner controller - one of "JOINT_POSITION", "JOINT_VELOCITY", or "OSC_POSE"
+            :`'input_max'`, `'input_min'`, `'output_max'`, `'output_min'`: Control input/output limits
+            :Additional controller-specific parameters
 
-        input_min (float or Iterable of float): Minimum below which an inputted action will be clipped. Can be either be
-            a scalar (same value for all action dimensions), or a list (specific values for each dimension). If the
-            latter, dimension should be the same as the control dimension for this controller
+        iterations (int): Number of iterations to run the controller for each step (default: 1)
 
-        output_max (float or Iterable of float): Maximum which defines upper end of scaling range when scaling an input
-            action. Can be either be a scalar (same value for all action dimensions), or a list (specific values for
-            each dimension). If the latter, dimension should be the same as the control dimension for this controller
+        error_scale (float): Scaling factor applied to the computed error (default: 1.0)
 
-        output_min (float or Iterable of float): Minimum which defines upper end of scaling range when scaling an input
-            action. Can be either be a scalar (same value for all action dimensions), or a list (specific values for
-            each dimension). If the latter, dimension should be the same as the control dimension for this controller
+        stiffness (float or array): Cartesian stiffness values for each dimension (default: 500)
 
-        TODO: add additional docs
+        kp (float or array): Proportional gains for PD control (default: 0.1)
+
+        kd (float or array): Derivative gains for PD control (default: 0.0)
+
+        compliance_mode (str): Mode of compliance control. One of:
+            :`'fixed'`: Fixed stiffness values
+            :`'variable_stiffness'`: Variable diagonal stiffness matrix
+            :`'variable_stiffness_and_p_gains'`: Variable stiffness and P gains
+
+        policy_freq (int): Control policy frequency in Hz (default: 20)
+
+        force_limits (2-tuple): Min/max force limits in N (default: (-50.0, 50.0))
+
+        torque_limits (2-tuple): Min/max torque limits in Nm (default: (-10.0, 10.0))
+
+        ft_buffer_size (int): Size of force/torque measurement buffer (default: 10)
+
+        stiffness_limits (2-tuple): Min/max stiffness values (default: (50, 500))
+
+        kp_limits (2-tuple): Min/max proportional gain values (default: (0, 300))
+
+        damping_ratio_limits (2-tuple): Min/max damping ratio values (default: (0, 100))
+
+        selection_matrix (array): 6D vector specifying which dimensions to control with position vs force (default: ones(6))
+
+        position_limits (array or None): Position limits for the end-effector (default: None)
+
+        orientation_limits (array or None): Orientation limits for the end-effector (default: None)
+
+        interpolator_pos (Interpolator): Position interpolator for smooth transitions (default: None)
+
+        interpolator_ori (Interpolator): Orientation interpolator for smooth transitions (default: None)
+
+        control_delta (bool): If True, interpret control inputs as relative changes (default: True)
+
+        gripper_body_name (str): Name of gripper body for payload compensation (default: None)
+
+        frame_of_reference (str): Frame for control computations - either "eef" or "robot_base" (default: "eef")
+
+        lite_physics (bool): Whether to use simplified physics computations (default: True)
+
+        use_kdl (bool): Whether to use KDL for inverse kinematics (default: False)
 
     Raises:
-        AssertionError: [Invalid compliance mode]
+        AssertionError: If an invalid compliance_mode is specified
+        ValueError: If an invalid inner_controller_type is specified
     """
 
     def __init__(
@@ -155,7 +189,7 @@ class ComplianceController(Controller):
         self.output_min = self.nums2array(inner_controller_config['output_min'], self.control_dim)
 
         self.control_dim += 6  # + force/torque
-        self.force_min = self.nums2array(force_limits[0], 3)  # TODO Q: are these imposed anywhere?
+        self.force_min = self.nums2array(force_limits[0], 3)
         self.force_max = self.nums2array(force_limits[1], 3)
         self.torque_min = self.nums2array(torque_limits[0], 3)
         self.torque_max = self.nums2array(torque_limits[1], 3)
@@ -168,17 +202,8 @@ class ComplianceController(Controller):
         # Add to control dim based on compliance_mode
         if self.compliance_mode == "variable_stiffness":
             self.control_dim += 6
-        elif self.compliance_mode == "variable_stiffness_p_gains":
+        elif self.compliance_mode == "variable_stiffness_and_p_gains":
             self.control_dim += 12
-        elif self.compliance_mode == "variable_stiffness_diag_only":
-            pass
-        elif self.compliance_mode == "variable_stiffness_full":
-            self.control_dim = 18
-
-            self.stiffness = self.nums2array(stiffness, 12)
-            # stiffness limits
-            self.stiffness_min = self.nums2array(stiffness_limits[0], 12)
-            self.stiffness_max = self.nums2array(stiffness_limits[1], 12)
 
         self.use_delta = control_delta
 
@@ -193,8 +218,6 @@ class ComplianceController(Controller):
         self.error_scale = error_scale
 
         self.last_err = np.zeros(6)
-        self.derr_buf = RingBuffer(dim=6, length=2)
-        self.last_joint_vel = np.zeros(6)
 
         # limits
         self.position_limits = np.array(position_limits) if position_limits is not None else position_limits
@@ -256,20 +279,22 @@ class ComplianceController(Controller):
 
     def set_goal(self, action, set_pos=None, set_ori=None):
         """
-        Sets goal based on input @action. If self.impedance_mode is not "fixed", then the input will be parsed into the
-        delta values to update the goal position / pose and the kp and/or damping_ratio values to be immediately updated
-        internally before executing the proceeding control loop.
-
-        Note that @action expected to be in the following format, based on impedance mode!
-
-            :Mode `'fixed'`: [joint pos command] # TODO change name in docs to eef pose
-            :Mode `'variable'`: [damping_ratio values, kp values, joint pos command]
-            :Mode `'variable_kp'`: [kp values, joint pos command]
+        Sets the controller's goal state based on the input action. Processes the action according to the compliance mode
+        and updates internal controller parameters.
 
         Args:
-            action (Iterable): Desired relative joint position goal state
-            set_pos (Iterable): If set, overrides @action and sets the desired absolute eef position goal state
-            set_ori (Iterable): IF set, overrides @action and sets the desired absolute eef orientation goal state
+            action (np.array): Control action array with format depending on compliance_mode:
+                - 'fixed': [delta_pose (6), desired_wrench (6)]
+                - 'variable_stiffness': [delta_pose (6), desired_wrench (6), stiffness (6)]
+                - 'variable_stiffness_and_p_gains': [delta_pose (6), desired_wrench (6), stiffness (6), kp (6)]
+
+            set_pos (np.array, optional): If provided, directly sets the absolute goal position, overriding action
+            set_ori (np.array, optional): If provided, directly sets the absolute goal orientation as a rotation matrix
+
+        Note:
+            - For delta_pose: First 3 values are position, last 3 are axis-angle orientation
+            - For desired_wrench: First 3 values are force (N), last 3 are torque (Nm)
+            - Stiffness and kp values are clipped to their configured limits
         """
         # Update state
         self.update()
@@ -277,44 +302,20 @@ class ComplianceController(Controller):
         if self.compliance_mode == "variable_stiffness":
             delta, desired_ft, stiffness = action[:6], action[6:12], action[12:]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
-        elif self.compliance_mode == "variable_stiffness_p_gains":
+        elif self.compliance_mode == "variable_stiffness_and_p_gains":
             delta, desired_ft, stiffness, kp = action[:6], action[6:12], action[12:18], action[18:]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
-        elif self.compliance_mode == "variable_stiffness_diag_only":
-            stiffness, delta = action[:6], action[6:]
-            self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
-            desired_ft = np.zeros(6)
-        elif self.compliance_mode == "variable_stiffness_full":
-            cholesky_stiffness, delta = action[:12], action[12:]
-            stiffness_pos_matrix = T.cholesky_vector_to_spd(cholesky_stiffness[:6])
-            stiffness_ori_matrix = T.cholesky_vector_to_spd(cholesky_stiffness[6:])
-            stiffness = np.concatenate([stiffness_pos_matrix.flatten(), stiffness_ori_matrix.flatten()])
-
-            self.stiffness = np.zeros_like(stiffness)
-
-            # assume positive diagonal stiffness
-            diag_indices = [0, 4, 8, 9, 13, 17]
-            self.stiffness[diag_indices] = np.clip(stiffness[diag_indices], self.stiffness_min[0], self.stiffness_max[0])
-            # other values have no min value, it can even be negative up to the -stiffness_max value
-            other_indices = np.ones(len(stiffness), bool)
-            other_indices[diag_indices] = False
-            self.stiffness[other_indices] = np.sign(stiffness[other_indices]) * np.clip(np.abs(stiffness[other_indices]), 0, self.stiffness_max[0])
-
-            # TODO:(cambel) Here we only use the diagonal values
-            self.stiffness = self.stiffness[diag_indices]
-            desired_ft = np.zeros(6)
         else:  # This is case "fixed"
             delta, desired_ft = action[:6], action[6:]
+
         desired_ft[:3] = np.clip(desired_ft[:3], self.force_min, self.force_max)
         desired_ft[3:] = np.clip(desired_ft[3:], self.torque_min, self.torque_max)
+        self.desired_force_torque = desired_ft
 
         # If we're using deltas, interpret actions as such
         if self.use_delta:
-            if delta is not None:
-                scaled_delta = self.scale_action(delta)
-            else:
-                scaled_delta = []
+            scaled_delta = self.scale_action(delta)
         # Else, interpret actions as absolute values
         else:
             if set_pos is None:
@@ -325,7 +326,6 @@ class ComplianceController(Controller):
             scaled_delta = np.zeros_like(delta)
 
         # We only want to update goal orientation if there is a valid delta ori value OR if we're using absolute ori
-        # use math.isclose instead of numpy because numpy is slow
         self.goal_ori = set_goal_orientation(
             scaled_delta[3:], self.ref_ori_mat, orientation_limit=self.orientation_limits, set_ori=set_ori
         )
@@ -343,16 +343,9 @@ class ComplianceController(Controller):
             )  # goal is the total orientation error
             self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
 
-        self.desired_force_torque = desired_ft
-
     def run_controller(self):
         """
-        Executes a hybrid force-position controller that combines position/orientation control with force/torque control.
-
-        The controller operates in either end-effector ('eef') or robot base ('robot_base') frame and uses:
-        - Position/orientation control through stiffness-based pose error
-        - Force/torque control through wrench error 
-        - PD control for dynamic response
+        Executes one step of the hybrid force-position controller.
 
         The control flow is:
         1. Update current robot state
@@ -366,12 +359,6 @@ class ComplianceController(Controller):
 
         Returns:
             np.array: Command torques for the robot joints
-
-        Notes:
-            - Uses interpolation for smooth position/orientation transitions
-            - Selection matrix determines position vs force controlled dimensions
-            - Maintains error state between calls for derivative term
-            - Can use KDL for inverse kinematics if enabled
         """
         # 1. Update state
         self.update()
@@ -390,7 +377,7 @@ class ComplianceController(Controller):
 
             if self.frame_of_reference == "eef":
                 # convert the error back to the robot_base frame
-                cartesian_input = self.rotate_by_transformation(cartesian_input, eef_to_base)
+                cartesian_input = T.rotate_by_transformation(cartesian_input, eef_to_base)
 
             cartesian_input *= self.error_scale  # scale the entire error here
 
@@ -404,11 +391,28 @@ class ComplianceController(Controller):
         return self.run_inner_controller(desired_wrench)
 
     def compute_spatial_controller(self, error, period):
-        error = self.kp * error + self.kd * (error - self.last_err) / period
-        self.last_err = error
-        return error
+        """
+        Implements a PD controller in operational space.
+
+        Args:
+            error (np.array): Current 6D error vector (position and orientation)
+            period (float): Time period for derivative computation
+
+        Returns:
+            np.array: Control output combining proportional and derivative terms
+        """
+        control_error = self.kp * error + self.kd * (error - self.last_err) / period
+        self.last_err = np.copy(control_error)
+        return control_error
 
     def compute_motion_error(self):
+        """
+        Computes the pose error between current and desired end-effector state.
+        Handles interpolation if enabled.
+
+        Returns:
+            np.array: 6D pose error vector [position_error (3), orientation_error (3)]
+        """
         desired_pos = None
         # Only linear interpolator is currently supported
         if self.interpolator_pos is not None:
@@ -447,9 +451,24 @@ class ComplianceController(Controller):
         return pose_error
 
     def compute_force_error(self):
+        """
+        Computes the wrench error between desired and measured forces/torques.
+
+        Returns:
+            np.array: 6D wrench error vector [force_error (3), torque_error (3)]
+        """
         return self.desired_force_torque - self.eef_wrench
 
     def compute_compliance_error(self):
+        """
+        Computes the total compliance error by combining pose and wrench errors according to the selection matrix.
+        Handles frame transformations between end-effector and base frames.
+
+        Returns:
+            tuple:
+                - np.array: Combined 6D compliance error vector
+                - np.array or None: Transform from eef to base frame if in eef mode
+        """
         pose_error = self.compute_motion_error()
 
         eef_to_base = None
@@ -457,7 +476,7 @@ class ComplianceController(Controller):
             # Convert pose error to end effector frame
             eef_to_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")[:3, :3]
             # Assume that the desired force torque is given in the end effector frame
-            pose_error = self.rotate_by_transformation(pose_error, eef_to_base.T)
+            pose_error = T.rotate_by_transformation(pose_error, eef_to_base.T)
 
         elif self.frame_of_reference == "robot_base":
             # Assume that the desired force torque is given in the robot base frame
@@ -474,19 +493,26 @@ class ComplianceController(Controller):
 
         return net_force, eef_to_base
 
-    def rotate_by_transformation(self, error, A_to_B):
-        pos_error = A_to_B @ error[:3]
-        ori_error = A_to_B @ error[3:]
-        return np.concatenate([pos_error, ori_error])
-
     def run_inner_controller(self, desired_wrench):
+        """
+        Executes the configured inner controller with the computed desired wrench.
+
+        Args:
+            desired_wrench (np.array or dict): Control command in appropriate format for inner controller:
+                - For JOINT_POSITION: dict with 'positions' key
+                - For JOINT_VELOCITY: 6D joint velocity array
+                - For OSC_POSE: 6D cartesian command array
+
+        Returns:
+            np.array: Command torques for the robot joints
+        """
         if self.inner_controller_type == "JOINT_POSITION":
             # Inner controller expects relative joint positions
             self.inner_controller.set_goal(desired_wrench['positions'])
             # position_error = desired_wrench['positions'] - self.joint_pos
             # # vel_pos_error = desired_wrench['velocities'] - self.joint_vel
             # vel_pos_error = - self.joint_vel
-            # kp = np.array([10]*6)
+            # kp = np.array([1]*6)
             # kd = np.array([0.01]*6)
             # desired_torque = np.multiply(np.array(position_error), kp) + np.multiply(vel_pos_error, kd)
 
@@ -494,7 +520,7 @@ class ComplianceController(Controller):
             # self.torques = np.dot(self.mass_matrix, desired_torque) + self.torque_compensation
             # return self.torques
         elif self.inner_controller_type == "JOINT_VELOCITY":
-            self.inner_controller.set_goal(velocities=desired_wrench)
+            self.inner_controller.set_goal(velocities=desired_wrench['velocities'])
         elif self.inner_controller_type == "OSC_POSE":
             self.inner_controller.set_goal(action=desired_wrench)
 

@@ -46,7 +46,11 @@ DEFAULT_GRIND_CONFIG = {
     "spawn_mortar": True,
 
     "reset_with_ik": True,
+
+    # Trajectory settings
     "randomize_reference_trajectory": False,
+    "num_waypoints": 1000,
+    "duration": 10,
 
     # misc settings
     "evaluate": False,
@@ -57,6 +61,14 @@ DEFAULT_GRIND_CONFIG = {
     "get_info": False,  # Whether to grab info after each env step if not
     "use_robot_obs": True,  # if we use robot observations (proprioception) as input to the policy
     "early_terminations": True,  # Whether we allow for early terminations or not
+
+    # Mortar parameters
+    "mortar_diameter": 0.08,  # diameter of the mortar (m)
+    "mortar_inner_height": 0.007,  # height of the mortar inner surface (m)
+    "desired_height": 0.005,  # desired grinding height (m)
+    "inclination_fraction": 0.5,  # fraction of mortar radius for inclination
+    "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
+    "initial_position": [0, 0, 0.85],  # initial position offset
 }
 
 
@@ -230,7 +242,6 @@ class OSXGrind(ManipulationEnv):
         ), "Tried to specify gripper other than Grinder in Grind environment!"
 
         self.horizon = horizon
-
         self.task_config = task_config
 
         self.print_results = self.task_config["print_results"]
@@ -268,6 +279,7 @@ class OSXGrind(ManipulationEnv):
         self.task_box = np.array([self.mortar_radius, self.mortar_radius, self.mortar_height+self.table_offset[2]]) + self.mortar_space_threshold_max
 
         # references to follow
+        self.num_waypoints = self.task_config["num_waypoints"]
         self.current_waypoint_index = 0
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         # Add an extra waypoint to make sure that every waypoint is
@@ -285,6 +297,9 @@ class OSXGrind(ManipulationEnv):
             self.reference_force = np.array([[0, 0, desired_contact_force, 0, 0, 0]] * self.trajectory_len)
         else:
             self.reference_force = reference_force
+        self.duration = self.task_config["duration"]
+        self.step_duration = max(1.0/500, self.duration / float(self.trajectory_len))  # Minimum 500Hz like in real UR5e
+        self.last_step_time = 0
 
         self.tracking_trajectory_threshold = self.task_config['tracking_trajectory_threshold']
         self.tracking_trajectory_method = self.task_config['tracking_trajectory_method']
@@ -360,26 +375,35 @@ class OSXGrind(ManipulationEnv):
                 - virtual force
                 - action kp?
         """
-
         action_kp = np.interp(action, [-1, 1], [0.001, 1.0])  # limits for kp (action from sac)
         # change controller params
         # self.robots[0].composite_controller.part_controllers['right'].kp[self.action_indices] = action_kp[self.action_indices]
-
-        pos_rot_action = np.zeros(6)
 
         self.ft_action = self.reference_force[self.current_waypoint_index]
 
         # send action with both pose and wrench to the env
         # send the ft action already in base frame
-        ctr_action = np.concatenate([pos_rot_action, self.ft_action])
 
         # online tracking of the reference trajectory
         residual_action = self._compute_relative_distance()
         factor = 1 - np.tanh(50 * self.tracking_error)
         scale_factor = np.interp(factor, [0.0, 1.0], [1, 10])  # TODO get some good values for per step and per thresh
-        ctr_action[:6] += residual_action * scale_factor
+        # ctr_action[:6] += residual_action  * scale_factor
+        # ctr_action[:6] += residual_action  # * scale_factor
+
+        pos_rot_action = residual_action
+        # pos_rot_action = np.zeros(6)
+        # pos_rot_action[:3] = self.reference_trajectory[self.current_waypoint_index][:3]
+        # pos_rot_action[3:6] = T.quat2axisangle(self.reference_trajectory[self.current_waypoint_index][3:])
+
+        ctr_action = np.concatenate([pos_rot_action, self.ft_action])
 
         self.__log_details__(action, residual_action)
+        if self.timestep % 50 == 0:
+            print(f"step {self.timestep}")
+            print(f"error {self.tracking_error}")
+            print(f"residual_action {residual_action}")
+            print(f"ctr_action {ctr_action}")
         return super().step(ctr_action)
 
     def reward(self, action=None):
@@ -421,7 +445,8 @@ class OSXGrind(ManipulationEnv):
                 step_penalty = -1
                 # TODO: reward for finishing faster?
 
-                reward += force_reward + traj_reward + step_penalty
+                reward = force_reward + traj_reward + step_penalty
+                # print(f"{force_reward=} {traj_reward=} {step_penalty=}")
 
                 if self.log_rewards:
                     self.log_dict['rewards']['traj_error'].append(traj_reward)
@@ -453,7 +478,8 @@ class OSXGrind(ManipulationEnv):
         # track error of the actions controlled by the policy
         tracking_pos = T.rotate_vector_by_quaternion(relative_distance[:3], ref_quat)
         self.tracking_error = np.linalg.norm(np.concatenate([tracking_pos*np.array([1, 1, 0.]), relative_distance[3:]]))
-        # print(f"{tracking_pos=}", f"{self.tracking_error}")
+        # if self.timestep % 10 == 0:
+        #     print(f"{tracking_pos*100}", f"{self.tracking_error*100}")
         return relative_distance
 
     def _compute_relative_wrenches(self):
@@ -643,6 +669,8 @@ class OSXGrind(ManipulationEnv):
 
         super()._reset_internal()
 
+        self.last_step_time = self.sim.data._data.time
+
         # Reset all object positions using initializer sampler if we're not directly loading from an xml
         if self.spawn_mortar and not self.deterministic_reset:
 
@@ -677,19 +705,24 @@ class OSXGrind(ManipulationEnv):
         if done and self.print_results:
             print("Max steps per episode reached")
 
+        # Only update waypoint if we haven't reached the end of trajectory
         if self.current_waypoint_index < self.trajectory_len - 1:
-            if self.tracking_trajectory_method == 'per_step':
-                self.current_waypoint_index += 1
 
-            elif self.tracking_trajectory_method == 'per_error_threshold':
-                if self.tracking_error < self.tracking_trajectory_threshold:
+            if self.sim.data._data.time - self.last_step_time > self.step_duration:
+                if self.tracking_trajectory_method == 'per_step':  # equivalent to DURATION mode
                     self.current_waypoint_index += 1
+                    self.last_step_time = self.sim.data._data.time
 
-            # update in rendering the cylinder representing the normal force/direction
-            # assume orientation is given perpendicular to mortar surface
-            offset_cylinder_half_size = T.rotate_vector_by_quaternion([0, 0, -self.cylinder_length], self.reference_trajectory[self.current_waypoint_index][3:])
-            self.sim.model.body_pos[self.force_cylinder_body_id] = self.reference_trajectory[self.current_waypoint_index][:3] + offset_cylinder_half_size
-            self.sim.model.body_quat[self.force_cylinder_body_id] = T.convert_quat(self.reference_trajectory[self.current_waypoint_index][3:], "wxyz")
+                elif self.tracking_trajectory_method == 'per_error_threshold':  # equivalent to TRACKING_ERROR mode
+                    if self.tracking_error < self.tracking_trajectory_threshold:
+                        self.current_waypoint_index += 1
+                        self.last_step_time = self.sim.data._data.time
+
+                # update in rendering the cylinder representing the normal force/direction
+                # assume orientation is given perpendicular to mortar surface
+                offset_cylinder_half_size = T.rotate_vector_by_quaternion([0, 0, -self.cylinder_length], self.reference_trajectory[self.current_waypoint_index][3:])
+                self.sim.model.body_pos[self.force_cylinder_body_id] = self.reference_trajectory[self.current_waypoint_index][:3] + offset_cylinder_half_size
+                self.sim.model.body_quat[self.force_cylinder_body_id] = T.convert_quat(self.reference_trajectory[self.current_waypoint_index][3:], "wxyz")
 
         return reward, done, info
 
@@ -783,16 +816,24 @@ class OSXGrind(ManipulationEnv):
         return not np.any(abs_ft > self.force_torque_limits)
 
     def _randomize_reference_trajectory(self):
-        mortar_diameter = 0.08
-        mortar_inner_height = 0.007
-        num_waypoints = 150
-        desired_height = 0.005
-        inclination_fraction = 0.5
-        initial_orientation = [-0.707,  0.707, 0.0,  0.0]
-        initial_position = [0, 0,  0.8 + mortar_inner_height]
-        reference_trajectory = generate_mortar_trajectory(mortar_diameter=mortar_diameter, desired_height=desired_height,
-                                                          n_steps=num_waypoints, default_quat=initial_orientation, fraction=inclination_fraction)
+        mortar_diameter = self.task_config["mortar_diameter"]
+        mortar_inner_height = self.task_config["mortar_inner_height"]
+        desired_height = self.task_config["desired_height"]
+        inclination_fraction = self.task_config["inclination_fraction"]
+        initial_orientation = self.task_config["initial_orientation"]
+        initial_position = self.task_config["initial_position"]
+        initial_position[2] += mortar_inner_height  # Add inner height to z position
+
+        reference_trajectory = generate_mortar_trajectory(
+            mortar_diameter=mortar_diameter,
+            desired_height=desired_height,
+            n_steps=self.num_waypoints,
+            default_quat=initial_orientation,
+            fraction=inclination_fraction
+        )
         reference_trajectory[:, :3] += initial_position
+        # reference_trajectory[1:, :3] += [0.0, 0.0, 0.01]
+        reference_trajectory[:, 3:] = initial_orientation
         return reference_trajectory
 
     @property

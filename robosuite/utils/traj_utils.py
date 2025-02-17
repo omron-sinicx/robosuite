@@ -1,6 +1,9 @@
+from scipy.interpolate import CubicSpline
+from dataclasses import dataclass
 import abc
 
 import numpy as np
+import quaternion
 
 import robosuite.utils.transform_utils as T
 
@@ -232,6 +235,150 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
 
     # Step 7: Combine positions and orientations
     trajectory = np.column_stack((x, y, z, quaternions))
+
+    # Add initial pose to the end of the trajectory to complete the circle
     trajectory = np.concatenate([trajectory, [trajectory[0]]])
 
     return trajectory
+
+
+@dataclass
+class TrajectoryState:
+    position: np.ndarray          # Current position
+    orientation: quaternion.quaternion  # Current orientation
+    linear_velocity: np.ndarray   # Linear velocity
+    angular_velocity: np.ndarray  # Angular velocity
+    linear_acceleration: np.ndarray    # Linear acceleration
+    angular_acceleration: np.ndarray   # Angular acceleration
+
+
+class MinimumJerkTrajectory:
+    def __init__(self, waypoints, waypoint_rotations, duration, dt):
+        """
+        Initialize minimum jerk trajectory through waypoints.
+
+        Args:
+            waypoints (np.ndarray): Array of shape (N, 3) containing position waypoints
+            waypoint_rotations (list): List of N quaternions for orientations
+            duration (float): Total duration of trajectory
+            dt (float): Time step for trajectory
+        """
+        self.waypoints = waypoints
+        self.rotations = quaternion.as_quat_array(np.roll(waypoint_rotations, 1, axis=-1))
+        self.duration = duration
+        self.dt = dt
+        self.num_points = len(waypoints)
+
+        # Time parameterization
+        self.times = np.linspace(0, duration, self.num_points)
+        self.trajectory_times = np.arange(0, duration + dt, dt)
+
+        # Generate trajectories
+        self._generate_position_trajectory()
+        self._generate_rotation_trajectory()
+
+    def _generate_position_trajectory(self):
+        """
+        Generate minimum jerk trajectory for positions using cubic splines
+        """
+        # Create cubic spline for each dimension
+        self.splines = []
+        for dim in range(3):
+            # Get positions for this dimension
+            pos = self.waypoints[:, dim]
+
+            # For minimum jerk, we set zero velocity and acceleration at endpoints
+            # Create natural cubic spline (second derivative zero at endpoints)
+            spline = CubicSpline(self.times, pos, bc_type='natural')
+            self.splines.append(spline)
+
+        # Compute positions, velocities, and accelerations
+        self.positions = np.zeros((len(self.trajectory_times), 3))
+        self.velocities = np.zeros_like(self.positions)
+        self.accelerations = np.zeros_like(self.positions)
+
+        for i, t in enumerate(self.trajectory_times):
+            for dim in range(3):
+                self.positions[i, dim] = self.splines[dim](t)
+                self.velocities[i, dim] = self.splines[dim].derivative(1)(t)
+                self.accelerations[i, dim] = self.splines[dim].derivative(2)(t)
+
+    def _generate_rotation_trajectory(self):
+        """
+        Generate smooth quaternion trajectory using SLERP between waypoints
+        """
+        self.quaternions = []
+        self.angular_velocities = []
+        self.angular_accelerations = []
+
+        # Time between waypoints
+        segment_duration = self.duration / (self.num_points - 1)
+        steps_per_segment = int(segment_duration / self.dt)
+
+        for i in range(self.num_points - 1):
+            q0 = self.rotations[i]
+            q1 = self.rotations[i+1]
+
+            # Generate interpolation parameters
+            t = np.linspace(0, 1, steps_per_segment)
+
+            # Perform SLERP for each timestep
+            for ti in t:
+                # SLERP
+                qi = quaternion.slerp_evaluate(q0, q1, ti)
+                self.quaternions.append(qi)
+
+                # Compute angular velocity (finite difference)
+                if len(self.quaternions) > 1:
+                    dq = self.quaternions[-1] * self.quaternions[-2].conjugate()
+                    angle = 2 * np.arccos(np.clip(dq.w, -1.0, 1.0))
+                    if abs(angle) < 1e-10:
+                        w = np.zeros(3)
+                    else:
+                        axis = np.array([dq.x, dq.y, dq.z])
+                        axis = axis / np.sin(angle/2)
+                        w = (angle / self.dt) * axis
+                    self.angular_velocities.append(w)
+                else:
+                    self.angular_velocities.append(np.zeros(3))
+
+        # Add final orientation
+        self.quaternions.append(self.rotations[-1])
+        self.angular_velocities.append(np.zeros(3))
+
+        # Compute angular acceleration (finite difference)
+        self.angular_accelerations = []
+        for i in range(len(self.angular_velocities)):
+            if i == 0:
+                acc = np.zeros(3)
+            else:
+                acc = (self.angular_velocities[i] - self.angular_velocities[i-1]) / self.dt
+            self.angular_accelerations.append(acc)
+
+        # expose quaternion as x,y,z,w instead of the numpy-quaternion format w,x,y,z
+        self.quaternions = np.roll(quaternion.as_float_array(), -1, axis=-1)
+
+    def get_state(self, t):
+        """
+        Get trajectory state at time t
+
+        Args:
+            t (float): Time at which to sample trajectory
+
+        Returns:
+            TrajectoryState: State of the trajectory at time t
+        """
+        # Clip time to trajectory duration
+        t = np.clip(t, 0, self.duration)
+
+        # Get index for current time
+        idx = int(t / self.dt)
+
+        return TrajectoryState(
+            position=self.positions[idx],
+            orientation=self.quaternions[idx],
+            linear_velocity=self.velocities[idx],
+            angular_velocity=self.angular_velocities[idx],
+            linear_acceleration=self.accelerations[idx],
+            angular_acceleration=self.angular_accelerations[idx]
+        )
