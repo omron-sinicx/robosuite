@@ -1169,3 +1169,19 @@ def rotate_by_transformation(error, A_to_B):
     pos_error = A_to_B @ error[:3]
     ori_error = A_to_B @ error[3:]
     return np.concatenate([pos_error, ori_error])
+
+
+def rotate_quaternion_by_rpy(rpy, q_in, rotated_frame=False):
+    """
+    if rotated_frame == True, Apply RPY rotation in the reference frame of the quaternion.
+
+    Otherwise, Apply RPY rotation in the rotated frame (the one to which the quaternion has rotated the reference frame).
+    """
+    q_rot = mat2quat(euler2mat(rpy))
+
+    if rotated_frame:
+        q_rotated = quat_multiply(q_in, q_rot)
+    else:
+        q_rotated = quat_multiply(q_rot, q_in)
+
+    return q_rotated

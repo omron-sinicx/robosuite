@@ -383,7 +383,6 @@ class ComplianceController(Controller):
         for _ in range(self.iterations):
 
             net_force, eef_to_base = self.compute_compliance_error()
-            net_force[3:] = 0.0
 
             # Compute necessary error terms for PD controller
             cartesian_input = self.compute_spatial_controller(net_force, period)
@@ -396,6 +395,7 @@ class ComplianceController(Controller):
 
             if self.use_kdl:
                 desired_wrench = self.ik_solver.get_joint_control_cmds(period, cartesian_input)
+                desired_wrench['positions'] = desired_wrench['positions'] - self.joint_pos
             else:
                 desired_wrench = cartesian_input
 

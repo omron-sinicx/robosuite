@@ -327,7 +327,7 @@ class OperationalSpaceController(Controller):
     def compute_goal_pos(self, delta, goal_update_mode=None):
         """
         Compute new goal position, given a delta to update. Can either update the new goal based on
-        current achieved position or current deisred goal. Updating based on current deisred goal can be useful
+        current achieved position or current desired goal. Updating based on current desired goal can be useful
         if we want the robot to adhere with a sequence of target poses as closely as possible,
         without lagging or overshooting.
 
@@ -481,6 +481,11 @@ class OperationalSpaceController(Controller):
             position_kp = np.array(self.kp[0:9]).reshape((3, 3))
             orientation_kp = np.array(self.kp[9:18]).reshape((3, 3))
 
+        # Scale position gains proportionally up to 10x as error gets smaller
+        error_norm = np.linalg.norm(position_error)
+        if error_norm < 1:
+            scale = 10 * (1 - error_norm) + 1  # Linear scaling from 1x to 10x
+            position_kp *= scale
         # F_r = kp * pos_err + kd * vel_err
         desired_force = np.dot(position_error, position_kp) + np.multiply(
             vel_pos_error, self.kd[0:3]
@@ -489,6 +494,12 @@ class OperationalSpaceController(Controller):
         base_ori_vel = np.array(self.sim.data.get_site_xvelr(f"{self.naming_prefix}{self.part_name}_center"))
         vel_ori_error = -(self.ref_ori_vel - base_ori_vel)
 
+        # Scale position gains proportionally up to 10x as error gets smaller
+
+        ori_error_norm = np.linalg.norm(ori_error)
+        if ori_error_norm < 1:
+            scale = 10 * (1 - ori_error_norm) + 1  # Linear scaling from 1x to 10x
+            orientation_kp *= scale
         # Tau_r = kp * ori_err + kd * vel_err
         desired_torque = np.dot(ori_error, orientation_kp) + np.multiply(
             vel_ori_error, self.kd[3:6]

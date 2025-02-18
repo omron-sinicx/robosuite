@@ -37,6 +37,7 @@ DEFAULT_GRIND_CONFIG = {
 
     # tracking settings
     "tracking_trajectory_threshold": 0.005,
+    "tracking_force_threshold": 1.0,
     "tracking_trajectory_method": 'per_error_threshold',
 
     # Task settings
@@ -68,7 +69,7 @@ DEFAULT_GRIND_CONFIG = {
     "desired_height": 0.005,  # desired grinding height (m)
     "inclination_fraction": 0.5,  # fraction of mortar radius for inclination
     "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
-    "initial_position": [0, 0, 0.85],  # initial position offset
+    "initial_position": [0, 0, 0.775],  # initial position offset
 }
 
 
@@ -293,7 +294,7 @@ class OSXGrind(ManipulationEnv):
         self.trajectory_len = len(self.reference_trajectory)
 
         if reference_force is None:
-            desired_contact_force = np.random.uniform(low=3, high=20)
+            desired_contact_force = np.random.uniform(low=3, high=10)
             self.reference_force = np.array([[0, 0, desired_contact_force, 0, 0, 0]] * self.trajectory_len)
         else:
             self.reference_force = reference_force
@@ -303,6 +304,7 @@ class OSXGrind(ManipulationEnv):
 
         self.tracking_trajectory_threshold = self.task_config['tracking_trajectory_threshold']
         self.tracking_trajectory_method = self.task_config['tracking_trajectory_method']
+        self.tracking_force_threshold = self.task_config['tracking_force_threshold']
         # Verify the proposed impedance mode is supported
         assert self.tracking_trajectory_method in TRACKING_METHODS, (
             "Error: unsupported tracking method"
@@ -386,22 +388,13 @@ class OSXGrind(ManipulationEnv):
 
         # online tracking of the reference trajectory
         residual_action = self._compute_relative_distance()
-        factor = 1 - np.tanh(50 * self.tracking_error)
-        scale_factor = np.interp(factor, [0.0, 1.0], [1, 10])  # TODO get some good values for per step and per thresh
-        # ctr_action[:6] += residual_action  * scale_factor
-        # ctr_action[:6] += residual_action  # * scale_factor
-
-        pos_rot_action = residual_action
-        # pos_rot_action = np.zeros(6)
-        # pos_rot_action[:3] = self.reference_trajectory[self.current_waypoint_index][:3]
-        # pos_rot_action[3:6] = T.quat2axisangle(self.reference_trajectory[self.current_waypoint_index][3:])
-
-        ctr_action = np.concatenate([pos_rot_action, self.ft_action])
+        ctr_action = np.concatenate([residual_action, self.ft_action])
 
         self.__log_details__(action, residual_action)
         if self.timestep % 50 == 0:
             print(f"step {self.timestep}")
             print(f"error {self.tracking_error}")
+            print(f"force error {self.tracking_force_error}")
             print(f"residual_action {residual_action}")
             print(f"ctr_action {ctr_action}")
         return super().step(ctr_action)
@@ -490,7 +483,7 @@ class OSXGrind(ManipulationEnv):
         # only consider the error for the force controlled directions
         relative_wrench *= (np.ones(6) - self.robots[0].composite_controller.part_controllers['right'].selection_matrix)
 
-        self.tracking_force_error = np.linalg.norm(relative_wrench / self.force_follow_normalization)
+        self.tracking_force_error = np.linalg.norm(relative_wrench)
         return relative_wrench
 
     def _load_model(self):
@@ -714,7 +707,8 @@ class OSXGrind(ManipulationEnv):
                     self.last_step_time = self.sim.data._data.time
 
                 elif self.tracking_trajectory_method == 'per_error_threshold':  # equivalent to TRACKING_ERROR mode
-                    if self.tracking_error < self.tracking_trajectory_threshold:
+                    if self.tracking_error < self.tracking_trajectory_threshold \
+                            and self.tracking_force_error < self.tracking_force_threshold:
                         self.current_waypoint_index += 1
                         self.last_step_time = self.sim.data._data.time
 
@@ -833,7 +827,7 @@ class OSXGrind(ManipulationEnv):
         )
         reference_trajectory[:, :3] += initial_position
         # reference_trajectory[1:, :3] += [0.0, 0.0, 0.01]
-        reference_trajectory[:, 3:] = initial_orientation
+        # reference_trajectory[:, 3:] = initial_orientation
         return reference_trajectory
 
     @property

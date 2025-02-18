@@ -4,6 +4,7 @@ import numpy as np
 from robosuite.utils.binding_utils import MjSim
 from robosuite.utils.buffers import RingBuffer
 
+from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.sim_utils import compensate_ft_reading
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.controller import Controller
@@ -25,7 +26,7 @@ class ForwardDynamicsComplianceController(Controller):
 
     The controller operates in either end-effector ('eef') or robot base ('robot_base') frame and uses:
     - Position/orientation control through stiffness-based pose error
-    - Force/torque control through wrench error 
+    - Force/torque control through wrench error
     - PD control for dynamic response
 
     Args:
@@ -236,9 +237,13 @@ class ForwardDynamicsComplianceController(Controller):
         self.desired_force_torque = np.zeros(6)
 
         if self.use_kdl:
-            self.ik_solver = IKSolver(robot='ur5e_powder_grinding_default', rospackage='osx_powder_grinding',
-                                      base_link='base_link', ee_link='tool0')
-            self.ik_solver.build_generic_model()
+            self.kdl_solver = IKSolver(robot='ur5e_powder_grinding_default', rospackage='osx_powder_grinding',
+                                       base_link='base_link', ee_link='gripper_tip_link')
+            self.kdl_solver.build_generic_model()
+            self.mjc_ik_solver = MuJoCoIKSolver(self.sim.model,
+                                                self.sim.data,
+                                                f"{self.ft_prefix}_grip_site",
+                                                joint_indexes=self.joint_index)
 
     def update(self):
         super().update()
@@ -362,15 +367,16 @@ class ForwardDynamicsComplianceController(Controller):
         """
         # 1. Update state
         self.update()
+        # if self.sim.data.time > 0.04:
+        #     exit(0)
 
         if self.use_kdl:
-            self.ik_solver.synchronize_joint_positions(self.joint_pos)
+            self.kdl_solver.synchronize_joint_positions(self.joint_pos)
 
         period = 0.02
         for _ in range(self.iterations):
 
             net_force, eef_to_base = self.compute_compliance_error()
-            net_force[3:] = 0.0
 
             # Compute necessary error terms for PD controller
             cartesian_input = self.compute_spatial_controller(net_force, period)
@@ -379,16 +385,27 @@ class ForwardDynamicsComplianceController(Controller):
                 # convert the error back to the robot_base frame
                 cartesian_input = T.rotate_by_transformation(cartesian_input, eef_to_base)
 
-            cartesian_input *= self.error_scale  # scale the entire error here
+            cartesian_input *= self.error_scale   # scale the entire error here
 
             if self.use_kdl:
-                desired_wrench = self.ik_solver.get_joint_control_cmds(period, cartesian_input)
+                m_simulated_joint_positions = self.kdl_solver.get_joint_control_cmds(period, cartesian_input)
+                if self.inner_controller_type == "JOINT_POSITION":
+                    # Inner controller expects relative joint positions
+                    self.inner_controller.set_goal(m_simulated_joint_positions - self.joint_pos)
+                elif self.inner_controller_type == "OSC_POSE":
+                    self.kdl_solver.update_kinematics()
+                    m_simulated_pose = self.kdl_solver.get_end_effector_pose()
+                    self.inner_controller.set_goal(action=m_simulated_pose)
+                else:
+                    raise ValueError(f"Invalid inner controller type: {self.inner_controller_type}")
             else:
-                desired_wrench = cartesian_input
+                self.inner_controller.set_goal(action=cartesian_input)
 
-        # print(f"desired_wrench {desired_wrench}")
+        # Always run superclass call for any cleanups at the end
+        super().run_controller()
 
-        return self.run_inner_controller(desired_wrench)
+        # Always run superclass call to compute actual torques from desired positions
+        return self.inner_controller.run_controller()
 
     def compute_spatial_controller(self, error, period):
         """
@@ -489,46 +506,9 @@ class ForwardDynamicsComplianceController(Controller):
         wrench_error_sel = (np.ones_like(self.selection_matrix) - self.selection_matrix) * wrench_error
 
         # base frame error
-        net_force = self.stiffness * pose_error_sel + wrench_error_sel
+        net_force = self.stiffness * pose_error_sel + wrench_error_sel * 0.01
 
         return net_force, eef_to_base
-
-    def run_inner_controller(self, desired_wrench):
-        """
-        Executes the configured inner controller with the computed desired wrench.
-
-        Args:
-            desired_wrench (np.array or dict): Control command in appropriate format for inner controller:
-                - For JOINT_POSITION: dict with 'positions' key
-                - For JOINT_VELOCITY: 6D joint velocity array
-                - For OSC_POSE: 6D cartesian command array
-
-        Returns:
-            np.array: Command torques for the robot joints
-        """
-        if self.inner_controller_type == "JOINT_POSITION":
-            # Inner controller expects relative joint positions
-            self.inner_controller.set_goal(desired_wrench['positions'])
-            # position_error = desired_wrench['positions'] - self.joint_pos
-            # # vel_pos_error = desired_wrench['velocities'] - self.joint_vel
-            # vel_pos_error = - self.joint_vel
-            # kp = np.array([1]*6)
-            # kd = np.array([0.01]*6)
-            # desired_torque = np.multiply(np.array(position_error), kp) + np.multiply(vel_pos_error, kd)
-
-            # # Return desired torques plus gravity compensations
-            # self.torques = np.dot(self.mass_matrix, desired_torque) + self.torque_compensation
-            # return self.torques
-        elif self.inner_controller_type == "JOINT_VELOCITY":
-            self.inner_controller.set_goal(velocities=desired_wrench['velocities'])
-        elif self.inner_controller_type == "OSC_POSE":
-            self.inner_controller.set_goal(action=desired_wrench)
-
-        # Always run superclass call for any cleanups at the end
-        super().run_controller()
-
-        # Always run superclass call to compute actual torques from desired positions
-        return self.inner_controller.run_controller()
 
     def update_origin(self, origin_pos, origin_ori):
         super().update_origin(origin_pos, origin_ori)
