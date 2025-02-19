@@ -69,7 +69,7 @@ DEFAULT_GRIND_CONFIG = {
     "desired_height": 0.005,  # desired grinding height (m)
     "inclination_fraction": 0.5,  # fraction of mortar radius for inclination
     "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
-    "initial_position": [0, 0, 0.775],  # initial position offset
+    "initial_position": [0, 0, 0.8],  # initial position offset
 }
 
 
@@ -391,12 +391,12 @@ class OSXGrind(ManipulationEnv):
         ctr_action = np.concatenate([residual_action, self.ft_action])
 
         self.__log_details__(action, residual_action)
-        if self.timestep % 50 == 0:
-            print(f"step {self.timestep}")
-            print(f"error {self.tracking_error}")
-            print(f"force error {self.tracking_force_error}")
-            print(f"residual_action {residual_action}")
-            print(f"ctr_action {ctr_action}")
+        # if self.timestep % 50 == 0:
+        #     print(f"step {self.timestep}")
+        #     print(f"error {self.tracking_error}")
+        #     print(f"force error {self.tracking_force_error}")
+        #     print(f"residual_action {residual_action}")
+        #     print(f"ctr_action {ctr_action}")
         return super().step(ctr_action)
 
     def reward(self, action=None):
@@ -692,7 +692,9 @@ class OSXGrind(ManipulationEnv):
 
         # allow episode to finish early if allowed
         if self.early_terminations:
-            done = done or self._check_terminated()
+            terminated, reason = self._check_terminated()
+            info['termination_reason'] = reason
+            done = done or terminated
 
         # Add termination criteria
         if done and self.print_results:
@@ -757,26 +759,30 @@ class OSXGrind(ManipulationEnv):
             bool: True if episode is terminated
         """
         terminated = False
+        reason = ""
 
         # Prematurely terminate if contacting the table with the arm
         if self.check_contact(self.robots[0].robot_model):
             if self.print_results:
                 print(20 * "-" + " COLLIDED " + 20 * "-")
             terminated = True
+            reason = "COLLIDED"
 
         # Prematurely terminate if the end effector leave the play area
         if not self._check_task_space_limits():
             if self.print_results:
                 print(20 * "-" + " TASK SPACE LIMIT REACHED " + 20 * "-")
             terminated = True
+            reason = "TASK SPACE LIMIT REACHED"
 
         # Prematurely terminate if task is completed
         if self._check_success():
             if self.print_results:
                 print(20 * "-" + " TRACKING COMPLETED " + 20 * "-")
             terminated = True
+            reason = "TRACKING COMPLETED"
 
-        return terminated
+        return terminated, reason
 
     def _check_success(self):
         """
@@ -815,7 +821,7 @@ class OSXGrind(ManipulationEnv):
         desired_height = self.task_config["desired_height"]
         inclination_fraction = self.task_config["inclination_fraction"]
         initial_orientation = self.task_config["initial_orientation"]
-        initial_position = self.task_config["initial_position"]
+        initial_position = self.task_config["initial_position"].copy()
         initial_position[2] += mortar_inner_height  # Add inner height to z position
 
         reference_trajectory = generate_mortar_trajectory(
