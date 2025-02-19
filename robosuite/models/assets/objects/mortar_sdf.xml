@@ -14,10 +14,15 @@
       <plugin instance="bowl"/>
     </mesh>
   </asset>
+  <default>
+    <default class="collision">
+        <geom solimp="1.0 1.0 0.001" solref="0.1 2" group="0" condim="4" priority="1"/>
+    </default>
+  </default>
   <worldbody>
     <body>
       <body name="object">
-        <geom pos="0 0 0.0" type="sdf" name="bowl" mesh="bowl" mass="100" rgba=".2 .8 .8 1" group="0" condim="4">
+        <geom pos="0 0 0.0" type="sdf" name="bowl" mesh="bowl" mass="100" rgba=".2 .8 .8 1" class="collision">
             <plugin instance="bowl"/>
         </geom>
         <geom name="bowl_base" pos="0 0 -0.04" size="0.015 0.003" type="cylinder" solimp="0.998 0.998 0.001" solref="0.02 1" density="100" mass="10" rgba=".2 .8 .8 1" friction="0.95 0.3 0.1" group="0" condim="4" />
