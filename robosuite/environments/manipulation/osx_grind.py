@@ -52,6 +52,7 @@ DEFAULT_GRIND_CONFIG = {
     "randomize_reference_trajectory": False,
     "num_waypoints": 1000,
     "duration": 10,
+    "target_force": 10.0,  # N
 
     # misc settings
     "evaluate": False,
@@ -233,7 +234,6 @@ class OSXGrind(ManipulationEnv):
         renderer="mjviewer",
         renderer_config=None,
         reference_trajectory=None,
-        reference_force=None,
         action_indices=range(0, 6)
     ):
 
@@ -282,6 +282,7 @@ class OSXGrind(ManipulationEnv):
         # references to follow
         self.num_waypoints = self.task_config["num_waypoints"]
         self.current_waypoint_index = 0
+        self.target_force = self.task_config["target_force"]
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
@@ -293,11 +294,11 @@ class OSXGrind(ManipulationEnv):
             self.reference_trajectory = reference_trajectory
         self.trajectory_len = len(self.reference_trajectory)
 
-        if reference_force is None:
+        if self.target_force is None:
             desired_contact_force = np.random.uniform(low=3, high=10)
             self.reference_force = np.array([[0, 0, desired_contact_force, 0, 0, 0]] * self.trajectory_len)
         else:
-            self.reference_force = reference_force
+            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.trajectory_len)
         self.duration = self.task_config["duration"]
         self.step_duration = max(1.0/500, self.duration / float(self.trajectory_len))  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
