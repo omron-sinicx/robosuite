@@ -420,16 +420,16 @@ class OSXGrind(ManipulationEnv):
             self.reference_force[self.current_waypoint_index]
         ])
 
-        if self.timestep % 50 == 0:
-            print(f"step {self.timestep}")
-            print(f"error {self.tracking_error}")
-            print(f"force error {self.tracking_force_error}")
-            print(f"""
-{action = }
-{controller.kp = }
-{controller.stiffness = }
-{controller.kd = }
-""")
+#         if self.timestep % 50 == 0:
+#             print(f"step {self.timestep}")
+#             print(f"error {self.tracking_error}")
+#             print(f"force error {self.tracking_force_error}")
+#             print(f"""
+# {action = }
+# {controller.kp = }
+# {controller.stiffness = }
+# {controller.kd = }
+# """)
         return super().step(controller_targets)
 
     def reward(self, action=None):
