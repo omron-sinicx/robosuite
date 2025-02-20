@@ -107,6 +107,10 @@ class ForwardDynamicsComplianceController(Controller):
         joint_indexes,
         actuator_range,
         inner_controller_config,
+        input_max=1,
+        input_min=-1,
+        output_max=1,
+        output_min=-1,
         iterations=1,
         error_scale=1.0,
         stiffness=500,
@@ -184,10 +188,10 @@ class ForwardDynamicsComplianceController(Controller):
         self.compliance_mode = compliance_mode
 
         self.control_dim = 6  # desired position/orientation
-        self.input_max = self.nums2array(inner_controller_config['input_max'], self.control_dim)
-        self.input_min = self.nums2array(inner_controller_config['input_min'], self.control_dim)
-        self.output_max = self.nums2array(inner_controller_config['output_max'], self.control_dim)
-        self.output_min = self.nums2array(inner_controller_config['output_min'], self.control_dim)
+        self.input_max = self.nums2array(input_max, self.control_dim)
+        self.input_min = self.nums2array(input_min, self.control_dim)
+        self.output_max = self.nums2array(output_max, self.control_dim)
+        self.output_min = self.nums2array(output_min, self.control_dim)
 
         self.control_dim += 6  # + force/torque
         self.force_min = self.nums2array(force_limits[0], 3)
@@ -211,6 +215,7 @@ class ForwardDynamicsComplianceController(Controller):
         self.kp = self.nums2array(kp, 6)
         self.kd = self.nums2array(kd, 6)
         # kp and kd limits
+        self.kp_limits = kp_limits
         self.kp_min = self.nums2array(kp_limits[0], 6)
         self.kp_max = self.nums2array(kp_limits[1], 6)
         self.damping_ratio_min = self.nums2array(damping_ratio_limits[0], 6)
@@ -506,7 +511,7 @@ class ForwardDynamicsComplianceController(Controller):
         wrench_error_sel = (np.ones_like(self.selection_matrix) - self.selection_matrix) * wrench_error
 
         # base frame error
-        net_force = self.stiffness * pose_error_sel + wrench_error_sel * 0.01
+        net_force = self.stiffness * pose_error_sel + wrench_error_sel
 
         return net_force, eef_to_base
 
