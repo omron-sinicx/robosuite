@@ -10,6 +10,7 @@ from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.observables import Observable, sensor
 from robosuite.utils.placement_samplers import UniformRandomSampler
 from robosuite.utils.traj_utils import generate_mortar_trajectory
+from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
 import robosuite.utils.transform_utils as T
 
 
@@ -54,6 +55,10 @@ DEFAULT_GRIND_CONFIG = {
     "duration": 10,
     "target_force": 10.0,  # N
 
+    # action settings
+    "action_ndim": 4,  # 4D or 12D
+    "enable_controller_tuning": False,
+
     # misc settings
     "evaluate": False,
     "print_results": False,  # Whether to print results or not
@@ -66,7 +71,7 @@ DEFAULT_GRIND_CONFIG = {
 
     # Mortar parameters
     "mortar_diameter": 0.08,  # diameter of the mortar (m)
-    "mortar_inner_height": 0.007,  # height of the mortar inner surface (m)
+    "mortar_inner_height": 0.01,  # height of the mortar inner surface (m)
     "desired_height": 0.005,  # desired grinding height (m)
     "inclination_fraction": 0.5,  # fraction of mortar radius for inclination
     "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
@@ -234,7 +239,6 @@ class OSXGrind(ManipulationEnv):
         renderer="mjviewer",
         renderer_config=None,
         reference_trajectory=None,
-        action_indices=range(0, 6)
     ):
 
         # Assert that the gripper type is Grinder
@@ -313,10 +317,9 @@ class OSXGrind(ManipulationEnv):
         )
 
         # actor action subset
-        self.action_indices = action_indices
-
+        self.action_ndim = self.task_config['action_ndim']
         self.placement_initializer = None
-
+        self.enable_controller_tuning = self.task_config['enable_controller_tuning']
         # log data
         self.prev_quat = self.reference_trajectory[0, 3:]
         self.evaluate = self.task_config['evaluate']
@@ -378,27 +381,48 @@ class OSXGrind(ManipulationEnv):
                 - virtual force
                 - action kp?
         """
-        action_kp = np.interp(action, [-1, 1], [0.001, 1.0])  # limits for kp (action from sac)
+        assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
+
+        controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
+
+        if self.action_ndim == 4:
+            scaled_kp = np.interp(action[:2], [-1, 1], controller.kp_limits)
+            scaled_stiffness = np.interp(action[2:], [-1, 1], controller.stiffness_limits)
+            # Reconstruct the action to be 12D
+            action_kp = np.concatenate([[scaled_kp[0]]*3, [scaled_kp[1]]*3])
+            action_stiffness = np.concatenate([[scaled_stiffness[0]]*3, [scaled_stiffness[1]]*3])
+        elif self.action_ndim == 12:
+            action_kp = np.interp(action[:6], [-1, 1], controller.kp_limits)
+            action_stiffness = np.interp(action[6:], [-1, 1], controller.stiffness_limits)
+        else:
+            raise ValueError(f"Unsupported action dimension: {self.action_ndim}. Only 4 or 12 are supported.")
+
         # change controller params
-        # self.robots[0].composite_controller.part_controllers['right'].kp[self.action_indices] = action_kp[self.action_indices]
+        if self.enable_controller_tuning:
+            controller.kp = action_kp
+            controller.stiffness = action_stiffness
+            controller.kd = action_kp * controller.damping_ratio
+            print(f"""
+{action = }
+{action_kp = }
+{action_stiffness = }
+{controller.kp = }
+{controller.stiffness = }
+{controller.kd = }
+""")
 
-        self.ft_action = self.reference_force[self.current_waypoint_index]
+        controller_targets = np.concatenate([
+            self.reference_trajectory[self.current_waypoint_index],
+            self.reference_force[self.current_waypoint_index]
+        ])
 
-        # send action with both pose and wrench to the env
-        # send the ft action already in base frame
-
-        # online tracking of the reference trajectory
-        residual_action = self._compute_relative_distance()
-        ctr_action = np.concatenate([residual_action, self.ft_action])
-
-        self.__log_details__(action, residual_action)
         # if self.timestep % 50 == 0:
         #     print(f"step {self.timestep}")
         #     print(f"error {self.tracking_error}")
         #     print(f"force error {self.tracking_force_error}")
         #     print(f"residual_action {residual_action}")
         #     print(f"ctr_action {ctr_action}")
-        return super().step(ctr_action)
+        return super().step(controller_targets)
 
     def reward(self, action=None):
 
@@ -465,24 +489,23 @@ class OSXGrind(ManipulationEnv):
     def _compute_relative_distance(self):
         relative_distance = np.zeros(6)
         if self.reference_trajectory is not None:
-            relative_distance[:3] = self.reference_trajectory[self.current_waypoint_index][:3] - self.eef_pos
             ref_quat = self.reference_trajectory[self.current_waypoint_index][3:]
+            relative_distance[:3] = self.reference_trajectory[self.current_waypoint_index][:3] - self.eef_pos
+            relative_distance[:3] = T.rotate_vector_by_quaternion(relative_distance[:3], ref_quat)
             relative_distance[3:] = T.quaternions_orientation_error(ref_quat, self.eef_quat)
 
         # track error of the actions controlled by the policy
-        tracking_pos = T.rotate_vector_by_quaternion(relative_distance[:3], ref_quat)
-        self.tracking_error = np.linalg.norm(np.concatenate([tracking_pos*np.array([1, 1, 0.]), relative_distance[3:]]))
-        # if self.timestep % 10 == 0:
-        #     print(f"{tracking_pos*100}", f"{self.tracking_error*100}")
+        relative_distance *= self.selection_matrix
+        self.tracking_error = np.linalg.norm(relative_distance)
         return relative_distance
 
     def _compute_relative_wrenches(self):
         relative_wrench = np.zeros(6)
 
         # in base frame
-        relative_wrench = self.ft_action - self.eef_wrench
+        relative_wrench = self.reference_force[self.current_waypoint_index] - self.eef_wrench
         # only consider the error for the force controlled directions
-        relative_wrench *= (np.ones(6) - self.robots[0].composite_controller.part_controllers['right'].selection_matrix)
+        relative_wrench *= (np.ones(6) - self.selection_matrix)
 
         self.tracking_force_error = np.linalg.norm(relative_wrench)
         return relative_wrench
@@ -663,6 +686,7 @@ class OSXGrind(ManipulationEnv):
 
         super()._reset_internal()
 
+        self.selection_matrix = self.robots[0].composite_controller.part_controllers['right'].selection_matrix
         self.last_step_time = self.sim.data._data.time
 
         # Reset all object positions using initializer sampler if we're not directly loading from an xml
@@ -838,24 +862,6 @@ class OSXGrind(ManipulationEnv):
         return reference_trajectory
 
     @property
-    def action_spec(self):
-        """
-        Action space (low, high) for this environment
-
-        Returns:
-            2-tuple:
-
-                - (np.array) minimum (low) action values
-                - (np.array) maximum (high) action values
-        """
-        low, high = [], []
-
-        for robot in self.robots:
-            lo, hi = robot.action_limits
-            low, high = lo[self.action_indices], hi[self.action_indices]
-        return low, high
-
-    @property
     def action_dim(self):
         """
         Size of the action space
@@ -863,7 +869,7 @@ class OSXGrind(ManipulationEnv):
         Returns:
             int: Action space dimension
         """
-        return len(self.action_indices)
+        return self.action_ndim
 
     @property
     def eef_wrench(self):
@@ -876,40 +882,6 @@ class OSXGrind(ManipulationEnv):
     @property
     def eef_quat(self):
         return T.mat2quat(self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3))
-
-    def __log_details__(self, action, residual_action):
-        if self.log_details:
-            # save variables during training
-            self.log_dict['details']['timesteps'].append(self.timestep)
-            self.log_dict['details']['waypoint'].append(self.current_waypoint_index)
-            self.log_dict['details']['action_in'].append(action)
-            self.log_dict['details']['res_action'].append(residual_action)
-            self.log_dict['details']['current_ref'].append(self.reference_trajectory[self.current_waypoint_index])
-            self.log_dict['details']['current_pos'].append(self.eef_pos)
-
-            # just for plotting, make quat affine
-            curr_quat = self.robots[0]._hand_quat['right']
-            if np.dot(curr_quat,  self.prev_quat) < 0:  # if pointing in opposite directions
-                curr_quat = -curr_quat
-            self.prev_quat = curr_quat
-
-            self.log_dict['details']['current_quat'].append(curr_quat)
-
-            self.log_dict['details']['current_force_ref'].append(self.ft_action)
-            self.log_dict['details']['current_force'].append(self.eef_wrench)
-
-            # TODO separate case hand from base
-            self.log_dict['details']['current_force_ref_eef_frame'].append(self.reference_force[self.current_waypoint_index])
-            self.log_dict['details']['current_force_eef_frame'].append(self.eef_wrench)
-
-            # controller params
-            self.log_dict['details']['kp'].append(self.robots[0].composite_controller.part_controllers['right'].kp.copy())
-
-            if self.evaluate:
-                self.log_filename = self.log_dir + "/step_actions_eval.npz"
-                self._save_details()
-            else:
-                self.log_filename = self.log_dir + "/step_actions.npz"
 
     def _save_details(self):
         np.savez(

@@ -123,6 +123,7 @@ class ForwardDynamicsComplianceController(Controller):
         ft_buffer_size=10,
         stiffness_limits=(50, 500),
         kp_limits=(0, 300),
+        damping_ratio=1.0,
         damping_ratio_limits=(0, 100),
         selection_matrix=np.ones(6),
         position_limits=None,
@@ -187,7 +188,9 @@ class ForwardDynamicsComplianceController(Controller):
         )
         self.compliance_mode = compliance_mode
 
-        self.control_dim = 6  # desired position/orientation
+        self.use_delta = control_delta
+        self.control_pose_dim = 6 if control_delta else 7  # desired position/orientation
+        self.control_dim = self.control_pose_dim
         self.input_max = self.nums2array(input_max, self.control_dim)
         self.input_min = self.nums2array(input_min, self.control_dim)
         self.output_max = self.nums2array(output_max, self.control_dim)
@@ -200,6 +203,7 @@ class ForwardDynamicsComplianceController(Controller):
         self.torque_max = self.nums2array(torque_limits[1], 3)
 
         self.stiffness = self.nums2array(stiffness, 6)
+        self.stiffness_limits = stiffness_limits
         # stiffness limits
         self.stiffness_min = self.nums2array(stiffness_limits[0], 6)
         self.stiffness_max = self.nums2array(stiffness_limits[1], 6)
@@ -210,14 +214,13 @@ class ForwardDynamicsComplianceController(Controller):
         elif self.compliance_mode == "variable_stiffness_and_p_gains":
             self.control_dim += 12
 
-        self.use_delta = control_delta
-
         self.kp = self.nums2array(kp, 6)
         self.kd = self.nums2array(kd, 6)
         # kp and kd limits
         self.kp_limits = kp_limits
         self.kp_min = self.nums2array(kp_limits[0], 6)
         self.kp_max = self.nums2array(kp_limits[1], 6)
+        self.damping_ratio = damping_ratio
         self.damping_ratio_min = self.nums2array(damping_ratio_limits[0], 6)
         self.damping_ratio_max = self.nums2array(damping_ratio_limits[1], 6)
 
@@ -310,14 +313,14 @@ class ForwardDynamicsComplianceController(Controller):
         self.update()
 
         if self.compliance_mode == "variable_stiffness":
-            delta, desired_ft, stiffness = action[:6], action[6:12], action[12:]
+            delta, desired_ft, stiffness = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
         elif self.compliance_mode == "variable_stiffness_and_p_gains":
-            delta, desired_ft, stiffness, kp = action[:6], action[6:12], action[12:18], action[18:]
+            delta, desired_ft, stiffness, kp = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:18], action[18:]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
         else:  # This is case "fixed"
-            delta, desired_ft = action[:6], action[6:]
+            delta, desired_ft = action[:self.control_pose_dim], action[self.control_pose_dim:]
 
         desired_ft[:3] = np.clip(desired_ft[:3], self.force_min, self.force_max)
         desired_ft[3:] = np.clip(desired_ft[3:], self.torque_min, self.torque_max)
@@ -331,7 +334,7 @@ class ForwardDynamicsComplianceController(Controller):
             if set_pos is None:
                 set_pos = delta[:3]
             if set_ori is None:
-                set_ori = (T.quat2mat(T.axisangle2quat(delta[3:6])))
+                set_ori = (T.quat2mat(delta[3:7]))
             # No scaling of values since these are absolute values
             scaled_delta = np.zeros_like(delta)
 
