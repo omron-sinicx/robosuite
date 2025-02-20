@@ -393,24 +393,28 @@ class OSXGrind(ManipulationEnv):
         """
         assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
-        controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
-
-        if self.action_ndim == 4:
-            action_kp = np.concatenate([[action[0]]*3, [action[1]]*3])
-            action_stiffness = np.concatenate([[action[2]]*3, [action[3]]*3])
-            input_min = np.array([-1]*6)
-            input_max = np.array([1]*6)
-            action_kp = scale_action(action_kp, input_min, input_max, controller.kp_limits[0], controller.kp_limits[1])
-            action_stiffness = scale_action(action_stiffness, input_min, input_max, controller.stiffness_limits[0], controller.stiffness_limits[1])
-            # Reconstruct the action to be 12D
-        elif self.action_ndim == 12:
-            action_kp = np.interp(action[:6], [-1, 1], controller.kp_limits)
-            action_stiffness = np.interp(action[6:], [-1, 1], controller.stiffness_limits)
-        else:
-            raise ValueError(f"Unsupported action dimension: {self.action_ndim}. Only 4 or 12 are supported.")
-
         # change controller params
         if self.enable_controller_tuning:
+            controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
+            input_min = np.array([-1]*6)
+            input_max = np.array([1]*6)
+
+            if self.action_ndim == 4:
+                action_kp = np.concatenate([[action[0]]*3, [action[1]]*3])
+                action_stiffness = np.concatenate([[action[2]]*3, [action[3]]*3])
+                action_kp = scale_action(action_kp, input_min, input_max,
+                                         controller.kp_limits[0], controller.kp_limits[1])
+                action_stiffness = scale_action(action_stiffness, input_min, input_max,
+                                                controller.stiffness_limits[0], controller.stiffness_limits[1])
+                # Reconstruct the action to be 12D
+            elif self.action_ndim == 12:
+                action_kp = scale_action(action[:6], input_min, input_max,
+                                         controller.kp_limits[0], controller.kp_limits[1])
+                action_stiffness = scale_action(action[6:], input_min, input_max,
+                                                controller.stiffness_limits[0], controller.stiffness_limits[1])
+            else:
+                raise ValueError(f"Unsupported action dimension: {self.action_ndim}. Only 4 or 12 are supported.")
+
             controller.kp = action_kp
             controller.stiffness = action_stiffness
             controller.kd = action_kp * controller.damping_ratio
@@ -420,16 +424,16 @@ class OSXGrind(ManipulationEnv):
             self.reference_force[self.current_waypoint_index]
         ])
 
-#         if self.timestep % 50 == 0:
-#             print(f"step {self.timestep}")
-#             print(f"error {self.tracking_error}")
-#             print(f"force error {self.tracking_force_error}")
-#             print(f"""
-# {action = }
-# {controller.kp = }
-# {controller.stiffness = }
-# {controller.kd = }
-# """)
+        if self.timestep % 50 == 0:
+            print(f"step {self.timestep}")
+            print(f"error {self.tracking_error}")
+            print(f"force error {self.tracking_force_error}")
+            print(f"""
+{action = }
+{controller.kp = }
+{controller.stiffness = }
+{controller.kd = }
+""")
         return super().step(controller_targets)
 
     def reward(self, action=None):
