@@ -85,6 +85,16 @@ TRACKING_METHODS = [
 ]
 
 
+def scale_action(action, input_min, input_max, output_min, output_max):
+    action_scale = abs(output_max - output_min) / abs(input_max - input_min)
+    action_output_transform = (output_max + output_min) / 2.0
+    action_input_transform = (input_max + input_min) / 2.0
+    action = np.clip(action, input_min, input_max)
+    transformed_action = (action - action_input_transform) * action_scale + action_output_transform
+
+    return transformed_action
+
+
 class OSXGrind(ManipulationEnv):
     """
     This class corresponds to the grinding task for a single robot arm.
@@ -386,11 +396,13 @@ class OSXGrind(ManipulationEnv):
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
 
         if self.action_ndim == 4:
-            scaled_kp = np.interp(action[:2], [-1, 1], controller.kp_limits)
-            scaled_stiffness = np.interp(action[2:], [-1, 1], controller.stiffness_limits)
+            action_kp = np.concatenate([[action[0]]*3, [action[1]]*3])
+            action_stiffness = np.concatenate([[action[2]]*3, [action[3]]*3])
+            input_min = np.array([-1]*6)
+            input_max = np.array([1]*6)
+            action_kp = scale_action(action_kp, input_min, input_max, controller.kp_limits[0], controller.kp_limits[1])
+            action_stiffness = scale_action(action_stiffness, input_min, input_max, controller.stiffness_limits[0], controller.stiffness_limits[1])
             # Reconstruct the action to be 12D
-            action_kp = np.concatenate([[scaled_kp[0]]*3, [scaled_kp[1]]*3])
-            action_stiffness = np.concatenate([[scaled_stiffness[0]]*3, [scaled_stiffness[1]]*3])
         elif self.action_ndim == 12:
             action_kp = np.interp(action[:6], [-1, 1], controller.kp_limits)
             action_stiffness = np.interp(action[6:], [-1, 1], controller.stiffness_limits)
@@ -402,26 +414,22 @@ class OSXGrind(ManipulationEnv):
             controller.kp = action_kp
             controller.stiffness = action_stiffness
             controller.kd = action_kp * controller.damping_ratio
-            print(f"""
-{action = }
-{action_kp = }
-{action_stiffness = }
-{controller.kp = }
-{controller.stiffness = }
-{controller.kd = }
-""")
 
         controller_targets = np.concatenate([
             self.reference_trajectory[self.current_waypoint_index],
             self.reference_force[self.current_waypoint_index]
         ])
 
-        # if self.timestep % 50 == 0:
-        #     print(f"step {self.timestep}")
-        #     print(f"error {self.tracking_error}")
-        #     print(f"force error {self.tracking_force_error}")
-        #     print(f"residual_action {residual_action}")
-        #     print(f"ctr_action {ctr_action}")
+        if self.timestep % 50 == 0:
+            print(f"step {self.timestep}")
+            print(f"error {self.tracking_error}")
+            print(f"force error {self.tracking_force_error}")
+            print(f"""
+{action = }
+{controller.kp = }
+{controller.stiffness = }
+{controller.kd = }
+""")
         return super().step(controller_targets)
 
     def reward(self, action=None):

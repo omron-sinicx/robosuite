@@ -203,7 +203,7 @@ class ForwardDynamicsComplianceController(Controller):
         self.torque_max = self.nums2array(torque_limits[1], 3)
 
         self.stiffness = self.nums2array(stiffness, 6)
-        self.stiffness_limits = stiffness_limits
+        self.stiffness_limits = np.array(stiffness_limits)
         # stiffness limits
         self.stiffness_min = self.nums2array(stiffness_limits[0], 6)
         self.stiffness_max = self.nums2array(stiffness_limits[1], 6)
@@ -217,7 +217,7 @@ class ForwardDynamicsComplianceController(Controller):
         self.kp = self.nums2array(kp, 6)
         self.kd = self.nums2array(kd, 6)
         # kp and kd limits
-        self.kp_limits = kp_limits
+        self.kp_limits = np.array(kp_limits)
         self.kp_min = self.nums2array(kp_limits[0], 6)
         self.kp_max = self.nums2array(kp_limits[1], 6)
         self.damping_ratio = damping_ratio
