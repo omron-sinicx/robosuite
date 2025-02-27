@@ -158,7 +158,7 @@ class LinearInterpolator(Interpolator):
         return x_current
 
 
-def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None):
+def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.02):
     """
     Generate a trajectory to trace the surface of an upward-facing bowl at a given height.
     The pen orientation at the center (0,0,0) is represented by quaternion [0,-1,0,0].
@@ -170,6 +170,10 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
         default_quat (list): Quaternion [qx, qy, qz, qw] representing orientation at the bowl center at (0,0,0)
         fraction: (float): If defined, the final quaternion returned is the slerp fraction from the default_quat to the 
                            corresponding normal vector
+        max_angle (float): If defined, takes priority over fraction. Maximum angle (in radians) between default_quat
+                           and the final quaternion. The fraction will be calculated to ensure this constraint.
+        pestle_radius (float): Radius of the pestle tip in meters. Used to adjust trajectory to prevent penetration
+                              when inclination is constrained.
 
     Returns:
         np.array: Array of shape (n_steps, 7) containing [x, y, z, qx, qy, qz, qw]
@@ -186,24 +190,29 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
     # For upward facing bowl: r^2 = R^2 - (R-h)^2
     circle_radius = np.sqrt(radius**2 - (radius - desired_height)**2)
 
-    # Step 4: Generate points along a circle at the desired height
+    # Step 4: Generate points along a circle at desired height
     theta = np.linspace(0, 2*np.pi, n_steps)
-    x = circle_radius * np.cos(theta)
-    y = circle_radius * np.sin(theta)
-    z = np.full_like(theta, desired_height)
 
-    # Step 5: Calculate normal vectors at each point
+    # Step 5: Calculate normal vectors at each point on the original circle
     # For an upward facing bowl, the normal vector points outward from the center of curvature
     normals = np.zeros((n_steps, 3))
+
+    # First, calculate normals at the original circle points to determine inclination constraints
+    original_x = circle_radius * np.cos(theta)
+    original_y = circle_radius * np.sin(theta)
+    original_z = np.full_like(theta, desired_height)
+
     for i in range(n_steps):
-        point = np.array([x[i], y[i], z[i] - radius])  # Shift center of curvature to (0,0,-R)
+        point = np.array([original_x[i], original_y[i], original_z[i] - radius])  # Shift center of curvature to (0,0,-R)
         normal = -point / np.linalg.norm(point)  # Normalize and negate for outward normal
         normals[i] = normal
 
-    # Step 6: Convert normal vectors to quaternions considering initial orientation
+    # Step 6: Calculate quaternions and determine penetration adjustment
     quaternions = np.zeros((n_steps, 4))
-
     initial_rotation = T.quat2mat(default_quat)
+
+    # Calculate the maximum penetration depth to adjust circle radius
+    max_penetration = 0.0
 
     for i in range(n_steps):
         normal = normals[i]
@@ -229,9 +238,54 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
         # Compose rotations: first apply initial orientation, then surface normal rotation
         final_rotation = surface_rotation @ initial_rotation
         final_quaternion = T.mat2quat(final_rotation)
-        if fraction:
+
+        # Store the unconstrained quaternion to calculate penetration
+        unconstrained_quaternion = np.array(final_quaternion)
+
+        # Apply constraints if specified
+        if max_angle is not None:
+            total_angle = compute_quat_angle(default_quat, final_quaternion)
+            # If the angle is greater than max_angle, calculate the appropriate fraction
+            if total_angle > max_angle:
+                # Calculate the fraction that would give us max_angle
+                computed_fraction = max_angle / total_angle
+                final_quaternion = T.quat_slerp(default_quat, final_quaternion, fraction=computed_fraction)
+
+                # Calculate penetration due to constrained inclination
+                if pestle_radius > 0:
+                    # Calculate the difference between ideal and constrained orientation
+                    angle_diff = total_angle - max_angle
+                    # Estimate penetration based on pestle radius and angle difference
+                    # Using trigonometry: penetration ≈ pestle_radius * (1 - cos(angle_diff))
+                    penetration = pestle_radius * (1 - np.cos(angle_diff))
+                    max_penetration = max(max_penetration, penetration)
+        elif fraction is not None:
+            # Store the unconstrained quaternion
+            unconstrained_quaternion = np.array(final_quaternion)
+
+            # Apply the fraction constraint
             final_quaternion = T.quat_slerp(default_quat, final_quaternion, fraction=fraction)
+
+            # Calculate penetration due to constrained inclination
+            if pestle_radius > 0:
+                # Calculate the angle between unconstrained and constrained orientation
+                angle_diff = compute_quat_angle(final_quaternion, unconstrained_quaternion)
+                # Estimate penetration based on pestle radius and angle difference
+                penetration = pestle_radius * (1 - np.cos(angle_diff))
+                max_penetration = max(max_penetration, penetration)
+
         quaternions[i] = final_quaternion
+
+    # Adjust circle radius to prevent penetration
+    adjusted_circle_radius = circle_radius
+    if pestle_radius > 0 and max_penetration > 0:
+        # Reduce the circle radius by the maximum penetration depth
+        adjusted_circle_radius = max(0, circle_radius - max_penetration)
+
+    # Generate adjusted trajectory points
+    x = adjusted_circle_radius * np.cos(theta)
+    y = adjusted_circle_radius * np.sin(theta)
+    z = np.full_like(theta, desired_height)
 
     # Step 7: Combine positions and orientations
     trajectory = np.column_stack((x, y, z, quaternions))
@@ -240,6 +294,20 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
     trajectory = np.concatenate([trajectory, [trajectory[0]]])
 
     return trajectory
+
+
+def compute_quat_angle(quat1, quat2):
+    # Calculate the angle between default_quat and final_quaternion
+    dot = np.dot(quat1, quat2)
+    # Ensure we're taking the shortest path
+    if dot < 0:
+        quat2 = -quat2
+        dot = -dot
+    # Clamp dot product for numerical stability
+    dot = np.clip(dot, -1.0, 1.0)
+    # Calculate the total angle between quaternions
+    total_angle = np.arccos(dot) * 2
+    return total_angle
 
 
 @dataclass

@@ -73,7 +73,7 @@ DEFAULT_GRIND_CONFIG = {
     "mortar_diameter": 0.08,  # diameter of the mortar (m)
     "mortar_inner_height": 0.01,  # height of the mortar inner surface (m)
     "desired_height": 0.005,  # desired grinding height (m)
-    "inclination_fraction": 0.5,  # fraction of mortar radius for inclination
+    "max_inclination_angle": 0.5,  # fraction of mortar radius for inclination
     "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
     "initial_position": [0, 0, 0.8],  # initial position offset
 }
@@ -300,11 +300,10 @@ class OSXGrind(ManipulationEnv):
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
+        self.randomize_reference_trajectory = self.task_config['randomize_reference_trajectory']
         if reference_trajectory is None:
-            self.randomize_reference_trajectory = True
             self.reference_trajectory = self._randomize_reference_trajectory()
         else:
-            self.randomize_reference_trajectory = self.task_config['randomize_reference_trajectory']
             self.reference_trajectory = reference_trajectory
         self.trajectory_len = len(self.reference_trajectory)
 
@@ -855,18 +854,22 @@ class OSXGrind(ManipulationEnv):
     def _randomize_reference_trajectory(self):
         mortar_diameter = self.task_config["mortar_diameter"]
         mortar_inner_height = self.task_config["mortar_inner_height"]
-        desired_height = self.task_config["desired_height"]
-        inclination_fraction = self.task_config["inclination_fraction"]
+        max_inclination_angle = self.task_config["max_inclination_angle"]
         initial_orientation = self.task_config["initial_orientation"]
         initial_position = self.task_config["initial_position"].copy()
         initial_position[2] += mortar_inner_height  # Add inner height to z position
+
+        if self.randomize_reference_trajectory:
+            desired_height = np.random.uniform(low=0.0, high=0.04)
+        else:
+            desired_height = self.task_config["desired_height"]
 
         reference_trajectory = generate_mortar_trajectory(
             mortar_diameter=mortar_diameter,
             desired_height=desired_height,
             n_steps=self.num_waypoints,
             default_quat=initial_orientation,
-            fraction=inclination_fraction
+            max_angle=max_inclination_angle
         )
         reference_trajectory[:, :3] += initial_position
         # reference_trajectory[1:, :3] += [0.0, 0.0, 0.01]
