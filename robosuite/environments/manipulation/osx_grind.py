@@ -385,10 +385,25 @@ class OSXGrind(ManipulationEnv):
 
     def step(self, action):
         """
-            Action space:
-                - duration in secs of a loop
-                - virtual force
-                - action kp?
+        Take a step in the environment with the given action.
+
+        Args:
+            action (np.array): Action array that can be either 4D or 12D:
+                - 4D: [kp_pos, kp_ori, stiffness_pos, stiffness_ori] where each value is replicated 3 times
+                - 12D: [kp_pos_x, kp_pos_y, kp_pos_z, kp_ori_x, kp_ori_y, kp_ori_z,
+                        stiffness_pos_x, stiffness_pos_y, stiffness_pos_z,
+                        stiffness_ori_x, stiffness_ori_y, stiffness_ori_z]
+                Values should be in range [-1, 1] and will be scaled to controller limits.
+
+        Returns:
+            4-tuple:
+                - (np.array) observations from the environment
+                - (float) reward from the environment
+                - (bool) whether the episode has ended
+                - (dict) info about current episode state
+
+        Raises:
+            ValueError: If action_ndim is not 4 or 12
         """
         assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
@@ -423,16 +438,6 @@ class OSXGrind(ManipulationEnv):
             self.reference_force[self.current_waypoint_index]
         ])
 
-        if self.timestep % 50 == 0:
-            print(f"step {self.timestep}")
-            print(f"error {self.tracking_error}")
-            print(f"force error {self.tracking_force_error}")
-            print(f"""
-{action = }
-{controller.kp = }
-{controller.stiffness = }
-{controller.kd = }
-""")
         return super().step(controller_targets)
 
     def reward(self, action=None):
