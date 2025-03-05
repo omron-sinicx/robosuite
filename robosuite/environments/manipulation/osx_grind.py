@@ -639,11 +639,11 @@ class OSXGrind(ManipulationEnv):
 
         @sensor(modality=f"{pf}proprio")
         def robot0_relative_pose(obs_cache):
-            return self._compute_relative_distance()/self.traj_follow_normalization
+            return self._compute_relative_distance() / self.traj_follow_normalization
 
         @sensor(modality=f"{pf}proprio")
         def robot0_relative_wrench(obs_cache):
-            return self._compute_relative_wrenches()
+            return self._compute_relative_wrenches() / self.force_follow_normalization
 
         @sensor(modality=f"{pf}proprio")
         def robot0_wrench(obs_cache):
