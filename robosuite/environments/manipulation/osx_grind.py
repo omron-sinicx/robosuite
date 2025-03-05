@@ -71,7 +71,7 @@ DEFAULT_GRIND_CONFIG = {
 
     # Mortar parameters
     "mortar_diameter": 0.08,  # diameter of the mortar (m)
-    "mortar_inner_height": 0.01,  # height of the mortar inner surface (m)
+    "mortar_inner_height": 0.0155,  # height of the mortar inner surface (m)
     "desired_height": 0.005,  # desired grinding height (m)
     "max_inclination_angle": 0.5,  # fraction of mortar radius for inclination
     "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
@@ -407,9 +407,10 @@ class OSXGrind(ManipulationEnv):
         """
         assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
+        controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
+
         # change controller params
         if self.enable_controller_tuning:
-            controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
             input_min = np.array([-1]*6)
             input_max = np.array([1]*6)
 

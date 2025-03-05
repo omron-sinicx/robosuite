@@ -1,35 +1,42 @@
-<?xml version='1.0' encoding='utf-8'?>
+<?xml version="1.0" encoding="utf-8"?>
 <mujoco model="mortar">
-  <extension>
-      <plugin plugin="mujoco.sdf.bowl">
-      <instance name="bowl">
-          <config key="height" value="0.0"/>
-          <config key="radius" value="0.04"/>
-          <config key="thickness" value="0.003"/>
-      </instance>
-      </plugin>
-  </extension>
-  <asset>
-    <mesh name="bowl">
-      <plugin instance="bowl"/>
-    </mesh>
-  </asset>
-  <default>
-    <default class="collision">
-        <geom solimp="1.0 1.0 0.001" solref="0.1 2" group="0" condim="4" priority="1"/>
-    </default>
-  </default>
-  <worldbody>
-    <body>
-      <body name="object">
-        <geom pos="0 0 0.0" type="sdf" name="bowl" mesh="bowl" mass="100" rgba=".2 .8 .8 1" class="collision">
-            <plugin instance="bowl"/>
-        </geom>
-        <geom name="bowl_base" pos="0 0 -0.04" size="0.015 0.003" type="cylinder" solimp="0.998 0.998 0.001" solref="0.02 1" density="100" mass="10" rgba=".2 .8 .8 1" friction="0.95 0.3 0.1" group="0" condim="4" />
-      </body>
-      <site rgba="0 0 0 0" size="0.005" pos="0 0 -0.045" name="bottom_site"/>
-      <site rgba="0 0 0 0" size="0.005" pos="0 0 0.03" name="top_site"/>
-      <site rgba="0 0 0 0" size="0.005" pos="0.03 0.03 0" name="horizontal_radius_site"/>
-    </body>
-  </worldbody>
+	<extension>
+		<plugin plugin="mujoco.sdf.bowl">
+			<instance name="bowl">
+				<config key="height" value="0.0" />
+				<config key="radius" value="0.045" />
+				<config key="thickness" value="0.005" />
+			</instance>
+		</plugin>
+	</extension>
+	<asset>
+		<mesh name="bowl">
+			<plugin instance="bowl" />
+		</mesh>
+		<texture builtin="gradient" height="256" rgb1=".9 .9 1." rgb2=".2 .3 .4" type="skybox" width="256" />
+		<texture file="../textures/light-gray-floor-tile.png" type="2d" name="texplane" />
+		<material name="floorplane" reflectance="0.01" shininess="0.0" specular="0.0" texrepeat="2 2" texture="texplane" texuniform="true" />
+	</asset>
+	<default>
+		<default class="visual">
+			<geom rgba="0 1 0 0.6" group="1" />
+		</default>
+		<default class="collision">
+			<geom rgba="0.6 0.4 0 0.8" solimp="1.0 1.0 0.001" solref="0.1 2" group="0" condim="4" priority="1" />
+		</default>
+	</default>
+	<worldbody>
+		<body>
+			<!-- <geom type="sphere" size="0.04" pos="0 0 0.007" rgba="1 0 0 1" group="0"/> -->
+			<body name="object">
+				<geom pos="0 0 0.007" type="sdf" name="bowl" mesh="bowl" mass="100" class="collision">
+					<plugin instance="bowl" />
+				</geom>
+				<geom name="bowl_base" pos="0 0 -0.04" size="0.02 0.003" type="cylinder" class="collision" />
+			</body>
+			<site rgba="0 0 0 0" size="0.005" pos="0 0 -0.045" name="bottom_site" />
+			<site rgba="0 0 0 0" size="0.005" pos="0 0 0.03" name="top_site" />
+			<site rgba="0 0 0 0" size="0.005" pos="0.03 0.03 0" name="horizontal_radius_site" />
+		</body>
+	</worldbody>
 </mujoco>

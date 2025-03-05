@@ -63,7 +63,6 @@ class FrequencyWrapper:
         """
         # Store the action
         self.last_action = action
-        print(f"timestep: {self.timestep}")
 
         # Initialize accumulated reward and done flag
         total_reward = 0

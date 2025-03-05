@@ -16,14 +16,15 @@ class UR5eGrinder(GripperModel):
     """
 
     def __init__(self, idn=0):
-        super().__init__(xml_path_completion("grippers/grinder.xml"), idn=idn)
+        super().__init__(xml_path_completion("grippers/soft_pestle_jig.xml"), idn=idn)
 
     def format_action(self, action):
         return action
 
     @property
     def init_qpos(self):
-        return None
+        return_value = np.zeros(len(self.joints))
+        return return_value
 
     @property
     def _important_geoms(self):
