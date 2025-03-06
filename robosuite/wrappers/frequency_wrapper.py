@@ -32,6 +32,8 @@ class FrequencyWrapper:
 
         # Set the control frequency to the high frequency
         env_config_copy["control_freq"] = trajectory_target_freq
+        self.ignore_done = env_config_copy.get("ignore_done", False)
+        env_config_copy["ignore_done"] = True
 
         # Create the environment with the high frequency, passing all arguments transparently
         self.env = env_class(**env_config_copy)
@@ -77,6 +79,12 @@ class FrequencyWrapper:
             # Use the stored action for each inner step
             obs, reward, done, info = self.env.step(self.last_action)
             total_reward += reward
+
+            is_truncated = (self.timestep >= self.env.horizon) and not self.ignore_done
+            done = done or is_truncated
+
+            if is_truncated:
+                info['termination_reason'] = "TRUNCATED"
 
         self.timestep += 1
         return obs, total_reward, done, info
