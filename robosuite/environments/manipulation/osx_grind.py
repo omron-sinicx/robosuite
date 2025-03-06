@@ -21,10 +21,10 @@ DEFAULT_GRIND_CONFIG = {
         "tracking_trajectory_error": 1.0,  # reward for following the trajectory reference
         "tracking_force_error": 1.0,  # reward for pushing into the mortar according to te force reference
     },
-    "task_complete_reward": 50.0,  # reward per task done
-    "exit_task_space_penalty": 0,  # penalty for moving too far away from the mortar task space
-    "collision_penalty": 0,  # reward for increased velocity
-    "excess_force_penalty": 0,  # penalty for each step that the force is over the safety threshold
+    "task_complete_reward": 1.0,  # reward per task done
+    "exit_task_space_penalty": 1,  # penalty for moving too far away from the mortar task space
+    "collision_penalty": 1,  # reward for increased velocity
+    "excess_force_penalty": 1,  # penalty for each step that the force is over the safety threshold
 
     "force_follow_normalization": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # max load (N)
     "traj_follow_normalization": [0.01, 0.01, 0.01, 0.1, 0.1, 0.1],  # max distance between waypoints
@@ -34,18 +34,11 @@ DEFAULT_GRIND_CONFIG = {
 
     # settings for thresholds
     "force_torque_limits": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # maximum eef force/torque allowed (N | N/m)
-    "mortar_space_threshold_max": 0.1,  # maximum distance from the mortar the eef is allowed to diverge (m)
 
     # tracking settings
     "tracking_trajectory_threshold": 0.005,
     "tracking_force_threshold": 1.0,
     "tracking_trajectory_method": 'per_error_threshold',
-
-    # Task settings
-    "mortar_height": 0.047,  # (m)
-    "mortar_max_radius": 0.04,  # (m)
-    "mortar_mode": "mesh",  # "SDA" or "mesh" Convex Decomposition Approximation
-    "spawn_mortar": True,
 
     "reset_with_ik": True,
 
@@ -61,19 +54,21 @@ DEFAULT_GRIND_CONFIG = {
 
     # misc settings
     "print_results": False,  # Whether to print results or not
-    "log_rewards": False,
-    "log_details": True,
-    "get_info": False,  # Whether to grab info after each env step if not
-    "use_robot_obs": True,  # if we use robot observations (proprioception) as input to the policy
     "early_terminations": True,  # Whether we allow for early terminations or not
 
+    # Task settings
     # Mortar parameters
+    "mortar_height": 0.047,  # (m)
+    "mortar_max_radius": 0.04,  # (m)
+    "mortar_mode": "mesh",  # "SDA" or "mesh" Convex Decomposition Approximation
+    "spawn_mortar": True,
     "mortar_diameter": 0.08,  # diameter of the mortar (m)
     "mortar_inner_height": 0.0155,  # height of the mortar inner surface (m)
     "desired_height": 0.005,  # desired grinding height (m)
     "max_inclination_angle": 0.5,  # fraction of mortar radius for inclination
     "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
     "initial_position": [0, 0, 0.8],  # initial position offset
+    "mortar_space_threshold_max": 0.1,  # maximum distance from the mortar the eef is allowed to diverge (m)
 }
 
 
@@ -141,8 +136,6 @@ class OSXGrind(ManipulationEnv):
 
         reward_scale (None or float): Scales the normalized reward function by the amount specified.
             If None, environment reward remains unnormalized
-
-        reward_shaping (bool): if True, use dense rewards.
 
         placement_initializer (ObjectPositionSampler): if provided, will
             be used to place objects on every reset, else a UniformRandomSampler
@@ -226,7 +219,6 @@ class OSXGrind(ManipulationEnv):
         initialization_noise="default",
         use_camera_obs=True,
         reward_scale=1.0,
-        reward_shaping=True,
         has_renderer=False,
         has_offscreen_renderer=True,
         render_camera="frontview",
@@ -258,8 +250,6 @@ class OSXGrind(ManipulationEnv):
         self.task_config = task_config
 
         self.print_results = self.task_config["print_results"]
-        self.log_rewards = self.task_config["log_rewards"]
-        self.log_details = self.task_config["log_details"]
         self.early_terminations = self.task_config["early_terminations"]
 
         self.force_follow_normalization = self.task_config["force_follow_normalization"]
@@ -269,7 +259,6 @@ class OSXGrind(ManipulationEnv):
 
         # settings for the reward
         self.reward_scale = reward_scale
-        self.reward_shaping = reward_shaping
         self.reward_weights = self.task_config['reward_weights']
         self.exit_task_space_penalty = self.task_config["exit_task_space_penalty"]
         self.task_complete_reward = self.task_config["task_complete_reward"]
@@ -429,57 +418,33 @@ class OSXGrind(ManipulationEnv):
 
         reward = 0.0
 
-        # If the arm does not present unwanted behaviors (collisions, reaching joint limits,
-        # or other conditions based on @termination_flag), calculate reward
-        # (we don't want to reward grinding if there are unsafe situations)
+        # Reward for pushing into mortar with desired linear forces
+        distance_from_ref_force = -self.tracking_force_error
+        force_reward = self.reward_weights['tracking_force_error'] * distance_from_ref_force
 
-        if not self._check_task_space_limits():
-            reward = self.exit_task_space_penalty
-            self.task_space_exits += 1
-        elif not self._check_force_torque_limits():
-            reward = self.excess_force_penalty
-            self.f_excess += 1
-        elif self.check_contact(self.robots[0].robot_model):
-            if self.reward_shaping:
-                reward = self.collision_penalty
-            self.collisions += 1
+        # Reward for following desired linear trajectory
+        tracking_trajectory_error = -self.tracking_error
+        traj_reward = self.reward_weights['tracking_trajectory_error'] * tracking_trajectory_error
 
-        # sparse completion reward
-        elif self._check_success():
-            reward = self.task_complete_reward
+        step_penalty = -1
+        # TODO: reward for finishing faster?
 
-        else:
-            # use a shaping reward
-            if self.reward_shaping:
+        reward = force_reward + traj_reward + step_penalty
+        # print(f"{force_reward=} {traj_reward=} {step_penalty=}")
 
-                # Reward for pushing into mortar with desired linear forces
-                distance_from_ref_force = -self.tracking_force_error
-                force_reward = self.reward_weights['tracking_force_error'] * distance_from_ref_force
-
-                # Reward for following desired linear trajectory
-                tracking_trajectory_error = -self.tracking_error
-                # print(self.tracking_error, tracking_trajectory_error)
-                traj_reward = self.reward_weights['tracking_trajectory_error'] * tracking_trajectory_error
-
-                step_penalty = -1
-                # TODO: reward for finishing faster?
-
-                reward = force_reward + traj_reward + step_penalty
-                # print(f"{force_reward=} {traj_reward=} {step_penalty=}")
-
-                # Printing results
-                if self.print_results:
-                    string_to_print = (
-                        "Process {pid}, timestep {ts:>4}: reward: {rw:8.4f}, collisions: {sc:>3}, f_excess: {fe:>3}, task_space_limit: {te:>3}".format(
-                            pid=id(multiprocessing.current_process()),
-                            ts=self.timestep,
-                            rw=reward,
-                            sc=self.collisions,
-                            fe=self.f_excess,
-                            te=self.task_space_exits,
-                        )
-                    )
-                    print(string_to_print)
+        # Printing results
+        if self.print_results:
+            string_to_print = (
+                "Process {pid}, timestep {ts:>4}: reward: {rw:8.4f}, collisions: {sc:>3}, f_excess: {fe:>3}, task_space_limit: {te:>3}".format(
+                    pid=id(multiprocessing.current_process()),
+                    ts=self.timestep,
+                    rw=reward,
+                    sc=self.collisions,
+                    fe=self.f_excess,
+                    te=self.task_space_exits,
+                )
+            )
+            print(string_to_print)
 
         return reward
 
