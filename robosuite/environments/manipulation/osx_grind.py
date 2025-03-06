@@ -25,9 +25,10 @@ DEFAULT_GRIND_CONFIG = {
     "exit_task_space_penalty": 1,  # penalty for moving too far away from the mortar task space
     "collision_penalty": 1,  # reward for increased velocity
     "excess_force_penalty": 1,  # penalty for each step that the force is over the safety threshold
+    "step_penalty": -1,  # penalty for each step
 
     "force_follow_normalization": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # max load (N)
-    "traj_follow_normalization": [0.01, 0.01, 0.01, 0.1, 0.1, 0.1],  # max distance between waypoints
+    "traj_follow_normalization": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1],  # max distance between waypoints
 
     "table_full_size": [0.8, 0.8, 0.05],
     "table_friction": [1.0, 5e-3, 1e-4],
@@ -46,6 +47,7 @@ DEFAULT_GRIND_CONFIG = {
     "randomize_reference_trajectory": False,
     "num_waypoints": 1000,
     "duration": 10,
+    "duration_range": [3.0, 30.0],
     "target_force": 10.0,  # N
     "target_force_range": [1.0, 15.0],
 
@@ -54,7 +56,6 @@ DEFAULT_GRIND_CONFIG = {
     "action_ndim": 4,  # 4D or 12D
 
     # misc settings
-    "print_results": False,  # Whether to print results or not
     "early_terminations": True,  # Whether we allow for early terminations or not
 
     # Task settings
@@ -250,7 +251,6 @@ class OSXGrind(ManipulationEnv):
         self.horizon = horizon
         self.task_config = task_config
 
-        self.print_results = self.task_config["print_results"]
         self.early_terminations = self.task_config["early_terminations"]
 
         self.force_follow_normalization = self.task_config["force_follow_normalization"]
@@ -265,7 +265,7 @@ class OSXGrind(ManipulationEnv):
         self.task_complete_reward = self.task_config["task_complete_reward"]
         self.collision_penalty = self.task_config["collision_penalty"]
         self.excess_force_penalty = self.task_config["excess_force_penalty"]
-
+        self.step_penalty = self.task_config["step_penalty"]
         # settings for table top and task space
         self.mortar_height = self.task_config["mortar_height"]
         self.mortar_radius = self.task_config["mortar_max_radius"]
@@ -282,26 +282,28 @@ class OSXGrind(ManipulationEnv):
         self.task_box = np.array([self.mortar_radius, self.mortar_radius, self.mortar_height+self.table_offset[2]]) + self.mortar_space_threshold_max
 
         # references to follow
-        self.num_waypoints = self.task_config["num_waypoints"]
         self.current_waypoint_index = 0
         self.target_force = self.task_config["target_force"]
         self.target_force_range = self.task_config["target_force_range"]
 
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+
+        self.duration = self.task_config["duration"]
+        self.duration_range = self.task_config["duration_range"]
+        self.num_waypoints = control_freq * self.duration // 10
+        self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
+        self.last_step_time = 0
+
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
         self.randomize_reference_trajectory = self.task_config['randomize_reference_trajectory']
         if reference_trajectory is None:
-            self.reference_trajectory = self._randomize_reference_trajectory()
+            self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
         else:
             self.reference_trajectory = reference_trajectory
 
         if not self.randomize_reference_trajectory:
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
-
-        self.duration = self.task_config["duration"]
-        self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
-        self.last_step_time = 0
 
         self.tracking_trajectory_threshold = self.task_config['tracking_trajectory_threshold']
         self.tracking_trajectory_method = self.task_config['tracking_trajectory_method']
@@ -320,6 +322,12 @@ class OSXGrind(ManipulationEnv):
 
         self.input_min = np.array([-1]*6)
         self.input_max = np.array([1]*6)
+
+        self.reward_dict = {
+            "force_reward": 0.0,
+            "traj_reward": 0.0,
+            "step_penalty": 0.0,
+        }
 
         super().__init__(
             robots=robots,
@@ -426,25 +434,15 @@ class OSXGrind(ManipulationEnv):
         tracking_trajectory_error = -self.tracking_error
         traj_reward = self.reward_weights['tracking_trajectory_error'] * tracking_trajectory_error
 
-        step_penalty = -1
         # TODO: reward for finishing faster?
 
-        reward = force_reward + traj_reward + step_penalty
+        reward = force_reward + traj_reward + self.step_penalty
+        self.reward_dict = {
+            "force_reward": force_reward,
+            "traj_reward": traj_reward,
+            "step_penalty": self.step_penalty,
+        }
         # print(f"{force_reward=} {traj_reward=} {step_penalty=}")
-
-        # Printing results
-        if self.print_results:
-            string_to_print = (
-                "Process {pid}, timestep {ts:>4}: reward: {rw:8.4f}, collisions: {sc:>3}, f_excess: {fe:>3}, task_space_limit: {te:>3}".format(
-                    pid=id(multiprocessing.current_process()),
-                    ts=self.timestep,
-                    rw=reward,
-                    sc=self.collisions,
-                    fe=self.f_excess,
-                    te=self.task_space_exits,
-                )
-            )
-            print(string_to_print)
 
         return reward
 
@@ -457,6 +455,8 @@ class OSXGrind(ManipulationEnv):
             relative_distance[3:] = T.quaternions_orientation_error(ref_quat, self.eef_quat)
 
         # track error of the actions controlled by the policy
+        # normalize by the trajectory follow normalization
+        relative_distance /= self.traj_follow_normalization
         relative_distance *= self.selection_matrix
         self.tracking_error = np.linalg.norm(relative_distance)
         return relative_distance
@@ -466,6 +466,8 @@ class OSXGrind(ManipulationEnv):
 
         # in base frame
         relative_wrench = self.reference_force[self.current_waypoint_index] - self.eef_wrench
+        # normalize by the force follow normalization
+        relative_wrench /= self.force_follow_normalization
         # only consider the error for the force controlled directions
         relative_wrench *= (np.ones(6) - self.selection_matrix)
 
@@ -589,7 +591,7 @@ class OSXGrind(ManipulationEnv):
 
         @sensor(modality=f"{pf}proprio")
         def robot0_relative_wrench(obs_cache):
-            return self._compute_relative_wrenches() / self.force_follow_normalization
+            return self._compute_relative_wrenches()
 
         @sensor(modality=f"{pf}proprio")
         def robot0_wrench(obs_cache):
@@ -632,7 +634,7 @@ class OSXGrind(ManipulationEnv):
         self.sim.model._model.vis.scale.contactheight = 0.01
 
         if self.randomize_reference_trajectory:
-            self.reference_trajectory = self._randomize_reference_trajectory()
+            self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik and self.robots[0].robot_joints is not None:
@@ -677,15 +679,14 @@ class OSXGrind(ManipulationEnv):
         """
         reward, done, info = super()._post_action(action)
 
+        if done:
+            info['termination_reason'] = "TRUNCATED"
+
         # allow episode to finish early if allowed
-        if self.early_terminations:
+        elif self.early_terminations:
             terminated, reason = self._check_terminated()
             info['termination_reason'] = reason
             done = done or terminated
-
-        # Add termination criteria
-        if done and self.print_results:
-            print("Max steps per episode reached")
 
         # Only update waypoint if we haven't reached the end of trajectory
         if self.current_waypoint_index < self.num_waypoints - 1:
@@ -750,22 +751,16 @@ class OSXGrind(ManipulationEnv):
 
         # Prematurely terminate if contacting the table with the arm
         if self.check_contact(self.robots[0].robot_model):
-            if self.print_results:
-                print(20 * "-" + " COLLIDED " + 20 * "-")
             terminated = True
             reason = "COLLIDED"
 
         # Prematurely terminate if the end effector leave the play area
         if not self._check_task_space_limits():
-            if self.print_results:
-                print(20 * "-" + " TASK SPACE LIMIT REACHED " + 20 * "-")
             terminated = True
             reason = "TASK SPACE LIMIT REACHED"
 
         # Prematurely terminate if task is completed
         if self._check_success():
-            if self.print_results:
-                print(20 * "-" + " TRACKING COMPLETED " + 20 * "-")
             terminated = True
             reason = "TRACKING COMPLETED"
 
@@ -802,7 +797,7 @@ class OSXGrind(ManipulationEnv):
         abs_ft = np.abs(self.eef_wrench)
         return not np.any(abs_ft > self.force_torque_limits)
 
-    def _randomize_reference_trajectory(self):
+    def _randomize_reference_trajectory(self, control_freq):
         mortar_diameter = self.task_config["mortar_diameter"]
         mortar_inner_height = self.task_config["mortar_inner_height"]
         max_inclination_angle = self.task_config["max_inclination_angle"]
@@ -811,10 +806,16 @@ class OSXGrind(ManipulationEnv):
         initial_position[2] += mortar_inner_height  # Add inner height to z position
 
         if self.randomize_reference_trajectory:
-            desired_height = np.random.uniform(low=0.0, high=0.04)
+            # randomize the duration and the number of waypoints
+            self.duration = np.random.uniform(low=self.duration_range[0], high=self.duration_range[1])
+            self.num_waypoints = int(control_freq * self.duration // 10)
+            # randomize the desired height
+            desired_height = np.random.uniform(low=0.0, high=0.035)
             # update the target force
             target_force = np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1])
             self.reference_force = np.array([[0, 0, target_force, 0, 0, 0]] * self.num_waypoints)
+
+            # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {target_force}")
         else:
             desired_height = self.task_config["desired_height"]
 
@@ -826,8 +827,6 @@ class OSXGrind(ManipulationEnv):
             max_angle=max_inclination_angle
         )
         reference_trajectory[:, :3] += initial_position
-        # reference_trajectory[1:, :3] += [0.0, 0.0, 0.01]
-        # reference_trajectory[:, 3:] = initial_orientation
         return reference_trajectory
 
     @property
