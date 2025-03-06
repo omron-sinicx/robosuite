@@ -125,6 +125,7 @@ class ForwardDynamicsComplianceController(Controller):
         kp_limits=(0, 300),
         damping_ratio=1.0,
         damping_ratio_limits=(0, 100),
+        virtual_force_limits=(-50.0, 50.0),
         selection_matrix=np.ones(6),
         position_limits=None,
         orientation_limits=None,
@@ -145,6 +146,7 @@ class ForwardDynamicsComplianceController(Controller):
         self.frame_of_reference = frame_of_reference
         self.selection_matrix = selection_matrix
         self.gripper_body_name = gripper_body_name
+        self.virtual_force = np.zeros(6)
         if self.gripper_body_name:
             self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{gripper_body_name}")
 
@@ -223,6 +225,10 @@ class ForwardDynamicsComplianceController(Controller):
         self.damping_ratio = damping_ratio
         self.damping_ratio_min = self.nums2array(damping_ratio_limits[0], 6)
         self.damping_ratio_max = self.nums2array(damping_ratio_limits[1], 6)
+
+        # virtual force limits
+        self.virtual_force_min = self.nums2array(virtual_force_limits[0], 6)
+        self.virtual_force_max = self.nums2array(virtual_force_limits[1], 6)
 
         self.error_scale = error_scale
 
@@ -386,6 +392,9 @@ class ForwardDynamicsComplianceController(Controller):
 
             net_force, eef_to_base = self.compute_compliance_error()
 
+            # Add virtual force to net force
+            net_force += self.virtual_force
+
             # Compute necessary error terms for PD controller
             cartesian_input = self.compute_spatial_controller(net_force, period)
 
@@ -540,6 +549,8 @@ class ForwardDynamicsComplianceController(Controller):
 
         self.goal_ori = np.array(self.ref_ori_mat)
         self.goal_pos = np.array(self.ref_pos)
+
+        self.virtual_force = np.zeros(6)
 
         # Also reset interpolators if required
 
