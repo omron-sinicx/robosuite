@@ -56,16 +56,13 @@ DEFAULT_GRIND_CONFIG = {
     "target_force": 10.0,  # N
 
     # action settings
-    "action_type": "stiffness_kp",  # "stiffness_kp" or "virtual_force"
+    "action_type": "stiffness_kp",  # "stiffness_kp" or "virtual_force" or "none"
     "action_ndim": 4,  # 4D or 12D
-    "enable_controller_tuning": False,
 
     # misc settings
-    "evaluate": False,
     "print_results": False,  # Whether to print results or not
     "log_rewards": False,
     "log_details": True,
-    "log_dir": "log",
     "get_info": False,  # Whether to grab info after each env step if not
     "use_robot_obs": True,  # if we use robot observations (proprioception) as input to the policy
     "early_terminations": True,  # Whether we allow for early terminations or not
@@ -331,32 +328,6 @@ class OSXGrind(ManipulationEnv):
         self.action_type = self.task_config['action_type']
 
         self.placement_initializer = None
-        self.enable_controller_tuning = self.task_config['enable_controller_tuning']
-        # log data
-        self.prev_quat = self.reference_trajectory[0, 3:]
-        self.evaluate = self.task_config['evaluate']
-        self.log_dir = self.task_config['log_dir']
-        self.log_dict = {
-            'rewards': {
-                'traj_error': [],
-                'force_error': [],
-            },
-            'details': {
-                'timesteps': [],
-                'waypoint': [],
-                'action_in': [],
-                'res_action': [],
-                'scl_action': [],
-                'current_ref': [],
-                'current_pos': [],
-                'current_quat': [],
-                'current_force_ref': [],
-                'kp': [],
-                'current_force': [],
-                'current_force_ref_eef_frame': [],
-                'current_force_eef_frame': [],
-            }
-        }
 
         self.input_min = np.array([-1]*6)
         self.input_max = np.array([1]*6)
@@ -416,7 +387,9 @@ class OSXGrind(ManipulationEnv):
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
 
         # change controller params
-        if self.enable_controller_tuning and self.action_type == "stiffness_kp":
+        if self.action_type is None:
+            pass
+        elif self.action_type == "stiffness_kp":
 
             if self.action_ndim == 4:
                 action_kp = np.concatenate([[action[0]]*3, [action[1]]*3])
@@ -493,10 +466,6 @@ class OSXGrind(ManipulationEnv):
 
                 reward = force_reward + traj_reward + step_penalty
                 # print(f"{force_reward=} {traj_reward=} {step_penalty=}")
-
-                if self.log_rewards:
-                    self.log_dict['rewards']['traj_error'].append(traj_reward)
-                    self.log_dict['rewards']['force_error'].append(force_reward)
 
                 # Printing results
                 if self.print_results:
@@ -914,23 +883,3 @@ class OSXGrind(ManipulationEnv):
     @property
     def eef_quat(self):
         return T.mat2quat(self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3))
-
-    def _save_details(self):
-        np.savez(
-            self.log_dir + "/step_actions.npz",
-            timesteps=self.log_dict['details']['timesteps'],
-            waypoint=self.log_dict['details']['waypoint'],
-            action_in=self.log_dict['details']['action_in'],
-            res_action=self.log_dict['details']['res_action'],
-            scl_action=self.log_dict['details']['scl_action'],
-            crnt_ref=self.log_dict['details']['current_ref'],
-            crnt_pos=self.log_dict['details']['current_pos'],
-            crnt_quat=self.log_dict['details']['current_quat'],
-            crnt_f_ref=self.log_dict['details']['current_force_ref'],
-            crnt_f_ref_eef=self.log_dict['details']['current_force_ref_eef_frame'],
-            crnt_f_eef=self.log_dict['details']['current_force_eef_frame'],
-            crnt_f=self.log_dict['details']['current_force'],
-            contr_kp=self.log_dict['details']['kp'],
-            f_rew=self.log_dict['rewards']['force_error'],
-            p_rew=self.log_dict['rewards']['traj_error']
-        )
