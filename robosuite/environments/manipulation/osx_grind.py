@@ -47,6 +47,7 @@ DEFAULT_GRIND_CONFIG = {
     "num_waypoints": 1000,
     "duration": 10,
     "target_force": 10.0,  # N
+    "target_force_range": [1.0, 15.0],
 
     # action settings
     "action_type": "stiffness_kp",  # "stiffness_kp" or "virtual_force" or "none"
@@ -229,7 +230,7 @@ class OSXGrind(ManipulationEnv):
         lite_physics=True,
         horizon=1000,
         ignore_done=False,
-        hard_reset=True,
+        hard_reset=False,
         camera_names="agentview",
         camera_heights=256,
         camera_widths=256,
@@ -284,6 +285,8 @@ class OSXGrind(ManipulationEnv):
         self.num_waypoints = self.task_config["num_waypoints"]
         self.current_waypoint_index = 0
         self.target_force = self.task_config["target_force"]
+        self.target_force_range = self.task_config["target_force_range"]
+
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
@@ -292,15 +295,12 @@ class OSXGrind(ManipulationEnv):
             self.reference_trajectory = self._randomize_reference_trajectory()
         else:
             self.reference_trajectory = reference_trajectory
-        self.trajectory_len = len(self.reference_trajectory)
 
-        if self.target_force is None:
-            desired_contact_force = np.random.uniform(low=3, high=10)
-            self.reference_force = np.array([[0, 0, desired_contact_force, 0, 0, 0]] * self.trajectory_len)
-        else:
-            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.trajectory_len)
+        if not self.randomize_reference_trajectory:
+            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
+
         self.duration = self.task_config["duration"]
-        self.step_duration = max(1.0/500, self.duration / float(self.trajectory_len))  # Minimum 500Hz like in real UR5e
+        self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
         self.tracking_trajectory_threshold = self.task_config['tracking_trajectory_threshold']
@@ -369,7 +369,7 @@ class OSXGrind(ManipulationEnv):
                 - (dict) info about current episode state
 
         Raises:
-            ValueError: If action_ndim is not 4 or 12
+            ValueError: If action_ndim is not 4, 6, or 12
         """
         assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
@@ -688,7 +688,7 @@ class OSXGrind(ManipulationEnv):
             print("Max steps per episode reached")
 
         # Only update waypoint if we haven't reached the end of trajectory
-        if self.current_waypoint_index < self.trajectory_len - 1:
+        if self.current_waypoint_index < self.num_waypoints - 1:
 
             if self.sim.data._data.time - self.last_step_time > self.step_duration:
                 if self.tracking_trajectory_method == 'per_step':  # equivalent to DURATION mode
@@ -779,7 +779,7 @@ class OSXGrind(ManipulationEnv):
             bool: True completed task
         """
 
-        return self.current_waypoint_index + 1 == self.trajectory_len
+        return self.current_waypoint_index + 1 == self.num_waypoints
 
     def _check_task_space_limits(self):
         """
@@ -812,6 +812,9 @@ class OSXGrind(ManipulationEnv):
 
         if self.randomize_reference_trajectory:
             desired_height = np.random.uniform(low=0.0, high=0.04)
+            # update the target force
+            target_force = np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1])
+            self.reference_force = np.array([[0, 0, target_force, 0, 0, 0]] * self.num_waypoints)
         else:
             desired_height = self.task_config["desired_height"]
 
@@ -848,3 +851,17 @@ class OSXGrind(ManipulationEnv):
     @property
     def eef_quat(self):
         return T.mat2quat(self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3))
+
+    @property
+    def action_spec(self):
+        """
+        Action space (low, high) for this environment
+
+        Returns:
+            2-tuple:
+
+                - (np.array) minimum (low) action values
+                - (np.array) maximum (high) action values
+        """
+        low, high = -np.ones(self.action_ndim), np.ones(self.action_ndim)
+        return low, high
