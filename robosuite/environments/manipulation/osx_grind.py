@@ -57,7 +57,7 @@ DEFAULT_GRIND_CONFIG = {
 
     # misc settings
     "early_terminations": True,  # Whether we allow for early terminations or not
-
+    "clip_reward": True,  # Whether we clip the reward or not
     # Task settings
     # Mortar parameters
     "mortar_height": 0.047,  # (m)
@@ -261,6 +261,7 @@ class OSXGrind(ManipulationEnv):
         # settings for the reward
         self.reward_scale = reward_scale
         self.reward_weights = self.task_config['reward_weights']
+        self.clip_reward = self.task_config["clip_reward"]
         self.exit_task_space_penalty = self.task_config["exit_task_space_penalty"]
         self.task_complete_reward = self.task_config["task_complete_reward"]
         self.collision_penalty = self.task_config["collision_penalty"]
@@ -327,7 +328,17 @@ class OSXGrind(ManipulationEnv):
             "force_reward": 0.0,
             "traj_reward": 0.0,
             "step_penalty": 0.0,
+            "force_total_reward": 0.0,
+            "traj_total_reward": 0.0,
         }
+
+        self.init_qpos = np.array(
+            [-0.24163013, -0.88630004,  1.99429391, -2.6787902, -1.57079633, -4.95401911]
+        )
+
+        self.cumulative_reward = 0.0
+
+        self.ik = None
 
         super().__init__(
             robots=robots,
@@ -437,12 +448,16 @@ class OSXGrind(ManipulationEnv):
         # TODO: reward for finishing faster?
 
         reward = force_reward + traj_reward + self.step_penalty
-        self.reward_dict = {
-            "force_reward": force_reward,
-            "traj_reward": traj_reward,
-            "step_penalty": self.step_penalty,
-        }
-        # print(f"{force_reward=} {traj_reward=} {step_penalty=}")
+
+        if self.clip_reward:
+            reward = np.clip(reward, -1, 0)
+
+        self.reward_dict["force_reward"] = force_reward
+        self.reward_dict["traj_reward"] = traj_reward
+        self.reward_dict["step_penalty"] = self.step_penalty
+        self.reward_dict["force_total_reward"] += force_reward
+        self.reward_dict["traj_total_reward"] += traj_reward
+        # print(f"{force_reward=} {traj_reward=} {self.step_penalty=}")
 
         return reward
 
@@ -456,10 +471,12 @@ class OSXGrind(ManipulationEnv):
 
         # track error of the actions controlled by the policy
         # normalize by the trajectory follow normalization
-        relative_distance /= self.traj_follow_normalization
-        relative_distance *= self.selection_matrix
-        self.tracking_error = np.linalg.norm(relative_distance)
-        return relative_distance
+        normalized_relative_distance = relative_distance / self.traj_follow_normalization
+
+        # only consider the error for the position controlled directions
+        tracking_error = normalized_relative_distance * self.position_control_dims
+        self.tracking_error = np.linalg.norm(tracking_error)
+        return normalized_relative_distance
 
     def _compute_relative_wrenches(self):
         relative_wrench = np.zeros(6)
@@ -467,12 +484,16 @@ class OSXGrind(ManipulationEnv):
         # in base frame
         relative_wrench = self.reference_force[self.current_waypoint_index] - self.eef_wrench
         # normalize by the force follow normalization
-        relative_wrench /= self.force_follow_normalization
-        # only consider the error for the force controlled directions
-        relative_wrench *= (np.ones(6) - self.selection_matrix)
+        normalized_relative_wrench = relative_wrench / self.force_follow_normalization
 
-        self.tracking_force_error = np.linalg.norm(relative_wrench)
-        return relative_wrench
+        # only consider the error for the force controlled directions
+        tracking_force_error = normalized_relative_wrench * self.force_control_dims
+        self.tracking_force_error = np.linalg.norm(tracking_force_error)
+
+        # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
+        force_controlled_indices = np.where(self.force_control_dims == 1)[0]
+        force_controlled_values = normalized_relative_wrench[force_controlled_indices]
+        return force_controlled_values
 
     def _load_model(self):
         """
@@ -587,7 +608,7 @@ class OSXGrind(ManipulationEnv):
 
         @sensor(modality=f"{pf}proprio")
         def robot0_relative_pose(obs_cache):
-            return self._compute_relative_distance() / self.traj_follow_normalization
+            return self._compute_relative_distance()
 
         @sensor(modality=f"{pf}proprio")
         def robot0_relative_wrench(obs_cache):
@@ -628,6 +649,13 @@ class OSXGrind(ManipulationEnv):
         self.collisions = 0
         self.f_excess = 0
         self.task_space_exits = 0
+        self.reward_dict = {
+            "force_reward": 0.0,
+            "traj_reward": 0.0,
+            "step_penalty": 0.0,
+            "force_total_reward": 0.0,
+            "traj_total_reward": 0.0,
+        }
 
         # Update the contact point visual properties
         self.sim.model._model.vis.scale.contactwidth = 0.01
@@ -636,21 +664,33 @@ class OSXGrind(ManipulationEnv):
         if self.randomize_reference_trajectory:
             self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
 
+        if self.robots[0].composite_controller is None or self.hard_reset:
+            # instantiate controllers, only once
+            super()._reset_internal()
+            if self.ik is None:
+                self.ik = MuJoCoIKSolver(self.sim.model, self.sim.data,
+                                         "gripper0_right_grip_site",
+                                         joint_indexes=self.robots[0].joint_indexes,
+                                         position_threshold=0.001,
+                                         rotation_threshold=0.01,
+                                         max_iterations=1000)
+
         # Update the initial position of the robot based on the initial pose of the reference trajectory
-        if self.reset_with_ik and self.robots[0].robot_joints is not None:
-            ik = MuJoCoIKSolver(self.sim.model, self.sim.data, "gripper0_right_grip_site", joint_indexes=self.robots[0].joint_indexes)
-            result = ik.solve_ik(target_pos=self.reference_trajectory[0][:3],
-                                 target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
-                                 initial_guess=self.robots[0].init_qpos)
+        if self.reset_with_ik:
+            result = self.ik.solve_ik(target_pos=self.reference_trajectory[0][:3],
+                                      target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
+                                      initial_guess=self.init_qpos)
 
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
+                self.robots[0].init_qpos = self.init_qpos
                 print("IK solution not found, using default init_q. Error msg: ", result.message)
 
         super()._reset_internal()
 
-        self.selection_matrix = self.robots[0].composite_controller.part_controllers['right'].selection_matrix
+        self.position_control_dims = self.robots[0].composite_controller.part_controllers['right'].selection_matrix
+        self.force_control_dims = np.ones(6) - self.position_control_dims
         self.last_step_time = self.sim.data._data.time
 
         # Reset all object positions using initializer sampler if we're not directly loading from an xml
@@ -707,6 +747,12 @@ class OSXGrind(ManipulationEnv):
                 offset_cylinder_half_size = T.rotate_vector_by_quaternion([0, 0, -self.cylinder_length], self.reference_trajectory[self.current_waypoint_index][3:])
                 self.sim.model.body_pos[self.force_cylinder_body_id] = self.reference_trajectory[self.current_waypoint_index][:3] + offset_cylinder_half_size
                 self.sim.model.body_quat[self.force_cylinder_body_id] = T.convert_quat(self.reference_trajectory[self.current_waypoint_index][3:], "wxyz")
+
+        self.cumulative_reward += reward
+        if done:
+            # print(f"Cumulative reward: {self.cumulative_reward}")
+            self.cumulative_reward = 0.0
+            print(f"\n\nCumulative reward: {self.reward_dict['force_total_reward']} {self.reward_dict['traj_total_reward']}")
 
         return reward, done, info
 
@@ -807,17 +853,18 @@ class OSXGrind(ManipulationEnv):
 
         if self.randomize_reference_trajectory:
             # randomize the duration and the number of waypoints
-            self.duration = np.random.uniform(low=self.duration_range[0], high=self.duration_range[1])
+            self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
             self.num_waypoints = int(control_freq * self.duration // 10)
             # randomize the desired height
-            desired_height = np.random.uniform(low=0.0, high=0.035)
+            desired_height = np.random.uniform(low=0.001, high=0.020)
             # update the target force
-            target_force = np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1])
+            target_force = int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             self.reference_force = np.array([[0, 0, target_force, 0, 0, 0]] * self.num_waypoints)
 
-            # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {target_force}")
         else:
             desired_height = self.task_config["desired_height"]
+            target_force = self.task_config["target_force"]
+        # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {target_force} desired_height: {desired_height}")
 
         reference_trajectory = generate_mortar_trajectory(
             mortar_diameter=mortar_diameter,

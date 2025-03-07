@@ -22,7 +22,7 @@
 			<geom rgba="0 1 0 0.6" group="1" />
 		</default>
 		<default class="collision">
-			<geom rgba="0.6 0.4 0 0.8" solimp="1.0 1.0 0.001" solref="0.1 2" group="0" condim="4" priority="1" />
+			<geom rgba="0.6 0.4 0 0.8" solimp="1.0 1.0 0.001" solref="0.1 2" group="0" condim="4" priority="1" friction="0 0 0" />
 		</default>
 	</default>
 	<worldbody>

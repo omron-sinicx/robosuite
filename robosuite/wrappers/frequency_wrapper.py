@@ -87,7 +87,8 @@ class FrequencyWrapper:
                 info['termination_reason'] = "TRUNCATED"
 
         self.timestep += 1
-        return obs, total_reward, done, info
+        wrapper_reward = total_reward / self.steps_per_action
+        return obs, wrapper_reward, done, info
 
     def render(self, **kwargs):
         """Render the environment."""
