@@ -58,6 +58,8 @@ DEFAULT_GRIND_CONFIG = {
     # misc settings
     "early_terminations": True,  # Whether we allow for early terminations or not
     "clip_reward": True,  # Whether we clip the reward or not
+    "relative_wrench_mode": "controlled_directions_only",  # "controlled_directions_only" or "all"
+
     # Task settings
     # Mortar parameters
     "mortar_height": 0.047,  # (m)
@@ -491,9 +493,14 @@ class OSXGrind(ManipulationEnv):
         self.tracking_force_error = np.linalg.norm(tracking_force_error)
 
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
-        force_controlled_indices = np.where(self.force_control_dims == 1)[0]
-        force_controlled_values = normalized_relative_wrench[force_controlled_indices]
-        return force_controlled_values
+        if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
+            force_controlled_indices = np.where(self.force_control_dims == 1)[0]
+            force_controlled_values = normalized_relative_wrench[force_controlled_indices]
+            return force_controlled_values
+        elif self.task_config["relative_wrench_mode"] == "all":
+            return normalized_relative_wrench
+        else:
+            raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
 
     def _load_model(self):
         """
