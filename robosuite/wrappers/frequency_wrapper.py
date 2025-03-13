@@ -44,6 +44,7 @@ class FrequencyWrapper:
     def reset(self, **kwargs):
         """Reset the environment and return the initial observation."""
         obs = self.env.reset(**kwargs)
+        self.env.horizon = self.env.duration * self.action_control_freq * 2  # at most twice the duration
         self.last_action = None
         self.timestep = 0
         return obs

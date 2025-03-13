@@ -25,7 +25,7 @@ from robosuite.wrappers import Wrapper
 
 class GymWrapper(Wrapper, gym.Env):
     metadata = None
-    render_mode = None
+    render_mode = 'human'
     """
     Initializes the Gym wrapper. Mimics many of the required functionalities of the Wrapper class
     found in the gym.core module

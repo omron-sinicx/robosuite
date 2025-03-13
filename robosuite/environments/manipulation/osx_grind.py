@@ -607,27 +607,26 @@ class OSXGrind(ManipulationEnv):
         pf = self.robots[0].robot_model.naming_prefix
 
         @sensor(modality=f"{pf}proprio")
-        def robot0_relative_pose(obs_cache):
+        def relative_pose(obs_cache):
             return self._compute_relative_distance()
 
         @sensor(modality=f"{pf}proprio")
-        def robot0_relative_wrench(obs_cache):
+        def relative_wrench(obs_cache):
             return self._compute_relative_wrenches()
 
         @sensor(modality=f"{pf}proprio")
-        def robot0_wrench(obs_cache):
+        def eef_wrench(obs_cache):
             return self.eef_wrench
 
-        # # needed in the list of observables
         @sensor(modality=f"{pf}proprio")
-        def robot0_eef_force(obs_cache):
-            return self.eef_wrench[:3]
+        def eef_pos(obs_cache):
+            return self.eef_pos
 
         @sensor(modality=f"{pf}proprio")
-        def robot0_eef_torque(obs_cache):
-            return self.eef_wrench[3:]
+        def eef_rot_ortho6d(obs_cache):
+            return T.quat2ortho6(self.eef_quat)
 
-        sensors = [robot0_eef_force, robot0_eef_torque, robot0_relative_pose, robot0_relative_wrench]
+        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, relative_pose, relative_wrench]
         names = [s.__name__ for s in sensors]
 
         # Create observables
