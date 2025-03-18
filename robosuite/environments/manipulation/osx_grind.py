@@ -326,6 +326,7 @@ class OSXGrind(ManipulationEnv):
         self.action_change_type = self.task_config['action_change_type']
         self.action_step_size = self.task_config['action_step_size']
         self.previous_action = np.zeros(self.action_ndim)
+        self.current_action = np.zeros(self.action_ndim)
 
         self.placement_initializer = None
 
@@ -400,6 +401,10 @@ class OSXGrind(ManipulationEnv):
         Raises:
             ValueError: If action_ndim is not 4, 6, or 12
         """
+        if not np.allclose(self.current_action, policy_action):
+            self.previous_action = self.current_action.copy()
+            self.current_action = policy_action.copy()
+
         action = policy_action.copy()
         assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
@@ -473,8 +478,8 @@ class OSXGrind(ManipulationEnv):
         traj_reward = self.reward_weights['tracking_trajectory_error'] * tracking_trajectory_error
 
         # Reward for smooth actions - penalize squared differences between consecutive actions
-        if action is not None and hasattr(self, 'previous_action'):
-            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sum((action - self.previous_action)**2)
+        if self.current_action is not None and hasattr(self, 'previous_action'):
+            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sum((self.current_action - self.previous_action)**2)
         else:
             action_smoothness_penalty = 0.0
 
@@ -798,8 +803,6 @@ class OSXGrind(ManipulationEnv):
             # print(f"Cumulative reward: {self.cumulative_reward}")
             self.cumulative_reward = 0.0
             print(f"\n\nCumulative reward: {self.reward_dict['force_total_reward']} {self.reward_dict['traj_total_reward']}")
-
-        self.previous_action = action.copy()
 
         return reward, done, info
 
