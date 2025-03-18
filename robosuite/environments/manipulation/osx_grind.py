@@ -20,6 +20,7 @@ DEFAULT_GRIND_CONFIG = {
     "reward_weights": {
         "tracking_trajectory_error": 1.0,  # reward for following the trajectory reference
         "tracking_force_error": 1.0,  # reward for pushing into the mortar according to te force reference
+        "action_smoothness": 0.1,  # reward for smooth actions (low value to start)
     },
     "task_complete_reward": 1.0,  # reward per task done
     "exit_task_space_penalty": 1,  # penalty for moving too far away from the mortar task space
@@ -54,6 +55,8 @@ DEFAULT_GRIND_CONFIG = {
     # action settings
     "action_type": "stiffness_kp",  # "stiffness_kp" or "virtual_force" or "none"
     "action_ndim": 4,  # 4D or 12D
+    "action_change_type": "immediate",  # "immediate" or "progressive"
+    "action_step_size": 0.01,  # step size for progressive action change
 
     # misc settings
     "early_terminations": True,  # Whether we allow for early terminations or not
@@ -320,6 +323,9 @@ class OSXGrind(ManipulationEnv):
         # actor action subset
         self.action_ndim = self.task_config['action_ndim']
         self.action_type = self.task_config['action_type']
+        self.action_change_type = self.task_config['action_change_type']
+        self.action_step_size = self.task_config['action_step_size']
+        self.previous_action = np.zeros(self.action_ndim)
 
         self.placement_initializer = None
 
@@ -329,9 +335,11 @@ class OSXGrind(ManipulationEnv):
         self.reward_dict = {
             "force_reward": 0.0,
             "traj_reward": 0.0,
+            "action_smoothness": 0.0,
             "step_penalty": 0.0,
             "force_total_reward": 0.0,
             "traj_total_reward": 0.0,
+            "action_smoothness_total_reward": 0.0,
         }
 
         self.init_qpos = np.array(
@@ -370,7 +378,7 @@ class OSXGrind(ManipulationEnv):
             renderer_config=renderer_config,
         )
 
-    def step(self, action):
+    def step(self, policy_action):
         """
         Take a step in the environment with the given action.
 
@@ -392,9 +400,13 @@ class OSXGrind(ManipulationEnv):
         Raises:
             ValueError: If action_ndim is not 4, 6, or 12
         """
+        action = policy_action.copy()
         assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
+
+        if self.action_change_type == "progressive":
+            action = self.previous_action + (self.action_step_size * action)
 
         # change controller params
         if self.action_type is None:
@@ -447,18 +459,26 @@ class OSXGrind(ManipulationEnv):
         tracking_trajectory_error = -self.tracking_error
         traj_reward = self.reward_weights['tracking_trajectory_error'] * tracking_trajectory_error
 
+        # Reward for smooth actions - penalize squared differences between consecutive actions
+        if action is not None and hasattr(self, 'previous_action'):
+            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sum((action - self.previous_action)**2)
+        else:
+            action_smoothness_penalty = 0.0
+
         # TODO: reward for finishing faster?
 
-        reward = force_reward + traj_reward + self.step_penalty
+        reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty
 
         if self.clip_reward:
             reward = np.clip(reward, -1, 0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
+        self.reward_dict["action_smoothness"] = action_smoothness_penalty
         self.reward_dict["step_penalty"] = self.step_penalty
         self.reward_dict["force_total_reward"] += force_reward
         self.reward_dict["traj_total_reward"] += traj_reward
+        self.reward_dict["action_smoothness_total_reward"] += action_smoothness_penalty
         # print(f"{force_reward=} {traj_reward=} {self.step_penalty=}")
 
         return reward
@@ -633,7 +653,11 @@ class OSXGrind(ManipulationEnv):
         def eef_rot_ortho6d(obs_cache):
             return T.quat2ortho6(self.eef_quat)
 
-        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, relative_pose, relative_wrench]
+        @sensor(modality=f"{pf}proprio")
+        def previous_action(obs_cache):
+            return self.previous_action
+
+        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, relative_pose, relative_wrench, previous_action]
         names = [s.__name__ for s in sensors]
 
         # Create observables
@@ -658,9 +682,11 @@ class OSXGrind(ManipulationEnv):
         self.reward_dict = {
             "force_reward": 0.0,
             "traj_reward": 0.0,
+            "action_smoothness": 0.0,
             "step_penalty": 0.0,
             "force_total_reward": 0.0,
             "traj_total_reward": 0.0,
+            "action_smoothness_total_reward": 0.0,
         }
 
         # Update the contact point visual properties
@@ -759,6 +785,8 @@ class OSXGrind(ManipulationEnv):
             # print(f"Cumulative reward: {self.cumulative_reward}")
             self.cumulative_reward = 0.0
             print(f"\n\nCumulative reward: {self.reward_dict['force_total_reward']} {self.reward_dict['traj_total_reward']}")
+
+        self.previous_action = action.copy()
 
         return reward, done, info
 
