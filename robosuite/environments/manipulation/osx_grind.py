@@ -53,7 +53,7 @@ DEFAULT_GRIND_CONFIG = {
     "target_force_range": [1.0, 15.0],
 
     # action settings
-    "action_type": "stiffness_kp",  # "stiffness_kp" or "virtual_force" or "none"
+    "action_type": "stiffness_kp",  # "stiffness_kp" or "virtual_force" or "combined" or "none"
     "action_ndim": 4,  # 4D or 12D
     "action_change_type": "immediate",  # "immediate" or "progressive"
     "action_step_size": 0.01,  # step size for progressive action change
@@ -414,13 +414,13 @@ class OSXGrind(ManipulationEnv):
         elif self.action_type == "stiffness_kp":
 
             if self.action_ndim == 4:
+                # Reconstruct the action to be 12D
                 action_kp = np.concatenate([[action[0]]*3, [action[1]]*3])
                 action_stiffness = np.concatenate([[action[2]]*3, [action[3]]*3])
                 action_kp = scale_action(action_kp, self.input_min, self.input_max,
                                          controller.kp_min, controller.kp_max)
                 action_stiffness = scale_action(action_stiffness, self.input_min, self.input_max,
                                                 controller.stiffness_min, controller.stiffness_max)
-                # Reconstruct the action to be 12D
             elif self.action_ndim == 12:
                 action_kp = scale_action(action[:6], self.input_min, self.input_max,
                                          controller.kp_min, controller.kp_max)
@@ -437,8 +437,21 @@ class OSXGrind(ManipulationEnv):
             assert action.shape == (6,), f"Invalid action shape: {action.shape} != (6,)"
             controller.virtual_force = scale_action(action, self.input_min, self.input_max,
                                                     controller.virtual_force_min, controller.virtual_force_max)
+
+        elif self.action_type == "combined":
+            assert action.shape == (10,), f"Invalid action shape: {action.shape} != (10,)"
+            action_kp = scale_action(action[:6], self.input_min, self.input_max,
+                                     controller.kp_min, controller.kp_max)
+            action_stiffness = scale_action(action[6:8], self.input_min, self.input_max,
+                                            controller.stiffness_min, controller.stiffness_max)
+            controller.kp = action_kp
+            controller.stiffness = action_stiffness
+            controller.kd = action_kp * controller.damping_ratio
+            controller.virtual_force = scale_action(action[8:], self.input_min, self.input_max,
+                                                    controller.virtual_force_min, controller.virtual_force_max)
+
         else:
-            raise ValueError(f"Unsupported action type: {self.action_type}. Only 'stiffness_kp' and 'virtual_force' are supported.")
+            raise ValueError(f"Unsupported action type: {self.action_type}. Only 'stiffness_kp', 'virtual_force', and 'combined' are supported.")
 
         controller_targets = np.concatenate([
             self.reference_trajectory[self.current_waypoint_index],
