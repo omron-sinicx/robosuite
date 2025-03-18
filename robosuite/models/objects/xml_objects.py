@@ -324,7 +324,7 @@ class MortarSDFObject(MujocoXMLObject):
     TODO maybe add friction and damping functions 
     """
 
-    def __init__(self, name, height=0.0, radius=0.08, thickness=0.03, base_size=[0.015, 0.003], base_pos=None):
+    def __init__(self, name, height=0.0, radius=0.045, thickness=0.005, base_size=[0.02, 0.003], base_pos=None):
         super().__init__(
             xml_path_completion("objects/mortar_sdf.xml"),
             name=name,

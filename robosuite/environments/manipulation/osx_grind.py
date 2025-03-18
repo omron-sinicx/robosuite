@@ -67,7 +67,7 @@ DEFAULT_GRIND_CONFIG = {
     "mortar_mode": "mesh",  # "SDA" or "mesh" Convex Decomposition Approximation
     "spawn_mortar": True,
     "mortar_diameter": 0.08,  # diameter of the mortar (m)
-    "mortar_inner_height": 0.0155,  # height of the mortar inner surface (m)
+    "mortar_inner_height": 0.012,  # height of the mortar inner surface (m)
     "desired_height": 0.005,  # desired grinding height (m)
     "max_inclination_angle": 0.5,  # fraction of mortar radius for inclination
     "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
@@ -536,8 +536,8 @@ class OSXGrind(ManipulationEnv):
             self.mortar = MortarSDFObject(
                 name="mortar",
                 height=0.0,
-                radius=0.04,
-                thickness=0.003
+                radius=0.045,
+                thickness=0.005
             )
         else:
             raise ValueError(f"Unsupported mortar_mode '{self.mortar_mode}'. Only 'mesh' and 'SDF' are supported.")
