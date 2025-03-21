@@ -310,6 +310,61 @@ def compute_quat_angle(quat1, quat2):
     return total_angle
 
 
+def compute_max_step_size(trajectory):
+    """
+    Computes the maximum step size for each dimension in a trajectory.
+    For trajectories with both position and orientation (7D: xyz + quaternion),
+    position dimensions are computed directly, while orientation uses quaternion
+    error calculation.
+
+    Args:
+        trajectory (np.ndarray): Array of shape (N, M) containing N waypoints of 
+                               M dimensions each. For pos+quat trajectories, 
+                               M should be 7 (3 for position, 4 for quaternion).
+
+    Returns:
+        np.ndarray: For translation-only trajectories, returns array of shape (M,)
+                   containing the maximum step size for each dimension.
+                   For trajectories with orientation (7D), returns array of shape (6,)
+                   containing max step size for position (3) and orientation error (3).
+    """
+    if not isinstance(trajectory, np.ndarray):
+        trajectory = np.array(trajectory)
+
+    if len(trajectory.shape) != 2:
+        raise ValueError(f"Expected 2D array, got shape {trajectory.shape}")
+
+    # Check if this is a position+orientation trajectory (should be 7D)
+    if trajectory.shape[1] == 7:  # xyz + quaternion
+        # Initialize max step sizes array for 6D result (3 position + 3 orientation)
+        max_step_sizes = np.zeros(6)
+
+        # For position dimensions (first 3), calculate as before
+        pos_diffs = np.abs(np.diff(trajectory[:, :3], axis=0))
+        max_step_sizes[:3] = np.ones(3) * np.max(pos_diffs)
+
+        # For orientation (quaternion), calculate orientation error between consecutive waypoints
+        ori_errors = np.zeros((trajectory.shape[0]-1, 3))
+        for i in range(trajectory.shape[0]-1):
+            # Use quaternions_orientation_error from transform_utils
+            ori_errors[i] = T.quaternions_orientation_error(
+                trajectory[i+1, 3:7],  # next quaternion
+                trajectory[i, 3:7]     # current quaternion
+            )
+
+        # Get maximum orientation error for each axis
+        max_step_sizes[3:] = np.ones(3) * np.max(np.abs(ori_errors))
+    else:
+        # For standard trajectories, calculate as before
+        diffs = np.abs(np.diff(trajectory, axis=0))
+        max_step_sizes = np.max(diffs, axis=0)
+
+    # Replace zeros with small value 1e-8
+    max_step_sizes = np.where(max_step_sizes < 1e-4, 1e-4, max_step_sizes)
+
+    return max_step_sizes
+
+
 @dataclass
 class TrajectoryState:
     position: np.ndarray          # Current position

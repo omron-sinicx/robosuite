@@ -9,7 +9,7 @@ from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.observables import Observable, sensor
 from robosuite.utils.placement_samplers import UniformRandomSampler
-from robosuite.utils.traj_utils import generate_mortar_trajectory
+from robosuite.utils.traj_utils import compute_max_step_size, generate_mortar_trajectory
 from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
 import robosuite.utils.transform_utils as T
 
@@ -21,11 +21,10 @@ DEFAULT_GRIND_CONFIG = {
         "tracking_trajectory_error": 1.0,  # reward for following the trajectory reference
         "tracking_force_error": 1.0,  # reward for pushing into the mortar according to te force reference
         "action_smoothness": 0.1,  # reward for smooth actions (low value to start)
+        "speed": 1.0,  # reward for speed
     },
-    "task_complete_reward": 1.0,  # reward per task done
-    "exit_task_space_penalty": 1,  # penalty for moving too far away from the mortar task space
-    "collision_penalty": 1,  # reward for increased velocity
-    "excess_force_penalty": 1,  # penalty for each step that the force is over the safety threshold
+    "task_complete_reward": 10.0,  # reward per task done
+    "early_termination_penalty": -10.0,  # penalty for early termination
     "step_penalty": -1,  # penalty for each step
 
     "force_follow_normalization": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # max load (N)
@@ -258,7 +257,7 @@ class OSXGrind(ManipulationEnv):
 
         self.early_terminations = self.task_config["early_terminations"]
 
-        self.force_follow_normalization = self.task_config["force_follow_normalization"]
+        self.force_follow_normalization = np.array(self.task_config["force_follow_normalization"])
         self.traj_follow_normalization = np.array(self.task_config["traj_follow_normalization"])
 
         self.force_torque_limits = self.task_config['force_torque_limits']
@@ -267,10 +266,8 @@ class OSXGrind(ManipulationEnv):
         self.reward_scale = reward_scale
         self.reward_weights = self.task_config['reward_weights']
         self.clip_reward = self.task_config["clip_reward"]
-        self.exit_task_space_penalty = self.task_config["exit_task_space_penalty"]
         self.task_complete_reward = self.task_config["task_complete_reward"]
-        self.collision_penalty = self.task_config["collision_penalty"]
-        self.excess_force_penalty = self.task_config["excess_force_penalty"]
+        self.early_termination_penalty = self.task_config["early_termination_penalty"]
         self.step_penalty = self.task_config["step_penalty"]
         # settings for table top and task space
         self.mortar_height = self.task_config["mortar_height"]
@@ -300,6 +297,18 @@ class OSXGrind(ManipulationEnv):
         self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
+        self.tracking_trajectory_method = self.task_config['tracking_trajectory_method']
+        self.tracking_trajectory_threshold = np.array(self.task_config['tracking_trajectory_threshold'])
+        self.tracking_force_threshold = np.array(self.task_config['tracking_force_threshold'])
+        # Verify the proposed impedance mode is supported
+        assert self.tracking_trajectory_method in TRACKING_METHODS, (
+            "Error: unsupported tracking method"
+            "Inputted tracking method: {}, Supported methods: {}".format(self.tracking_trajectory_method, TRACKING_METHODS)
+        )
+
+        self.position_control_dims = np.array(controller_configs['body_parts']['right']['selection_matrix'])
+        self.force_control_dims = np.ones(6) - self.position_control_dims
+
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
         self.randomize_reference_trajectory = self.task_config['randomize_reference_trajectory']
@@ -310,15 +319,6 @@ class OSXGrind(ManipulationEnv):
 
         if not self.randomize_reference_trajectory:
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
-
-        self.tracking_trajectory_threshold = self.task_config['tracking_trajectory_threshold']
-        self.tracking_trajectory_method = self.task_config['tracking_trajectory_method']
-        self.tracking_force_threshold = self.task_config['tracking_force_threshold']
-        # Verify the proposed impedance mode is supported
-        assert self.tracking_trajectory_method in TRACKING_METHODS, (
-            "Error: unsupported tracking method"
-            "Inputted tracking method: {}, Supported methods: {}".format(self.tracking_trajectory_method, TRACKING_METHODS)
-        )
 
         # actor action subset
         self.action_ndim = self.task_config['action_ndim']
@@ -348,7 +348,7 @@ class OSXGrind(ManipulationEnv):
         )
 
         self.cumulative_reward = 0.0
-
+        self.global_timestep = 0
         self.ik = None
 
         super().__init__(
@@ -445,14 +445,17 @@ class OSXGrind(ManipulationEnv):
 
         elif self.action_type == "combined":
             assert action.shape == (10,), f"Invalid action shape: {action.shape} != (10,)"
-            action_kp = scale_action(action[:6], self.input_min, self.input_max,
+            # Reconstruct the action to be 12D
+            action_kp = np.concatenate([[action[0]]*3, [action[1]]*3])
+            action_stiffness = np.concatenate([[action[2]]*3, [action[3]]*3])
+            action_kp = scale_action(action_kp, self.input_min, self.input_max,
                                      controller.kp_min, controller.kp_max)
-            action_stiffness = scale_action(action[6:8], self.input_min, self.input_max,
+            action_stiffness = scale_action(action_stiffness, self.input_min, self.input_max,
                                             controller.stiffness_min, controller.stiffness_max)
             controller.kp = action_kp
             controller.stiffness = action_stiffness
             controller.kd = action_kp * controller.damping_ratio
-            controller.virtual_force = scale_action(action[8:], self.input_min, self.input_max,
+            controller.virtual_force = scale_action(action[4:], self.input_min, self.input_max,
                                                     controller.virtual_force_min, controller.virtual_force_max)
 
         else:
@@ -469,6 +472,13 @@ class OSXGrind(ManipulationEnv):
 
         reward = 0.0
 
+        terminated, reason = self._check_terminated()
+        if terminated:
+            if reason == "TRACKING COMPLETED":
+                return self.task_complete_reward
+            else:
+                return self.early_termination_penalty
+
         # Reward for pushing into mortar with desired linear forces
         distance_from_ref_force = -self.tracking_force_error
         force_reward = self.reward_weights['tracking_force_error'] * distance_from_ref_force
@@ -483,12 +493,13 @@ class OSXGrind(ManipulationEnv):
         else:
             action_smoothness_penalty = 0.0
 
-        # TODO: reward for finishing faster?
+        speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
-        reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty
+        reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty + speed_reward
+        # print(f"{force_reward=:0.02f} {traj_reward=:0.02f} {action_smoothness_penalty=:0.02f} {self.step_penalty=:0.02f} {speed_reward=:0.02f}")
 
         if self.clip_reward:
-            reward = np.clip(reward, -1, 0)
+            reward = np.clip(reward, -2.0, 0.0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
@@ -502,25 +513,17 @@ class OSXGrind(ManipulationEnv):
         return reward
 
     def _compute_relative_distance(self):
-        relative_distance = np.zeros(6)
-        if self.reference_trajectory is not None:
-            ref_quat = self.reference_trajectory[self.current_waypoint_index][3:]
-            relative_distance[:3] = self.reference_trajectory[self.current_waypoint_index][:3] - self.eef_pos
-            relative_distance[:3] = T.rotate_vector_by_quaternion(relative_distance[:3], ref_quat)
-            relative_distance[3:] = T.quaternions_orientation_error(ref_quat, self.eef_quat)
+        relative_distance = T.compute_pose_error(self.reference_trajectory[self.current_waypoint_index], self.eef_pose)
 
         # track error of the actions controlled by the policy
         # normalize by the trajectory follow normalization
-        normalized_relative_distance = relative_distance / self.traj_follow_normalization
+        normalized_relative_distance = relative_distance / self.max_step_size
 
         # only consider the error for the position controlled directions
-        tracking_error = normalized_relative_distance * self.position_control_dims
-        self.tracking_error = np.linalg.norm(tracking_error)
+        self.tracking_error = np.linalg.norm(normalized_relative_distance * self.position_control_dims)
         return normalized_relative_distance
 
     def _compute_relative_wrenches(self):
-        relative_wrench = np.zeros(6)
-
         # in base frame
         relative_wrench = self.reference_force[self.current_waypoint_index] - self.eef_wrench
         # normalize by the force follow normalization
@@ -697,6 +700,7 @@ class OSXGrind(ManipulationEnv):
         self.collisions = 0
         self.f_excess = 0
         self.task_space_exits = 0
+        self.global_timestep = 0
         self.reward_dict = {
             "force_reward": 0.0,
             "traj_reward": 0.0,
@@ -739,8 +743,6 @@ class OSXGrind(ManipulationEnv):
 
         super()._reset_internal()
 
-        self.position_control_dims = self.robots[0].composite_controller.part_controllers['right'].selection_matrix
-        self.force_control_dims = np.ones(6) - self.position_control_dims
         self.last_step_time = self.sim.data._data.time
 
         # Reset all object positions using initializer sampler if we're not directly loading from an xml
@@ -769,11 +771,8 @@ class OSXGrind(ManipulationEnv):
         """
         reward, done, info = super()._post_action(action)
 
-        if done:
-            info['termination_reason'] = "TRUNCATED"
-
-        # allow episode to finish early if allowed
-        elif self.early_terminations:
+        # allow episode to finish early if desired
+        if self.early_terminations:
             terminated, reason = self._check_terminated()
             info['termination_reason'] = reason
             done = done or terminated
@@ -782,15 +781,36 @@ class OSXGrind(ManipulationEnv):
         if self.current_waypoint_index < self.num_waypoints - 1:
 
             if self.sim.data._data.time - self.last_step_time > self.step_duration:
+                self.global_timestep += 1
+                self.last_step_time = self.sim.data._data.time
+
                 if self.tracking_trajectory_method == 'per_step':  # equivalent to DURATION mode
                     self.current_waypoint_index += 1
-                    self.last_step_time = self.sim.data._data.time
 
                 elif self.tracking_trajectory_method == 'per_error_threshold':  # equivalent to TRACKING_ERROR mode
-                    if self.tracking_error < self.tracking_trajectory_threshold \
-                            and self.tracking_force_error < self.tracking_force_threshold:
-                        self.current_waypoint_index += 1
-                        self.last_step_time = self.sim.data._data.time
+                    if self.tracking_error < self.pose_error_threshold \
+                            and self.tracking_force_error < self.force_error_threshold:
+                        # Check future waypoints to see if they also satisfy the threshold condition
+                        next_waypoint_index = self.current_waypoint_index + 1
+                        while next_waypoint_index < self.num_waypoints:
+                            # Check if the next waypoint would also satisfy the threshold
+                            relative_distance = T.compute_pose_error(self.reference_trajectory[next_waypoint_index], self.eef_pose)
+                            next_tracking_error = np.linalg.norm((relative_distance / self.traj_follow_normalization) * self.position_control_dims)
+
+                            # Check force error for next waypoint
+                            next_relative_wrench = self.reference_force[next_waypoint_index] - self.eef_wrench
+                            next_tracking_force_error = np.linalg.norm((next_relative_wrench / self.force_follow_normalization) * self.force_control_dims)
+
+                            # If the next waypoint doesn't satisfy the threshold, stop
+                            if next_tracking_error >= self.pose_error_threshold or \
+                               next_tracking_force_error >= self.force_error_threshold:
+                                break
+
+                            # Otherwise, continue to the next waypoint
+                            next_waypoint_index += 1
+
+                        # Update to the furthest valid waypoint
+                        self.current_waypoint_index = min(next_waypoint_index, self.num_waypoints - 1)
 
                 # update in rendering the cylinder representing the normal force/direction
                 # assume orientation is given perpendicular to mortar surface
@@ -800,9 +820,7 @@ class OSXGrind(ManipulationEnv):
 
         self.cumulative_reward += reward
         if done:
-            # print(f"Cumulative reward: {self.cumulative_reward}")
             self.cumulative_reward = 0.0
-            print(f"\n\nCumulative reward: {self.reward_dict['force_total_reward']} {self.reward_dict['traj_total_reward']}")
 
         return reward, done, info
 
@@ -844,6 +862,10 @@ class OSXGrind(ManipulationEnv):
         """
         terminated = False
         reason = ""
+
+        if (self.timestep >= self.horizon) and not self.ignore_done:
+            terminated = True
+            reason = "HORIZON REACHED"
 
         # Prematurely terminate if contacting the table with the arm
         if self.check_contact(self.robots[0].robot_model):
@@ -924,6 +946,10 @@ class OSXGrind(ManipulationEnv):
             max_angle=max_inclination_angle
         )
         reference_trajectory[:, :3] += initial_position
+
+        self.max_step_size = compute_max_step_size(reference_trajectory)
+        self.pose_error_threshold = np.linalg.norm(self.tracking_trajectory_threshold * self.position_control_dims / self.max_step_size)
+        self.force_error_threshold = np.linalg.norm(self.tracking_force_threshold * self.force_control_dims / self.force_follow_normalization)
         return reference_trajectory
 
     @property
@@ -947,6 +973,10 @@ class OSXGrind(ManipulationEnv):
     @property
     def eef_quat(self):
         return T.mat2quat(self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3))
+
+    @property
+    def eef_pose(self):
+        return np.concatenate([self.eef_pos, self.eef_quat])
 
     @property
     def action_spec(self):

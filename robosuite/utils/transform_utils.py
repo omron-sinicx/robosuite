@@ -1185,3 +1185,29 @@ def rotate_quaternion_by_rpy(rpy, q_in, rotated_frame=False):
         q_rotated = quat_multiply(q_rot, q_in)
 
     return q_rotated
+
+
+def compute_pose_error(target_pose, current_pose):
+    """
+    Computes the pose error between a target pose and a current pose.
+    
+    Args:
+        target_pose (np.array): Target pose as [position (3), orientation (4)] where orientation is a quaternion (x,y,z,w)
+        current_pose (np.array): Current pose as [position (3), orientation (4)] where orientation is a quaternion (x,y,z,w)
+        
+    Returns:
+        np.array: 6D pose error vector containing [position_error (3), orientation_error (3)]
+                  Position error is expressed in the target frame
+                  Orientation error is the minimal rotation vector between the two orientations
+    """
+    relative_distance = np.zeros(6)
+
+    # Compute translational error
+    relative_distance[:3] = target_pose[:3] - current_pose[:3]
+
+    # Compute rotational error
+    ref_quat = target_pose[3:]
+    relative_distance[:3] = rotate_vector_by_quaternion(relative_distance[:3], ref_quat)
+    relative_distance[3:] = quaternions_orientation_error(ref_quat, current_pose[3:])
+
+    return relative_distance
