@@ -1,6 +1,6 @@
 import multiprocessing
 import numpy as np
-
+from collections import OrderedDict
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import TableArena
 from robosuite.models.objects import MortarObject, CylinderObject
@@ -340,6 +340,8 @@ class OSXGrind(ManipulationEnv):
             "step_penalty": 0.0,
             "force_total_reward": 0.0,
             "traj_total_reward": 0.0,
+            "speed_reward": 0.0,
+            "speed_total_reward": 0.0,
             "action_smoothness_total_reward": 0.0,
         }
 
@@ -350,7 +352,7 @@ class OSXGrind(ManipulationEnv):
         self.cumulative_reward = 0.0
         self.global_timestep = 0
         self.ik = None
-
+        self.translated_action = OrderedDict()
         super().__init__(
             robots=robots,
             env_configuration=env_configuration,
@@ -401,12 +403,10 @@ class OSXGrind(ManipulationEnv):
         Raises:
             ValueError: If action_ndim is not 4, 6, or 12
         """
-        if not np.allclose(self.current_action, policy_action):
-            self.previous_action = self.current_action.copy()
-            self.current_action = policy_action.copy()
-
         action = policy_action.copy()
         assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
+
+        self._update_waypoint_index(action)
 
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
 
@@ -436,12 +436,19 @@ class OSXGrind(ManipulationEnv):
 
             controller.kp = action_kp
             controller.stiffness = action_stiffness
-            controller.kd = action_kp * controller.damping_ratio
+            # controller.kd = action_kp * controller.damping_ratio
+            self.translated_action = OrderedDict({
+                "kp": [action_kp[0], action_kp[3]],
+                "stiffness": [action_stiffness[0], action_stiffness[3]],
+            })
 
         elif self.action_type == "virtual_force":
             assert action.shape == (6,), f"Invalid action shape: {action.shape} != (6,)"
             controller.virtual_force = scale_action(action, self.input_min, self.input_max,
                                                     controller.virtual_force_min, controller.virtual_force_max)
+            self.translated_action = OrderedDict({
+                "virtual_force": controller.virtual_force,
+            })
 
         elif self.action_type == "combined":
             assert action.shape == (10,), f"Invalid action shape: {action.shape} != (10,)"
@@ -454,10 +461,14 @@ class OSXGrind(ManipulationEnv):
                                             controller.stiffness_min, controller.stiffness_max)
             controller.kp = action_kp
             controller.stiffness = action_stiffness
-            controller.kd = action_kp * controller.damping_ratio
+            # controller.kd = action_kp * controller.damping_ratio
             controller.virtual_force = scale_action(action[4:], self.input_min, self.input_max,
                                                     controller.virtual_force_min, controller.virtual_force_max)
-
+            self.translated_action = OrderedDict({
+                "kp": [action_kp[0], action_kp[3]],
+                "stiffness": [action_stiffness[0], action_stiffness[3]],
+                "virtual_force": controller.virtual_force,
+            })
         else:
             raise ValueError(f"Unsupported action type: {self.action_type}. Only 'stiffness_kp', 'virtual_force', and 'combined' are supported.")
 
@@ -465,6 +476,13 @@ class OSXGrind(ManipulationEnv):
             self.reference_trajectory[self.current_waypoint_index],
             self.reference_force[self.current_waypoint_index]
         ])
+
+        self.action_data = {
+            "kp": controller.kp,
+            "kd": controller.kd,
+            "stiffness": controller.stiffness,
+            "virtual_force": controller.virtual_force,
+        }
 
         return super().step(controller_targets)
 
@@ -488,7 +506,7 @@ class OSXGrind(ManipulationEnv):
         traj_reward = self.reward_weights['tracking_trajectory_error'] * tracking_trajectory_error
 
         # Reward for smooth actions - penalize squared differences between consecutive actions
-        if self.current_action is not None and hasattr(self, 'previous_action'):
+        if self.current_action is not None and hasattr(self, 'previous_action') and self.action_change_type == "immediate":
             action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sum((self.current_action - self.previous_action)**2)
         else:
             action_smoothness_penalty = 0.0
@@ -499,14 +517,16 @@ class OSXGrind(ManipulationEnv):
         # print(f"{force_reward=:0.02f} {traj_reward=:0.02f} {action_smoothness_penalty=:0.02f} {self.step_penalty=:0.02f} {speed_reward=:0.02f}")
 
         if self.clip_reward:
-            reward = np.clip(reward, -2.0, 0.0)
+            reward = np.clip(reward, -2.0, 1.0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
         self.reward_dict["action_smoothness"] = action_smoothness_penalty
         self.reward_dict["step_penalty"] = self.step_penalty
+        self.reward_dict["speed_reward"] = speed_reward
         self.reward_dict["force_total_reward"] += force_reward
         self.reward_dict["traj_total_reward"] += traj_reward
+        self.reward_dict["speed_total_reward"] += speed_reward
         self.reward_dict["action_smoothness_total_reward"] += action_smoothness_penalty
         # print(f"{force_reward=} {traj_reward=} {self.step_penalty=}")
 
@@ -706,10 +726,13 @@ class OSXGrind(ManipulationEnv):
             "traj_reward": 0.0,
             "action_smoothness": 0.0,
             "step_penalty": 0.0,
+            "speed_reward": 0.0,
             "force_total_reward": 0.0,
             "traj_total_reward": 0.0,
+            "speed_total_reward": 0.0,
             "action_smoothness_total_reward": 0.0,
         }
+        self.translated_action = None
 
         # Update the contact point visual properties
         self.sim.model._model.vis.scale.contactwidth = 0.01
@@ -777,11 +800,20 @@ class OSXGrind(ManipulationEnv):
             info['termination_reason'] = reason
             done = done or terminated
 
+        self.cumulative_reward += reward
+        if done:
+            self.cumulative_reward = 0.0
+
+        return reward, done, info
+
+    def _update_waypoint_index(self, action):
         # Only update waypoint if we haven't reached the end of trajectory
         if self.current_waypoint_index < self.num_waypoints - 1:
 
             if self.sim.data._data.time - self.last_step_time > self.step_duration:
                 self.global_timestep += 1
+                self.previous_action = self.current_action.copy()
+                self.current_action = action.copy()
                 self.last_step_time = self.sim.data._data.time
 
                 if self.tracking_trajectory_method == 'per_step':  # equivalent to DURATION mode
@@ -817,12 +849,6 @@ class OSXGrind(ManipulationEnv):
                 offset_cylinder_half_size = T.rotate_vector_by_quaternion([0, 0, -self.cylinder_length], self.reference_trajectory[self.current_waypoint_index][3:])
                 self.sim.model.body_pos[self.force_cylinder_body_id] = self.reference_trajectory[self.current_waypoint_index][:3] + offset_cylinder_half_size
                 self.sim.model.body_quat[self.force_cylinder_body_id] = T.convert_quat(self.reference_trajectory[self.current_waypoint_index][3:], "wxyz")
-
-        self.cumulative_reward += reward
-        if done:
-            self.cumulative_reward = 0.0
-
-        return reward, done, info
 
     def _pre_action(self, action, policy_step=False):
         """
