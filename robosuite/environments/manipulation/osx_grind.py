@@ -1,4 +1,4 @@
-import multiprocessing
+import logging
 import numpy as np
 from collections import OrderedDict
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
@@ -25,6 +25,7 @@ DEFAULT_GRIND_CONFIG = {
     },
     "task_complete_reward": 10.0,  # reward per task done
     "early_termination_penalty": -10.0,  # penalty for early termination
+    "waypoint_completion_delay": 0.0,  # delay in seconds for waypoint completion
     "step_penalty": -1,  # penalty for each step
 
     "force_follow_normalization": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # max load (N)
@@ -245,8 +246,10 @@ class OSXGrind(ManipulationEnv):
         renderer="mjviewer",
         renderer_config=None,
         reference_trajectory=None,
+        enable_logging=True
     ):
-
+        if not enable_logging:
+            logging.getLogger().setLevel(logging.ERROR)
         # Assert that the gripper type is Grinder
         assert (
             gripper_types == "Grinder"
@@ -256,7 +259,7 @@ class OSXGrind(ManipulationEnv):
         self.task_config = task_config
 
         self.early_terminations = self.task_config["early_terminations"]
-
+        self.waypoint_completion_delay = self.task_config["waypoint_completion_delay"]
         self.force_follow_normalization = np.array(self.task_config["force_follow_normalization"])
         self.traj_follow_normalization = np.array(self.task_config["traj_follow_normalization"])
 
@@ -294,6 +297,7 @@ class OSXGrind(ManipulationEnv):
         self.duration = self.task_config["duration"]
         self.duration_range = self.task_config["duration_range"]
         self.num_waypoints = control_freq * self.duration // 10
+        self.seconds_per_waypoint = 10 / control_freq
         self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
@@ -908,6 +912,10 @@ class OSXGrind(ManipulationEnv):
             terminated = True
             reason = "TRACKING COMPLETED"
 
+        if self._check_waypoint_completion_delay():
+            terminated = True
+            reason = "WAYPOINT COMPLETION DELAY REACHED"
+
         return terminated, reason
 
     def _check_success(self):
@@ -940,6 +948,19 @@ class OSXGrind(ManipulationEnv):
         """
         abs_ft = np.abs(self.eef_wrench)
         return not np.any(abs_ft > self.force_torque_limits)
+
+    def _check_waypoint_completion_delay(self):
+        """
+        Check if the waypoint completion delay has been reached
+        """
+        # Convert waypoint_completion_delay from seconds to timesteps
+        # Since num_waypoints = control_freq * duration // 10, each waypoint represents (10/control_freq) seconds
+        if self.waypoint_completion_delay == 0:
+            return False
+        delay_in_timesteps = self.waypoint_completion_delay / self.seconds_per_waypoint
+        delay = self.global_timestep - self.current_waypoint_index
+        # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
+        return delay > delay_in_timesteps
 
     def _randomize_reference_trajectory(self, control_freq):
         mortar_diameter = self.task_config["mortar_diameter"]
