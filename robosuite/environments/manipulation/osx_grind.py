@@ -758,7 +758,9 @@ class OSXGrind(ManipulationEnv):
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
-            result = self.ik.solve_ik(target_pos=self.reference_trajectory[0][:3],
+            initial_pos = self.reference_trajectory[0][:3]
+            initial_pos[2] += 0.001
+            result = self.ik.solve_ik(target_pos=initial_pos,
                                       target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
                                       initial_guess=self.init_qpos)
 
