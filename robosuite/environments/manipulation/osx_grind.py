@@ -28,8 +28,8 @@ DEFAULT_GRIND_CONFIG = {
     "waypoint_completion_delay": 0.0,  # delay in seconds for waypoint completion
     "step_penalty": -1,  # penalty for each step
 
-    "force_follow_normalization": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # max load (N)
-    "traj_follow_normalization": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1],  # max distance between waypoints
+    "force_torque_normalization": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # max load (N)
+    "pose_normalization": [0.1, 0.1, 0.1, 0.1, 0.1, 0.1],  # max distance between waypoints
 
     "table_full_size": [0.8, 0.8, 0.05],
     "table_friction": [1.0, 5e-3, 1e-4],
@@ -260,8 +260,8 @@ class OSXGrind(ManipulationEnv):
 
         self.early_terminations = self.task_config["early_terminations"]
         self.waypoint_completion_delay = self.task_config["waypoint_completion_delay"]
-        self.force_follow_normalization = np.array(self.task_config["force_follow_normalization"])
-        self.traj_follow_normalization = np.array(self.task_config["traj_follow_normalization"])
+        self.force_torque_normalization = np.array(self.task_config["force_torque_normalization"])
+        self.pose_normalization = np.array(self.task_config["pose_normalization"])
 
         self.force_torque_limits = self.task_config['force_torque_limits']
 
@@ -551,7 +551,7 @@ class OSXGrind(ManipulationEnv):
         # in base frame
         relative_wrench = self.reference_force[self.current_waypoint_index] - self.eef_wrench
         # normalize by the force follow normalization
-        normalized_relative_wrench = relative_wrench / self.force_follow_normalization
+        normalized_relative_wrench = relative_wrench / self.force_torque_normalization
 
         # only consider the error for the force controlled directions
         tracking_force_error = normalized_relative_wrench * self.force_control_dims
@@ -833,11 +833,11 @@ class OSXGrind(ManipulationEnv):
                         while next_waypoint_index < self.num_waypoints:
                             # Check if the next waypoint would also satisfy the threshold
                             relative_distance = T.compute_pose_error(self.reference_trajectory[next_waypoint_index], self.eef_pose)
-                            next_tracking_error = np.linalg.norm((relative_distance / self.traj_follow_normalization) * self.position_control_dims)
+                            next_tracking_error = np.linalg.norm((relative_distance / self.pose_normalization) * self.position_control_dims)
 
                             # Check force error for next waypoint
                             next_relative_wrench = self.reference_force[next_waypoint_index] - self.eef_wrench
-                            next_tracking_force_error = np.linalg.norm((next_relative_wrench / self.force_follow_normalization) * self.force_control_dims)
+                            next_tracking_force_error = np.linalg.norm((next_relative_wrench / self.force_torque_normalization) * self.force_control_dims)
 
                             # If the next waypoint doesn't satisfy the threshold, stop
                             if next_tracking_error >= self.pose_error_threshold or \
@@ -979,12 +979,12 @@ class OSXGrind(ManipulationEnv):
             # randomize the desired height
             desired_height = np.random.uniform(low=0.001, high=0.020)
             # update the target force
-            target_force = int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
-            self.reference_force = np.array([[0, 0, target_force, 0, 0, 0]] * self.num_waypoints)
+            self.target_force = int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
+            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
 
         else:
             desired_height = self.task_config["desired_height"]
-            target_force = self.task_config["target_force"]
+            self.target_force = self.task_config["target_force"]
         # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {target_force} desired_height: {desired_height}")
 
         reference_trajectory = generate_mortar_trajectory(
@@ -996,9 +996,10 @@ class OSXGrind(ManipulationEnv):
         )
         reference_trajectory[:, :3] += initial_position
 
-        self.max_step_size = compute_max_step_size(reference_trajectory)
+        # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
+        self.max_step_size = self.pose_normalization
         self.pose_error_threshold = np.linalg.norm(self.tracking_trajectory_threshold * self.position_control_dims / self.max_step_size)
-        self.force_error_threshold = np.linalg.norm(self.tracking_force_threshold * self.force_control_dims / self.force_follow_normalization)
+        self.force_error_threshold = np.linalg.norm(self.tracking_force_threshold * self.force_control_dims / self.force_torque_normalization)
         return reference_trajectory
 
     @property
