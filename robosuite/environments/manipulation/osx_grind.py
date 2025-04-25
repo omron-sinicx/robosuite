@@ -310,6 +310,7 @@ class OSXGrind(ManipulationEnv):
             "Inputted tracking method: {}, Supported methods: {}".format(self.tracking_trajectory_method, TRACKING_METHODS)
         )
 
+        self.controller_type = np.array(controller_configs['body_parts']['right']['type'])
         self.position_control_dims = np.array(controller_configs['body_parts']['right']['selection_matrix'])
         self.force_control_dims = np.ones(6) - self.position_control_dims
 
@@ -385,34 +386,12 @@ class OSXGrind(ManipulationEnv):
             renderer_config=renderer_config,
         )
 
-    def step(self, policy_action):
-        """
-        Take a step in the environment with the given action.
-
-        Args:
-            action (np.array): Action array that can be either 4D or 12D:
-                - 4D: [kp_pos, kp_ori, stiffness_pos, stiffness_ori] where each value is replicated 3 times
-                - 12D: [kp_pos_x, kp_pos_y, kp_pos_z, kp_ori_x, kp_ori_y, kp_ori_z,
-                        stiffness_pos_x, stiffness_pos_y, stiffness_pos_z,
-                        stiffness_ori_x, stiffness_ori_y, stiffness_ori_z]
-                Values should be in range [-1, 1] and will be scaled to controller limits.
-
-        Returns:
-            4-tuple:
-                - (np.array) observations from the environment
-                - (float) reward from the environment
-                - (bool) whether the episode has ended
-                - (dict) info about current episode state
-
-        Raises:
-            ValueError: If action_ndim is not 4, 6, or 12
-        """
-        action = policy_action.copy()
-        assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
-
-        self._update_waypoint_index(action)
-
+    def compute_cartesian_compliance_controller_targets(self, action):
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
+        controller_targets = np.concatenate([
+            self.reference_trajectory[self.current_waypoint_index],
+            self.reference_force[self.current_waypoint_index]
+        ])
 
         if self.action_change_type == "progressive":
             action = self.previous_action + (self.action_step_size * action)
@@ -473,13 +452,10 @@ class OSXGrind(ManipulationEnv):
                 "stiffness": [action_stiffness[0], action_stiffness[3]],
                 "virtual_force": controller.virtual_force,
             })
+        elif self.action_type == "cartesian_pose":
+            controller_targets[:7] = action
         else:
             raise ValueError(f"Unsupported action type: {self.action_type}. Only 'stiffness_kp', 'virtual_force', and 'combined' are supported.")
-
-        controller_targets = np.concatenate([
-            self.reference_trajectory[self.current_waypoint_index],
-            self.reference_force[self.current_waypoint_index]
-        ])
 
         self.action_data = {
             "kp": controller.kp,
@@ -487,6 +463,42 @@ class OSXGrind(ManipulationEnv):
             "stiffness": controller.stiffness,
             "virtual_force": controller.virtual_force,
         }
+
+        return controller_targets
+
+    def step(self, policy_action):
+        """
+        Take a step in the environment with the given action.
+
+        Args:
+            action (np.array): Action array that can be either 4D or 12D:
+                - 4D: [kp_pos, kp_ori, stiffness_pos, stiffness_ori] where each value is replicated 3 times
+                - 12D: [kp_pos_x, kp_pos_y, kp_pos_z, kp_ori_x, kp_ori_y, kp_ori_z,
+                        stiffness_pos_x, stiffness_pos_y, stiffness_pos_z,
+                        stiffness_ori_x, stiffness_ori_y, stiffness_ori_z]
+                Values should be in range [-1, 1] and will be scaled to controller limits.
+
+        Returns:
+            4-tuple:
+                - (np.array) observations from the environment
+                - (float) reward from the environment
+                - (bool) whether the episode has ended
+                - (dict) info about current episode state
+
+        Raises:
+            ValueError: If action_ndim is not 4, 6, or 12
+        """
+        action = policy_action.copy()
+        assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
+
+        self._update_waypoint_index(action)
+
+        if self.controller_type == "FDCC":
+            controller_targets = self.compute_cartesian_compliance_controller_targets(action)
+        elif self.controller_type == "JOINT_VELOCITY":
+            controller_targets = action
+        else:
+            raise ValueError(f"Unsupported controller type: {self.controller_type}. Only 'FDCC' and 'JOINT_VELOCITY' are supported.")
 
         return super().step(controller_targets)
 
