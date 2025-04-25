@@ -893,6 +893,10 @@ class OSXGrind(ManipulationEnv):
         return self.action_ndim
 
     @property
+    def current_wrench(self):
+        return self.robots[0].composite_controller.part_controllers['right'].current_wrench
+
+    @property
     def eef_wrench(self):
         return self.robots[0].composite_controller.part_controllers['right'].eef_wrench
 
