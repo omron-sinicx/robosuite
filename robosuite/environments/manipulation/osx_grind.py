@@ -497,6 +497,8 @@ class OSXGrind(ManipulationEnv):
             controller_targets = self.compute_cartesian_compliance_controller_targets(action)
         elif self.controller_type == "JOINT_VELOCITY":
             controller_targets = action
+        elif self.controller_type == "JOINT_POSITION":
+            controller_targets = action
         else:
             raise ValueError(f"Unsupported controller type: {self.controller_type}. Only 'FDCC' and 'JOINT_VELOCITY' are supported.")
 

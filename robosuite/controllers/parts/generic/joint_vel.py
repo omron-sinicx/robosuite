@@ -248,3 +248,7 @@ class JointVelocityController(Controller):
     @property
     def eef_wrench(self):
         return self.wrench_in_eef_frame_buf.average
+
+    @property
+    def current_wrench(self):
+        return self.get_wrench()
