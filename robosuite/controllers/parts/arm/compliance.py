@@ -13,7 +13,10 @@ from robosuite.controllers.parts.generic.joint_pos import JointPositionControlle
 from robosuite.controllers.parts.generic.joint_vel import JointVelocityController
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 from robosuite.utils.control_utils import *
-from ur_pykdl.ik_solver import IKSolver
+try:
+    from ur_pykdl.ik_solver import IKSolver
+except ImportError:
+    IKSolver = None
 
 
 # Supported impedance modes
