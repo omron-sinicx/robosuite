@@ -199,7 +199,7 @@ class TwoArmWiping(TwoArmEnv):
         camera_widths=256,
         camera_depths=False,
         camera_segmentations=None,  # {None, instance, class, element}
-        renderer="mujoco",
+        renderer="mjviewer",
         renderer_config=None,
         task_config=DEFAULT_WIPE_CONFIG,
         ** kwargs,
@@ -266,10 +266,6 @@ class TwoArmWiping(TwoArmEnv):
             self.num_markers * self.unit_wiped_reward + horizon * (self.wipe_contact_reward + self.task_complete_reward)
         )
 
-        # ee resets
-        self.ee_force_bias = np.zeros(3)
-        self.ee_torque_bias = np.zeros(3)
-
         # set other wipe-specific attributes
         self.wiped_markers = []
         self.collisions = 0
@@ -283,11 +279,15 @@ class TwoArmWiping(TwoArmEnv):
         # object placement initializer
         self.placement_initializer = placement_initializer
 
+        # set after init to ensure self.robots is set
+        self.ee_force_bias = np.zeros(3)
+        self.ee_torque_bias = np.zeros(3)
+
         super().__init__(
             robots=['UR5e', 'UR5e'],
             env_configuration='single-arm-opposed',
             controller_configs=controller_configs,
-            mount_types=None,
+            base_types="NullMobileBase",
             gripper_types=["Robotiq140Gripper", "WipingGripper"],
             initialization_noise=initialization_noise,
             use_camera_obs=use_camera_obs,
@@ -765,7 +765,7 @@ class TwoArmWiping(TwoArmEnv):
         self.collisions = 0
         self.f_excess = 0
 
-        # ee resets - bias at initial state
+        # set after init to ensure self.robots is set
         self.ee_force_bias = np.zeros(3)
         self.ee_torque_bias = np.zeros(3)
 
@@ -840,9 +840,9 @@ class TwoArmWiping(TwoArmEnv):
         reward, done, info = super()._post_action(action)
 
         # Update force bias
-        if np.linalg.norm(self.ee_force_bias) == 0:
-            self.ee_force_bias = self.robots[1].ee_force
-            self.ee_torque_bias = self.robots[1].ee_torque
+        if all([np.linalg.norm(self.ee_force_bias[arm]) == 0 for arm in self.ee_force_bias]):
+            self.ee_force_bias = self.robots[0].ee_force
+            self.ee_torque_bias = self.robots[0].ee_torque
 
         if self.get_info:
             info["add_vals"] = ["nwipedmarkers", "colls", "percent_viapoints_", "f_excess"]
@@ -871,7 +871,12 @@ class TwoArmWiping(TwoArmEnv):
                     marker_positions.append(marker_pos)
                     num_non_wiped_markers += 1
             wipe_centroid /= max(1, num_non_wiped_markers)
-            mean_pos_to_things_to_wipe = wipe_centroid - self._eef1_xpos  # left arm
+
+            # Mean position to things to wipe to the closest arm
+            mean_pos_to_things_to_wipe_list = [wipe_centroid - self._get_eef_xpos(arm) for arm in self.robots[0].arms]
+            mean_pos_to_things_to_wipe = mean_pos_to_things_to_wipe_list[
+                np.argmin([np.linalg.norm(x) for x in mean_pos_to_things_to_wipe_list])
+            ]
         # Radius of circle from centroid capturing all remaining wiping markers
         max_radius = 0
         if num_non_wiped_markers > 0:
@@ -879,16 +884,33 @@ class TwoArmWiping(TwoArmEnv):
         # Return all values
         return max_radius, wipe_centroid, mean_pos_to_things_to_wipe
 
+    def _get_eef_xpos(self, arm):
+        """
+        Grabs End Effector position as specifed by the arm argument
+
+        Args:
+            arm (str): Arm name
+
+        Returns:
+            np.array: End effector(x,y,z)
+        """
+        return np.array(self.sim.data.site_xpos[self.robots[0].eef_site_id[arm]])
+
     @property
     def _has_gripper_contact(self):
         """
-        Determines whether the gripper is making contact with an object, as defined by the eef force surprassing
+        Determines whether the any of the grippers are making contact with an object, as defined by the eef force surprassing
         a certain threshold defined by self.contact_threshold
 
         Returns:
             bool: True if contact is surpasses given threshold magnitude
         """
-        return np.linalg.norm(self.robots[1].ee_force - self.ee_force_bias) > self.contact_threshold
+        return any(
+            [
+                np.linalg.norm(self.robots[0].ee_force[arm] - self.ee_force_bias) > self.contact_threshold
+                for arm in self.robots[0].arms
+            ]
+        )
 
 
 def split_actions(action_dict: dict):
