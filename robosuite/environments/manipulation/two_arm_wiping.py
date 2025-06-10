@@ -288,7 +288,7 @@ class TwoArmWiping(TwoArmEnv):
             env_configuration='single-arm-opposed',
             controller_configs=controller_configs,
             base_types="NullMobileBase",
-            gripper_types=["WipingGripper", "Robotiq140Gripper"],
+            gripper_types=["Robotiq140Gripper", "WipingGripper"],
             initialization_noise=initialization_noise,
             use_camera_obs=use_camera_obs,
             has_renderer=has_renderer,
@@ -342,9 +342,9 @@ class TwoArmWiping(TwoArmEnv):
                     action = np.concatenate([
                         action_d['action.position'][0],
                         action_d['action.rotation_axis_angle'][0],
+                        action_d['action.gripper'][0],
                         action_d['action.position'][1],
                         action_d['action.rotation_axis_angle'][1],
-                        action_d['action.gripper'][0],
                     ])
                 else:
                     # Get the expected stiffness format depending on the controller's impedance mode
@@ -355,13 +355,14 @@ class TwoArmWiping(TwoArmEnv):
                         action_d[stiffness_key][0],
                         action_d['action.position'][0],
                         action_d['action.rotation_axis_angle'][0],
+                        action_d['action.gripper'][0],
                         action_d[stiffness_key][1],
                         action_d['action.position'][1],
                         action_d['action.rotation_axis_angle'][1],
-                        action_d['action.gripper'][1],
                     ])
         else:
             action = action_dict
+        print(f"{action=}")
 
         return super().step(action)
 
@@ -482,17 +483,17 @@ class TwoArmWiping(TwoArmEnv):
 
         total_force_ee = max(
             [
-                np.linalg.norm(np.array(self.robots[0].recent_ee_forcetorques[arm].current[:3]))
-                for arm in self.robots[0].arms
+                np.linalg.norm(np.array(self.robots[1].recent_ee_forcetorques[arm].current[:3]))
+                for arm in self.robots[1].arms
             ]
         )
 
         # Neg Reward from collisions of the arm with the table
-        if self.check_contact(self.robots[0].robot_model):
+        if self.check_contact(self.robots[1].robot_model):
             if self.reward_shaping:
                 reward = self.arm_limit_collision_penalty
             self.collisions += 1
-        elif self.robots[0].check_q_limits():
+        elif self.robots[1].check_q_limits():
             if self.reward_shaping:
                 reward = self.arm_limit_collision_penalty
             self.collisions += 1
@@ -502,8 +503,8 @@ class TwoArmWiping(TwoArmEnv):
             active_markers = []
 
             # Current 3D location of the corners of the wiping tool in world frame
-            for arm in self.robots[0].arms:
-                c_geoms = self.robots[0].gripper[arm].important_geoms["corners"]
+            for arm in self.robots[1].arms:
+                c_geoms = self.robots[1].gripper[arm].important_geoms["corners"]
                 active_markers += self._get_active_markers(c_geoms)
 
             # Obtain the list of currently active (wiped) markers that where not wiped before
@@ -552,7 +553,7 @@ class TwoArmWiping(TwoArmEnv):
 
                 # Penalize large accelerations
                 reward -= self.ee_accel_penalty * max(
-                    [np.mean(abs(self.robots[0].recent_ee_acc[arm].current)) for arm in self.robots[0].arms]
+                    [np.mean(abs(self.robots[1].recent_ee_acc[arm].current)) for arm in self.robots[1].arms]
                 )
 
             # Final reward if all wiped
@@ -883,8 +884,8 @@ class TwoArmWiping(TwoArmEnv):
 
         # Update force bias
         if np.linalg.norm(self.ee_force_bias) == 0:
-            self.ee_force_bias = self.robots[0].ee_force['right']
-            self.ee_torque_bias = self.robots[0].ee_torque['right']
+            self.ee_force_bias = self.robots[1].ee_force['right']
+            self.ee_torque_bias = self.robots[1].ee_torque['right']
 
         if self.get_info:
             info["add_vals"] = ["nwipedmarkers", "colls", "percent_viapoints_", "f_excess"]
@@ -915,7 +916,7 @@ class TwoArmWiping(TwoArmEnv):
             wipe_centroid /= max(1, num_non_wiped_markers)
 
             # Mean position to things to wipe to the closest arm
-            mean_pos_to_things_to_wipe_list = [wipe_centroid - self._get_eef_xpos(arm) for arm in self.robots[0].arms]
+            mean_pos_to_things_to_wipe_list = [wipe_centroid - self._get_eef_xpos(arm) for arm in self.robots[1].arms]
             mean_pos_to_things_to_wipe = mean_pos_to_things_to_wipe_list[
                 np.argmin([np.linalg.norm(x) for x in mean_pos_to_things_to_wipe_list])
             ]
@@ -936,7 +937,7 @@ class TwoArmWiping(TwoArmEnv):
         Returns:
             np.array: End effector(x,y,z)
         """
-        return np.array(self.sim.data.site_xpos[self.robots[0].eef_site_id[arm]])
+        return np.array(self.sim.data.site_xpos[self.robots[1].eef_site_id[arm]])
 
     @property
     def _has_gripper_contact(self):
@@ -949,8 +950,8 @@ class TwoArmWiping(TwoArmEnv):
         """
         return any(
             [
-                np.linalg.norm(self.robots[0].ee_force[arm] - self.ee_force_bias) > self.contact_threshold
-                for arm in self.robots[0].arms
+                np.linalg.norm(self.robots[1].ee_force[arm] - self.ee_force_bias) > self.contact_threshold
+                for arm in self.robots[1].arms
             ]
         )
 
