@@ -461,11 +461,20 @@ class Robot(object):
         def eef_vel_ang(obs_cache):
             return np.array(self.sim.data.get_body_xvelr(self.robot_model.eef_name[arm]))
 
+        @sensor(modality=modality)
+        def eef_vel_ang(obs_cache):
+            return np.array(self.sim.data.get_body_xvelr(self.robot_model.eef_name[arm]))
+
+        @sensor(modality=modality)
+        def eef_force_torque(obs_cache):
+            return np.concatenate([self.get_sensor_measurement(self.gripper[arm].important_sensors["force_ee"]),
+                                   self.get_sensor_measurement(self.gripper[arm].important_sensors["torque_ee"])])
+
         # only consider prefix if there is more than one arm
         pf = f"{arm}_" if len(self.arms) > 1 else ""
 
-        sensors = [eef_pos, eef_quat, eef_quat_site, eef_vel_lin, eef_vel_ang]
-        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site", f"{pf}eef_vel_lin", f"{pf}eef_vel_ang"]
+        sensors = [eef_pos, eef_quat, eef_quat_site, eef_vel_lin, eef_vel_ang, eef_force_torque]
+        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site", f"{pf}eef_vel_lin", f"{pf}eef_vel_ang", f"{pf}eef_force_torque"]
 
         # add in gripper sensors if this robot has a gripper
         if self.has_gripper[arm]:
