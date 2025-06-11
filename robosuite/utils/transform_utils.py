@@ -1190,11 +1190,11 @@ def rotate_quaternion_by_rpy(rpy, q_in, rotated_frame=False):
 def compute_pose_error(target_pose, current_pose):
     """
     Computes the pose error between a target pose and a current pose.
-    
+
     Args:
         target_pose (np.array): Target pose as [position (3), orientation (4)] where orientation is a quaternion (x,y,z,w)
         current_pose (np.array): Current pose as [position (3), orientation (4)] where orientation is a quaternion (x,y,z,w)
-        
+
     Returns:
         np.array: 6D pose error vector containing [position_error (3), orientation_error (3)]
                   Position error is expressed in the target frame

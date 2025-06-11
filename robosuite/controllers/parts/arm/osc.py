@@ -285,9 +285,9 @@ class OperationalSpaceController(Controller):
                 self.goal_ori = self.compute_goal_ori(np.zeros(3))
         # Else, interpret actions as absolute values
         elif self.input_type == "absolute":
-            self.goal_pos = action[0:3]
+            self.goal_pos = delta[0:3]
             if self.use_ori is True:
-                self.goal_ori = Rotation.from_rotvec(action[3:6]).as_matrix()
+                self.goal_ori = Rotation.from_rotvec(delta[3:6]).as_matrix()
             else:
                 self.goal_ori = self.compute_goal_ori(np.zeros(3))
         else:

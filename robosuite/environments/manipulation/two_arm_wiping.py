@@ -316,13 +316,13 @@ class TwoArmWiping(TwoArmEnv):
             expected action: [robot0 stiffness, robot0 position, robot0 rotation axis angle/delta, robot0 gripper,
                              robot1 stiffness, robot1 position, robot1 rotation axis angle/delta]
 
-            arg: `action_dict`: dict or list. 
-                If `dict`, expect lerobot format. 
+            arg: `action_dict`: dict or list.
+                If `dict`, expect lerobot format.
                 If `list`, expect environment format
         """
         if isinstance(action_dict, dict):
             action_d = copy(action_dict)  # do not modify original dict
-            if self.controller_configs['type'] == 'JOINT_POSITION':
+            if self.controller_configs['body_parts']['right']['type'] == 'JOINT_POSITION':
                 action_d = split_actions(action_d)
 
                 action = np.concatenate([
@@ -330,11 +330,11 @@ class TwoArmWiping(TwoArmEnv):
                     action_d['action.gripper'],
                     action_d['action.qpos'][1],
                 ])
-            else:
+            elif self.controller_configs['body_parts']['right']['type'] == 'OSC_POSE':
                 # Convert rotation to axis angle if necessary
                 if 'action.rotation_ortho6' in action_d:
-                    action_d['action.rotation_axis_angle'] = np.concatenate([T.quat2axisangle(T.ortho62quat(action_d['action.rotation_ortho6'][:6])),
-                                                                             T.quat2axisangle(T.ortho62quat(action_d['action.rotation_ortho6'][6:]))])
+                    action_d['action.rotation_axis_angle'] = [T.quat2axisangle(T.ortho62quat(action_d['action.rotation_ortho6'][0])),
+                                                              T.quat2axisangle(T.ortho62quat(action_d['action.rotation_ortho6'][1]))]
 
                 # action_d = split_actions(action_d)
 
@@ -360,6 +360,8 @@ class TwoArmWiping(TwoArmEnv):
                         action_d['action.position'][1],
                         action_d['action.rotation_axis_angle'][1],
                     ])
+            else:
+                raise ValueError(f"Unsupported controller type: {self.controller_configs['type']}. Only 'JOINT_POSITION' and 'OSC_POSE' are supported.")
         else:
             action = action_dict
 
