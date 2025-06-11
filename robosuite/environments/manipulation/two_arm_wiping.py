@@ -362,7 +362,6 @@ class TwoArmWiping(TwoArmEnv):
                     ])
         else:
             action = action_dict
-        print(f"{action=}")
 
         return super().step(action)
 

@@ -170,6 +170,7 @@ class Device(metaclass=abc.ABCMeta):
             if "abs" not in k:
                 ac_dict[k] = np.clip(v, -1, 1)
 
+        ac_dict["state"] = state
         return ac_dict
 
     def get_arm_action(self, robot, arm, norm_delta, goal_update_mode="target"):

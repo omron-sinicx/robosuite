@@ -183,7 +183,7 @@ class Keyboard(Device):
             elif key.char == "s":
                 self.active_arm_index = (self.active_arm_index + 1) % len(self.all_robot_arms[self.active_robot])
 
-            elif key.char == "=":
+            elif key.char == "0":
                 self.active_robot = (self.active_robot + 1) % self.num_robots
 
         except AttributeError as e:
