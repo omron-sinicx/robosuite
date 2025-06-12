@@ -3,6 +3,7 @@ import math
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+from robosuite.utils.buffers import RingBuffer
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
@@ -136,8 +137,12 @@ class OperationalSpaceController(Controller):
         input_ref_frame="base",
         uncouple_pos_ori=True,
         lite_physics=True,
+        ft_buffer_size=10,
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
+
+        self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
+        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
 
         super().__init__(
             sim,
@@ -226,6 +231,32 @@ class OperationalSpaceController(Controller):
         # initialize origin pos and ori
         self.origin_pos = None
         self.origin_ori = None
+
+    def update(self):
+        super().update()
+
+        self.wrench_in_eef_frame_buf.push(self.get_wrench())
+
+    def get_wrench(self):
+        return np.concatenate([
+            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
+            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
+        ])
+
+    def get_sensor_measurement(self, sensor_name):
+        """
+        Grabs relevant sensor data from the sim object
+
+        Args:
+            sensor_name (str): name of the sensor
+
+        Returns:
+            np.array: sensor values
+        """
+        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
+        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
+
+        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
 
     def set_goal(self, action):
         """
@@ -624,3 +655,7 @@ class OperationalSpaceController(Controller):
     @property
     def name(self):
         return "OSC_" + self.name_suffix
+
+    @property
+    def eef_wrench(self):
+        return self.wrench_in_eef_frame_buf.average

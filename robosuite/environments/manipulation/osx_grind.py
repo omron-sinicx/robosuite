@@ -42,7 +42,7 @@ DEFAULT_GRIND_CONFIG = {
     "tracking_force_threshold": 1.0,
     "tracking_trajectory_method": 'per_error_threshold',
 
-    "reset_with_ik": True,
+    "reset_with_ik": False,
 
     # Trajectory settings
     "randomize_reference_trajectory": False,
@@ -68,7 +68,7 @@ DEFAULT_GRIND_CONFIG = {
     "mortar_height": 0.047,  # (m)
     "mortar_max_radius": 0.04,  # (m)
     "mortar_mode": "mesh",  # "SDA" or "mesh" Convex Decomposition Approximation
-    "spawn_mortar": True,
+    "spawn_mortar": False,
     "mortar_diameter": 0.08,  # diameter of the mortar (m)
     "mortar_inner_height": 0.012,  # height of the mortar inner surface (m)
     "desired_height": 0.005,  # desired grinding height (m)
@@ -237,6 +237,7 @@ class OSXGrind(ManipulationEnv):
         horizon=1000,
         ignore_done=False,
         hard_reset=False,
+        enable_reward=True,
         camera_names="agentview",
         camera_heights=256,
         camera_widths=256,
@@ -349,6 +350,7 @@ class OSXGrind(ManipulationEnv):
             "speed_total_reward": 0.0,
             "action_smoothness_total_reward": 0.0,
         }
+        self.enable_reward = enable_reward
 
         self.init_qpos = np.array(
             [-0.24163013, -0.88630004,  1.99429391, -2.6787902, -1.57079633, -4.95401911]
@@ -358,10 +360,11 @@ class OSXGrind(ManipulationEnv):
         self.global_timestep = 0
         self.ik = None
         self.translated_action = OrderedDict()
+        self.controller_configs = controller_configs
         super().__init__(
             robots=robots,
             env_configuration=env_configuration,
-            controller_configs=controller_configs,
+            controller_configs=self.controller_configs,
             base_types="default",
             gripper_types=gripper_types,
             initialization_noise=initialization_noise,
@@ -489,7 +492,10 @@ class OSXGrind(ManipulationEnv):
             ValueError: If action_ndim is not 4, 6, or 12
         """
         action = policy_action.copy()
-        assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
+        if self.controller_type == 'OSC_POSE':
+            assert isinstance(action, dict), f"Expected action to be a dict, got {type(action)}"
+        else:
+            assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
         self._update_waypoint_index(action)
 
@@ -499,12 +505,38 @@ class OSXGrind(ManipulationEnv):
             controller_targets = action
         elif self.controller_type == "JOINT_POSITION":
             controller_targets = action
+        elif self.controller_type == 'OSC_POSE':
+
+            # Convert rotation to axis angle if necessary
+            if 'action.rotation_ortho6' in action:
+                action['action.rotation_axis_angle'] = [T.ortho62axisangle(action['action.rotation_ortho6'][0])]
+
+            print(f"action: {action['action.rotation_axis_angle']}")
+
+            if self.controller_configs['body_parts']['right']['impedance_mode'] == 'fixed':
+                controller_targets = np.concatenate([
+                    action['action.position'][0],
+                    action['action.rotation_axis_angle'][0],
+                ])
+            else:
+                # Get the expected stiffness format depending on the controller's impedance mode
+                stiffness_type = 'cholesky' if self.controller_configs['body_parts']['right']['impedance_mode'] == 'variable_full_kp' else 'diag'
+                stiffness_key = f'action.stiffness_{stiffness_type}'
+
+                controller_targets = np.concatenate([
+                    action[stiffness_key][0],
+                    action['action.position'][0],
+                    action['action.rotation_axis_angle'][0],
+                ])
         else:
             raise ValueError(f"Unsupported controller type: {self.controller_type}. Only 'FDCC' and 'JOINT_VELOCITY' are supported.")
 
         return super().step(controller_targets)
 
     def reward(self, action=None):
+
+        if not self.enable_reward:
+            return 0.0
 
         reward = 0.0
 
