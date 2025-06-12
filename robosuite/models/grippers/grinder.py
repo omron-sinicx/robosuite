@@ -23,11 +23,10 @@ class UR5eGrinder(GripperModel):
 
     @property
     def init_qpos(self):
-        return_value = np.zeros(len(self.joints))
-        return return_value
+        return None
 
     @property
     def _important_geoms(self):
         return {
-            "eef": ["pestle_collision"],
+            "eef": ["grip_site"],
         }
