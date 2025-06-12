@@ -1055,6 +1055,10 @@ def cholesky_vector_to_spd(cholesky_vector):
     return cholesky_matrix @ cholesky_matrix.T
 
 
+def ortho62axisangle(ortho6):
+    return quat2axisangle(ortho62quat(ortho6))
+
+
 def ortho62quat(ortho6):
     R = ortho62mat(ortho6)
     return mat2quat(R)

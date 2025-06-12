@@ -333,8 +333,8 @@ class TwoArmWiping(TwoArmEnv):
             elif self.controller_configs['body_parts']['right']['type'] == 'OSC_POSE':
                 # Convert rotation to axis angle if necessary
                 if 'action.rotation_ortho6' in action_d:
-                    action_d['action.rotation_axis_angle'] = [T.quat2axisangle(T.ortho62quat(action_d['action.rotation_ortho6'][0])),
-                                                              T.quat2axisangle(T.ortho62quat(action_d['action.rotation_ortho6'][1]))]
+                    action_d['action.rotation_axis_angle'] = [T.ortho62axisangle(action_d['action.rotation_ortho6'][0]),
+                                                              T.ortho62axisangle(action_d['action.rotation_ortho6'][1])]
 
                 # action_d = split_actions(action_d)
 
