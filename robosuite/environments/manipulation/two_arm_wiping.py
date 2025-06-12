@@ -606,11 +606,11 @@ class TwoArmWiping(TwoArmEnv):
         # load model for table top workspace
         mujoco_arena = OSXWipeArena(
             table_friction=self.table_friction,
-            wiping_area=(0.10, 0.10, 0.05),
+            wiping_area=(0.15, 0.15, 0.05),
             center_pose=[-0.175, 0.0],
-            num_markers=10,
-            line_width=0.03,
-            coverage_factor=0.7,
+            num_markers=30,
+            line_width=0.05,
+            coverage_factor=0.8,
             seed=0,  # Random seed
             xml=xml_path_completion("arenas/osx_arena.xml")
         )

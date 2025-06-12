@@ -42,7 +42,7 @@ DEFAULT_GRIND_CONFIG = {
     "tracking_force_threshold": 1.0,
     "tracking_trajectory_method": 'per_error_threshold',
 
-    "reset_with_ik": False,
+    "reset_with_ik": True,
 
     # Trajectory settings
     "randomize_reference_trajectory": False,
@@ -68,7 +68,7 @@ DEFAULT_GRIND_CONFIG = {
     "mortar_height": 0.047,  # (m)
     "mortar_max_radius": 0.04,  # (m)
     "mortar_mode": "mesh",  # "SDA" or "mesh" Convex Decomposition Approximation
-    "spawn_mortar": False,
+    "spawn_mortar": True,
     "mortar_diameter": 0.08,  # diameter of the mortar (m)
     "mortar_inner_height": 0.012,  # height of the mortar inner surface (m)
     "desired_height": 0.005,  # desired grinding height (m)
