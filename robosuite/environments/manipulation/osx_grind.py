@@ -13,6 +13,10 @@ from robosuite.utils.traj_utils import compute_max_step_size, generate_mortar_tr
 from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
 import robosuite.utils.transform_utils as T
 
+#for inverse kinematics
+#Customized UR kinematics
+import ur_driver.ur_custom as ur_ctrl
+from ur_ikfast.ur_ikfast import ur_kinematics as ur_ik
 
 # Default Grind environment configuration
 DEFAULT_GRIND_CONFIG = {
@@ -86,6 +90,7 @@ TRACKING_METHODS = [
 
 
 def scale_action(action, input_min, input_max, output_min, output_max):
+    """scale action value"""
     action_scale = abs(output_max - output_min) / abs(input_max - input_min)
     action_output_transform = (output_max + output_min) / 2.0
     action_input_transform = (input_max + input_min) / 2.0
@@ -288,6 +293,11 @@ class OSXGrind(ManipulationEnv):
         self.table_friction = self.task_config["table_friction"]
         self.task_box = np.array([self.mortar_radius, self.mortar_radius, self.mortar_height+self.table_offset[2]]) + self.mortar_space_threshold_max
 
+        #setting for the robot.
+        self.init_qpos = np.array(
+            [-0.24163013, -0.88630004,  1.99429391, -2.6787902, -1.57079633, -4.95401911]
+        )
+
         # references to follow
         self.current_waypoint_index = 0
         self.target_force = self.task_config["target_force"]
@@ -322,6 +332,12 @@ class OSXGrind(ManipulationEnv):
             self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
         else:
             self.reference_trajectory = reference_trajectory
+        
+        #calculate the reference joint angles using inverse kinematics referred to https://github.com/cambel/ur_ikfast
+        #construct UrCustom instance
+        self.ur_kin = ur_ctrl.UrCustom()
+        self.ur_ik_ = ur_ik.URKinematics('ur5e')
+        self.reference_joint = self.cal_refJoint(reference_trajectory=self.reference_trajectory)
 
         if not self.randomize_reference_trajectory:
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
@@ -351,10 +367,6 @@ class OSXGrind(ManipulationEnv):
             "action_smoothness_total_reward": 0.0,
         }
         self.enable_reward = enable_reward
-
-        self.init_qpos = np.array(
-            [-0.24163013, -0.88630004,  1.99429391, -2.6787902, -1.57079633, -4.95401911]
-        )
 
         self.cumulative_reward = 0.0
         self.global_timestep = 0
@@ -388,6 +400,123 @@ class OSXGrind(ManipulationEnv):
             renderer=renderer,
             renderer_config=renderer_config,
         )
+    
+    def cal_refJoint(self,reference_trajectory):
+        """Calculate the referential joint angles from reference_trajectory.
+        """
+        #calculate the reference joint angles using inverse kinematics 
+        #referred to https://github.com/cambel/ur_ikfast
+        reference_joint = []
+        
+        #For inverse kinematics
+        for i in range(reference_trajectory.shape[0]):#for each step referential pose.
+            
+            #Calculate IK
+            ee_pos_ref = reference_trajectory[i]#get the referential pose. (x,y,z,q.x,q.y,q.z,q.w)
+            
+            #convert eef_pos_ref (x,y,z,q.x,q.y,q.z,q.w) to tool0_pose_ref
+            rotMat_ee_ref = self.cal_quat2matrix_np(ee_pos_ref[3:])#(q.x,q.y,q.z,q.w)
+            
+            T_tool0_ref = np.eye(4)
+            T_tool0_ref[:3,:3]=rotMat_ee_ref
+            T_tool0_ref[:3,3]=ee_pos_ref[:3]#(x,y,z)
+            #base_link > tool0
+            T_tool0_ref = np.linalg.inv(self.ur_kin._T_world2base)@T_tool0_ref@np.linalg.inv(self.ur_kin._T_tool0_tip)#world>base_link, and eef>tool0
+            #convert to pose.
+            tool0_pose_ref = np.zeros(7)
+            #tool0_pose_ref[:9] =T_tool0_ref[:3,:3].flatten() 
+            tool0_pose_ref[:3]=T_tool0_ref[:3,3].copy()#(x,y,z)
+            quat_tool0 = self.rotation_matrix_to_quaternion(T_tool0_ref[:3,:3])#(rotation matrix to quaternion(q.x,q.y,q.z,q.w))
+            tool0_pose_ref[3:]=quat_tool0.copy()
+            
+            #inverse kinematics from tool0 pose to joint angles.
+            if i>0: #after first iteration, initial values are previous joints. Otherwise, current robot pose.
+                joint_angles = self.ur_ik_.inverse(tool0_pose_ref, False, q_guess=reference_joint[i-1]) #from tool0 to base_link
+            else:
+                joint_angles = self.ur_ik_.inverse(tool0_pose_ref, False, q_guess=self.init_qpos)#from tool0 to base_link
+
+            #save in self.reference_joint.
+            reference_joint.append(joint_angles.tolist())
+        #convert to np.array
+        reference_joint = np.array(reference_joint)
+
+        return reference_joint
+    
+    def rotation_matrix_to_quaternion(self,R):
+        """
+        Convert a 3x3 rotation matrix to a quaternion (qx, qy, qz, qw).
+        """
+        m00, m01, m02 = R[0, 0], R[0, 1], R[0, 2]
+        m10, m11, m12 = R[1, 0], R[1, 1], R[1, 2]
+        m20, m21, m22 = R[2, 0], R[2, 1], R[2, 2]
+
+        trace = m00 + m11 + m22
+
+        if trace > 0:
+            S = np.sqrt(trace + 1.0) * 2  # S=4*qw
+            qw = 0.25 * S
+            qx = (m21 - m12) / S
+            qy = (m02 - m20) / S
+            qz = (m10 - m01) / S
+        elif (m00 > m11) and (m00 > m22):
+            S = np.sqrt(1.0 + m00 - m11 - m22) * 2  # S=4*qx
+            qw = (m21 - m12) / S
+            qx = 0.25 * S
+            qy = (m01 + m10) / S
+            qz = (m02 + m20) / S
+        elif m11 > m22:
+            S = np.sqrt(1.0 + m11 - m00 - m22) * 2  # S=4*qy
+            qw = (m02 - m20) / S
+            qx = (m01 + m10) / S
+            qy = 0.25 * S
+            qz = (m12 + m21) / S
+        else:
+            S = np.sqrt(1.0 + m22 - m00 - m11) * 2  # S=4*qz
+            qw = (m10 - m01) / S
+            qx = (m02 + m20) / S
+            qy = (m12 + m21) / S
+            qz = 0.25 * S
+
+        return np.array([qx, qy, qz, qw])
+
+    def cal_quat2matrix_np(self,x):
+        """
+        Calculate the rotation matrix from its quaternion.
+        
+        Parameters
+        ----------
+        x : np.ndarray.
+            Quaternion (4)
+        
+        Return
+        ----------
+        R : (3,3) np.ndarray 
+            Rotation matrix.
+        """
+        qx, qy, qz, qw = x[0], x[1], x[2], x[3]
+
+        # Pre-compute repeated terms
+        tx = 2.0 * qx
+        ty = 2.0 * qy
+        tz = 2.0 * qz
+        twx = tx * qw
+        twy = ty * qw
+        twz = tz * qw
+        txx = tx * qx
+        txy = ty * qx
+        txz = tz * qx
+        tyy = ty * qy
+        tyz = tz * qy
+        tzz = tz * qz
+
+        # Construct the rotation matrix
+        R = np.array([
+            [1.0 - (tyy + tzz), txy - twz, txz + twy],
+            [txy + twz, 1.0 - (txx + tzz), tyz - twx],
+            [txz - twy, tyz + twx, 1.0 - (txx + tyy)]
+        ])
+
+        return R
 
     def compute_cartesian_compliance_controller_targets(self, action):
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
@@ -491,6 +620,7 @@ class OSXGrind(ManipulationEnv):
         Raises:
             ValueError: If action_ndim is not 4, 6, or 12
         """
+
         action = policy_action.copy()
         if self.controller_type == 'OSC_POSE':
             assert isinstance(action, dict), f"Expected action to be a dict, got {type(action)}"
@@ -498,7 +628,6 @@ class OSXGrind(ManipulationEnv):
             assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
         self._update_waypoint_index(action)
-
         if self.controller_type == "FDCC":
             controller_targets = self.compute_cartesian_compliance_controller_targets(action)
         elif self.controller_type == "JOINT_VELOCITY":
@@ -790,6 +919,7 @@ class OSXGrind(ManipulationEnv):
 
         if self.randomize_reference_trajectory:
             self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
+            self.reference_joint = self.cal_refJoint(reference_trajectory=self.reference_trajectory)
 
         if self.robots[0].composite_controller is None or self.hard_reset:
             # instantiate controllers, only once
