@@ -106,8 +106,8 @@ class JointVelocityController(Controller):
             low, high = self.actuator_limits
             self.kp = kp * (high - low)
 
-        self.ki = self.kp * 0.005
-        self.kd = self.kp * 0.001
+        self.ki = 0.0#self.kp * 0.005
+        self.kd = 0.0#self.kp * 0.001
         self.last_err = np.zeros(self.joint_dim)
         self.derr_buf = RingBuffer(dim=self.joint_dim, length=5)
         self.summed_err = np.zeros(self.joint_dim)
