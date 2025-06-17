@@ -13,10 +13,10 @@ from robosuite.utils.traj_utils import compute_max_step_size, generate_mortar_tr
 from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
 import robosuite.utils.transform_utils as T
 
-#for inverse kinematics
-#Customized UR kinematics
+# for inverse kinematics
+# Customized UR kinematics
 import ur_driver.ur_custom as ur_ctrl
-from ur_ikfast.ur_ikfast import ur_kinematics as ur_ik
+from ur_ikfast import ur_kinematics as ur_ik
 
 # Default Grind environment configuration
 DEFAULT_GRIND_CONFIG = {
@@ -292,7 +292,7 @@ class OSXGrind(ManipulationEnv):
         self.table_friction = self.task_config["table_friction"]
         self.task_box = np.array([self.mortar_radius, self.mortar_radius, self.mortar_height+self.table_offset[2]]) + self.mortar_space_threshold_max
 
-        #setting for the robot.
+        # setting for the robot.
         self.init_qpos = np.array(
             [-0.24163013, -0.88630004,  1.99429391, -2.6787902, -1.57079633, -4.95401911]
         )
@@ -331,9 +331,9 @@ class OSXGrind(ManipulationEnv):
             self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
         else:
             self.reference_trajectory = reference_trajectory
-        
-        #calculate the reference joint angles using inverse kinematics referred to https://github.com/cambel/ur_ikfast
-        #construct UrCustom instance
+
+        # calculate the reference joint angles using inverse kinematics referred to https://github.com/cambel/ur_ikfast
+        # construct UrCustom instance
         self.ur_kin = ur_ctrl.UrCustom()
         self.ur_ik_ = ur_ik.URKinematics('ur5e')
         self.reference_joint = self.cal_refJoint(reference_trajectory=self.reference_trajectory)
@@ -397,49 +397,49 @@ class OSXGrind(ManipulationEnv):
             renderer=renderer,
             renderer_config=renderer_config,
         )
-    
-    def cal_refJoint(self,reference_trajectory):
+
+    def cal_refJoint(self, reference_trajectory):
         """Calculate the referential joint angles from reference_trajectory.
         """
-        #calculate the reference joint angles using inverse kinematics 
-        #referred to https://github.com/cambel/ur_ikfast
+        # calculate the reference joint angles using inverse kinematics
+        # referred to https://github.com/cambel/ur_ikfast
         reference_joint = []
-        
-        #For inverse kinematics
-        for i in range(reference_trajectory.shape[0]):#for each step referential pose.
-            
-            #Calculate IK
-            ee_pos_ref = reference_trajectory[i]#get the referential pose. (x,y,z,q.x,q.y,q.z,q.w)
-            
-            #convert eef_pos_ref (x,y,z,q.x,q.y,q.z,q.w) to tool0_pose_ref
-            rotMat_ee_ref = self.cal_quat2matrix_np(ee_pos_ref[3:])#(q.x,q.y,q.z,q.w)
-            
-            T_tool0_ref = np.eye(4)
-            T_tool0_ref[:3,:3]=rotMat_ee_ref
-            T_tool0_ref[:3,3]=ee_pos_ref[:3]#(x,y,z)
-            #base_link > tool0
-            T_tool0_ref = np.linalg.inv(self.ur_kin._T_world2base)@T_tool0_ref@np.linalg.inv(self.ur_kin._T_tool0_tip)#world>base_link, and eef>tool0
-            #convert to pose.
-            tool0_pose_ref = np.zeros(7)
-            #tool0_pose_ref[:9] =T_tool0_ref[:3,:3].flatten() 
-            tool0_pose_ref[:3]=T_tool0_ref[:3,3].copy()#(x,y,z)
-            quat_tool0 = self.rotation_matrix_to_quaternion(T_tool0_ref[:3,:3])#(rotation matrix to quaternion(q.x,q.y,q.z,q.w))
-            tool0_pose_ref[3:]=quat_tool0.copy()
-            
-            #inverse kinematics from tool0 pose to joint angles.
-            if i>0: #after first iteration, initial values are previous joints. Otherwise, current robot pose.
-                joint_angles = self.ur_ik_.inverse(tool0_pose_ref, False, q_guess=reference_joint[i-1]) #from tool0 to base_link
-            else:
-                joint_angles = self.ur_ik_.inverse(tool0_pose_ref, False, q_guess=self.init_qpos)#from tool0 to base_link
 
-            #save in self.reference_joint.
+        # For inverse kinematics
+        for i in range(reference_trajectory.shape[0]):  # for each step referential pose.
+
+            # Calculate IK
+            ee_pos_ref = reference_trajectory[i]  # get the referential pose. (x,y,z,q.x,q.y,q.z,q.w)
+
+            # convert eef_pos_ref (x,y,z,q.x,q.y,q.z,q.w) to tool0_pose_ref
+            rotMat_ee_ref = self.cal_quat2matrix_np(ee_pos_ref[3:])  # (q.x,q.y,q.z,q.w)
+
+            T_tool0_ref = np.eye(4)
+            T_tool0_ref[:3, :3] = rotMat_ee_ref
+            T_tool0_ref[:3, 3] = ee_pos_ref[:3]  # (x,y,z)
+            # base_link > tool0
+            T_tool0_ref = np.linalg.inv(self.ur_kin._T_world2base)@T_tool0_ref@np.linalg.inv(self.ur_kin._T_tool0_tip)  # world>base_link, and eef>tool0
+            # convert to pose.
+            tool0_pose_ref = np.zeros(7)
+            # tool0_pose_ref[:9] =T_tool0_ref[:3,:3].flatten()
+            tool0_pose_ref[:3] = T_tool0_ref[:3, 3].copy()  # (x,y,z)
+            quat_tool0 = self.rotation_matrix_to_quaternion(T_tool0_ref[:3, :3])  # (rotation matrix to quaternion(q.x,q.y,q.z,q.w))
+            tool0_pose_ref[3:] = quat_tool0.copy()
+
+            # inverse kinematics from tool0 pose to joint angles.
+            if i > 0:  # after first iteration, initial values are previous joints. Otherwise, current robot pose.
+                joint_angles = self.ur_ik_.inverse(tool0_pose_ref, False, q_guess=reference_joint[i-1])  # from tool0 to base_link
+            else:
+                joint_angles = self.ur_ik_.inverse(tool0_pose_ref, False, q_guess=self.init_qpos)  # from tool0 to base_link
+
+            # save in self.reference_joint.
             reference_joint.append(joint_angles.tolist())
-        #convert to np.array
+        # convert to np.array
         reference_joint = np.array(reference_joint)
 
         return reference_joint
-    
-    def rotation_matrix_to_quaternion(self,R):
+
+    def rotation_matrix_to_quaternion(self, R):
         """
         Convert a 3x3 rotation matrix to a quaternion (qx, qy, qz, qw).
         """
@@ -476,15 +476,15 @@ class OSXGrind(ManipulationEnv):
 
         return np.array([qx, qy, qz, qw])
 
-    def cal_quat2matrix_np(self,x):
+    def cal_quat2matrix_np(self, x):
         """
         Calculate the rotation matrix from its quaternion.
-        
+
         Parameters
         ----------
         x : np.ndarray.
             Quaternion (4)
-        
+
         Return
         ----------
         R : (3,3) np.ndarray 
