@@ -388,50 +388,54 @@ class OSXGrind(ManipulationEnv):
             renderer_config=renderer_config,
         )
 
-    def cal_refJoint(self, reference_trajectory):
-        """Calculate the referential joint angles from reference_trajectory.
+    def calculate_joint_reference_trajectory(self, reference_trajectory):
+        """Calculate joint angles for each pose in the reference trajectory using inverse kinematics.
+        
+        Args:
+            reference_trajectory (np.ndarray): Array of end-effector poses (x,y,z,q.x,q.y,q.z,q.w)
+            
+        Returns:
+            np.ndarray: Array of joint angles for each pose in the trajectory
+            
+        Raises:
+            ValueError: If inverse kinematics fails to find a solution
         """
-        print("cal_refJoint START")
-        # calculate the reference joint angles using inverse kinematics
-        # referred to https://github.com/cambel/ur_ikfast
+        # Initialize IK solver if not already done
+        if self.ik is None:
+            self.ik = MuJoCoIKSolver(
+                self.sim.model, 
+                self.sim.data,
+                "gripper0_right_grip_site",
+                joint_indexes=self.robots[0].joint_indexes,
+                position_threshold=0.001,
+                rotation_threshold=0.01,
+                max_iterations=1000
+            )
+
         reference_joint = []
-
-        # For inverse kinematics
-        for i in range(reference_trajectory.shape[0]):  # for each step referential pose.
-
-            # Calculate IK
-            ee_pos_ref = reference_trajectory[i]  # get the referential pose. (x,y,z,q.x,q.y,q.z,q.w)
-
-            # inverse kinematics from tool0 pose to joint angles.
-            if self.ik is None:
-                self.ik = MuJoCoIKSolver(self.sim.model, self.sim.data,
-                                         "gripper0_right_grip_site",
-                                         joint_indexes=self.robots[0].joint_indexes,
-                                         position_threshold=0.001,
-                                         rotation_threshold=0.01,
-                                         max_iterations=1000)
-
-            if i > 0:  # after first iteration, initial values are previous joints. Otherwise, current robot pose.
-                joint_angles = self.ik.solve_ik(target_pos=ee_pos_ref[:3],
-                                                target_rot=T.quat2mat(ee_pos_ref[3:]),
-                                                initial_guess=reference_joint[i-1])
-            else:
-                joint_angles = self.ik.solve_ik(target_pos=ee_pos_ref[:3],
-                                                target_rot=T.quat2mat(ee_pos_ref[3:]),
-                                                initial_guess=self.init_qpos)
-            if joint_angles.success:
-                joint_angles = joint_angles.joint_angles
-            else:
-                print(f"IK failed at step {i}")
-                raise ValueError(f"IK failed at step {i}")
-
-            # save in self.reference_joint.
-            reference_joint.append(joint_angles.tolist())
-        # convert to np.array
-        reference_joint = np.array(reference_joint)
-
-        print("cal_refJoint END")
-        return reference_joint
+        
+        # Calculate joint angles for each pose in trajectory
+        for i, ee_pose in enumerate(reference_trajectory):
+            # Extract position and rotation from pose
+            target_pos = ee_pose[:3]
+            target_rot = T.quat2mat(ee_pose[3:])
+            
+            # Use previous joint angles as initial guess after first iteration
+            initial_guess = reference_joint[i-1] if i > 0 else self.init_qpos
+            
+            # Solve inverse kinematics
+            ik_result = self.ik.solve_ik(
+                target_pos=target_pos,
+                target_rot=target_rot,
+                initial_guess=initial_guess
+            )
+            
+            if not ik_result.success:
+                raise ValueError(f"Inverse kinematics failed at step {i}")
+                
+            reference_joint.append(ik_result.joint_angles.tolist())
+            
+        return np.array(reference_joint)
 
     def compute_cartesian_compliance_controller_targets(self, action):
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
@@ -805,7 +809,7 @@ class OSXGrind(ManipulationEnv):
 
         if self.randomize_reference_trajectory:
             self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
-            self.reference_joint = self.cal_refJoint(reference_trajectory=self.reference_trajectory)
+            self.reference_joint = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
 
         if self.robots[0].composite_controller is None or self.hard_reset:
             # instantiate controllers, only once
@@ -833,7 +837,6 @@ class OSXGrind(ManipulationEnv):
                 print("IK solution not found, using default init_q. Error msg: ", result.message)
 
         super()._reset_internal()
-        self.reference_joint = self.cal_refJoint(reference_trajectory=self.reference_trajectory)
 
         self.last_step_time = self.sim.data._data.time
 
