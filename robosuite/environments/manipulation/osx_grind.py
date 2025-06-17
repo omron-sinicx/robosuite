@@ -393,20 +393,20 @@ class OSXGrind(ManipulationEnv):
 
     def calculate_joint_reference_trajectory(self, reference_trajectory):
         """Calculate joint angles for each pose in the reference trajectory using inverse kinematics.
-        
+
         Args:
             reference_trajectory (np.ndarray): Array of end-effector poses (x,y,z,q.x,q.y,q.z,q.w)
-            
+
         Returns:
             np.ndarray: Array of joint angles for each pose in the trajectory
-            
+
         Raises:
             ValueError: If inverse kinematics fails to find a solution
         """
         # Initialize IK solver if not already done
         if self.ik is None:
             self.ik = MuJoCoIKSolver(
-                self.sim.model, 
+                self.sim.model,
                 self.sim.data,
                 "gripper0_right_grip_site",
                 joint_indexes=self.robots[0].joint_indexes,
@@ -416,28 +416,28 @@ class OSXGrind(ManipulationEnv):
             )
 
         reference_joint = []
-        
+
         # Calculate joint angles for each pose in trajectory
         for i, ee_pose in enumerate(reference_trajectory):
             # Extract position and rotation from pose
             target_pos = ee_pose[:3]
             target_rot = T.quat2mat(ee_pose[3:])
-            
+
             # Use previous joint angles as initial guess after first iteration
             initial_guess = reference_joint[i-1] if i > 0 else self.init_qpos
-            
+
             # Solve inverse kinematics
             ik_result = self.ik.solve_ik(
                 target_pos=target_pos,
                 target_rot=target_rot,
                 initial_guess=initial_guess
             )
-            
+
             if not ik_result.success:
                 raise ValueError(f"Inverse kinematics failed at step {i}")
-                
+
             reference_joint.append(ik_result.joint_angles.tolist())
-            
+
         return np.array(reference_joint)
 
     def compute_cartesian_compliance_controller_targets(self, action):
@@ -841,7 +841,7 @@ class OSXGrind(ManipulationEnv):
 
         if self.randomize_reference_trajectory:
             self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
-            self.reference_joint = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
+        self.reference_joint = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
 
         if self.robots[0].composite_controller is None or self.hard_reset:
             # instantiate controllers, only once
