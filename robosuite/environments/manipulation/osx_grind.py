@@ -302,8 +302,9 @@ class OSXGrind(ManipulationEnv):
 
         self.duration = self.task_config["duration"]
         self.duration_range = self.task_config["duration_range"]
-        self.num_waypoints = control_freq * self.duration // 10
-        self.seconds_per_waypoint = 10 / control_freq
+        scale_down = 10
+        self.num_waypoints = control_freq * self.duration // scale_down
+        self.seconds_per_waypoint = scale_down / control_freq
         self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
@@ -415,7 +416,7 @@ class OSXGrind(ManipulationEnv):
                 max_iterations=1000
             )
 
-        reference_joint = []
+        joint_reference_trajectory = []
 
         # Calculate joint angles for each pose in trajectory
         for i, ee_pose in enumerate(reference_trajectory):
@@ -424,7 +425,7 @@ class OSXGrind(ManipulationEnv):
             target_rot = T.quat2mat(ee_pose[3:])
 
             # Use previous joint angles as initial guess after first iteration
-            initial_guess = reference_joint[i-1] if i > 0 else self.init_qpos
+            initial_guess = joint_reference_trajectory[i-1] if i > 0 else self.init_qpos
 
             # Solve inverse kinematics
             ik_result = self.ik.solve_ik(
@@ -436,9 +437,9 @@ class OSXGrind(ManipulationEnv):
             if not ik_result.success:
                 raise ValueError(f"Inverse kinematics failed at step {i}")
 
-            reference_joint.append(ik_result.joint_angles.tolist())
+            joint_reference_trajectory.append(ik_result.joint_angles.tolist())
 
-        return np.array(reference_joint)
+        return np.array(joint_reference_trajectory)
 
     def compute_cartesian_compliance_controller_targets(self, action):
         controller: ForwardDynamicsComplianceController = self.robots[0].composite_controller.part_controllers['right']
@@ -841,7 +842,6 @@ class OSXGrind(ManipulationEnv):
 
         if self.randomize_reference_trajectory:
             self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
-        self.reference_joint = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
 
         if self.robots[0].composite_controller is None or self.hard_reset:
             # instantiate controllers, only once
@@ -869,6 +869,7 @@ class OSXGrind(ManipulationEnv):
                 print("IK solution not found, using default init_q. Error msg: ", result.message)
 
         super()._reset_internal()
+        self.joint_reference_trajectory = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
 
         self.last_step_time = self.sim.data._data.time
 
@@ -1083,7 +1084,7 @@ class OSXGrind(ManipulationEnv):
         else:
             desired_height = self.task_config["desired_height"]
             self.target_force = self.task_config["target_force"]
-        # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {target_force} desired_height: {desired_height}")
+        # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
         reference_trajectory = generate_mortar_trajectory(
             mortar_diameter=mortar_diameter,
@@ -1116,15 +1117,22 @@ class OSXGrind(ManipulationEnv):
 
     @property
     def eef_pos(self):
-        return np.array(self.sim.data.site_xpos[self.robots[0].eef_site_id['right']])
+        return self.eef_pose[:3]
 
     @property
     def eef_quat(self):
-        return T.mat2quat(self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3))
+        return self.eef_pose[3:]
 
     @property
     def eef_pose(self):
-        return np.concatenate([self.eef_pos, self.eef_quat])
+        pos_in_world = self.sim.data.get_body_xpos('gripper0_right_eef')
+        rot_in_world = self.sim.data.get_body_xmat('gripper0_right_eef').reshape((3, 3))
+        pose_in_world = T.make_pose(pos_in_world, rot_in_world)
+        ee_pos = pose_in_world[:3, 3]
+        ee_quat = T.mat2quat(pose_in_world[:3, :3])
+
+        pose = np.concatenate([ee_pos, ee_quat])
+        return pose
 
     @property
     def action_spec(self):

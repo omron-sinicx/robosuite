@@ -21,7 +21,7 @@
 			<geom pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" mesh="pestle_cage" name="pestle_cage_collision" class="pestle_collision" />
 			<geom pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" mesh="pestle_cage" name="pestle_cage_visualization" class="pestle_visual" />
 			<!-- This site was added for visualization. -->
-			<body name="eef" pos="0 0 0.13" quat="1 0 0 0">
+			<body name="eef" pos="0 0 0.1355" quat="1 0 0 0">
 				<site name="grip_site" pos="0 0 0.0" size="0.01 0.01 0.01" rgba="1 0 0 0.5" type="sphere" group="1" />
 				<site name="ee_x" pos="0.01 0 0" size="0.0025 .01" quat="0.707105  0 0.707108 0 " rgba="1 0 0 1" type="cylinder" group="1" />
 				<site name="ee_y" pos="0 0.01 0" size="0.0025 .01" quat="0.707105 0.707108 0 0" rgba="0 1 0 1" type="cylinder" group="1" />
