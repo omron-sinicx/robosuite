@@ -1,5 +1,3 @@
-import math
-
 import numpy as np
 from scipy.spatial.transform import Rotation
 
@@ -7,6 +5,7 @@ from robosuite.utils.buffers import RingBuffer
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
+from robosuite.utils.ik_solver import MuJoCoIKSolver
 
 # Supported impedance modes
 IMPEDANCE_MODES = {"fixed", "variable", "variable_kp", "variable_full_kp"}
@@ -231,6 +230,17 @@ class OperationalSpaceController(Controller):
         # initialize origin pos and ori
         self.origin_pos = None
         self.origin_ori = None
+
+        self.ik_solver = MuJoCoIKSolver(
+            self.sim.model,
+            self.sim.data,
+            ref_name,
+            position_threshold=0.001,
+            rotation_threshold=0.01,
+            time_limit=10,
+            joint_indexes=self.qpos_index,
+            base_body_name=f"{self.naming_prefix}base" if input_ref_frame == "base" else None
+        )
 
     def update(self):
         super().update()
@@ -651,6 +661,17 @@ class OperationalSpaceController(Controller):
         abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
         abs_action = np.concatenate([abs_pos, abs_rot])
         return abs_action
+
+    def ik_action(self, delta_ac, goal_update_mode):
+        """
+        Convert action to joint positions
+        """
+        abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
+        abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
+        ik_result = self.ik_solver.solve_ik(abs_pos, abs_ori, initial_guess=self.joint_pos, frame=self.input_ref_frame)
+        if not ik_result.success:
+            raise ValueError(f"Inverse kinematics failed")
+        return ik_result.joint_angles
 
     @property
     def name(self):
