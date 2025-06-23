@@ -34,6 +34,7 @@ class FrequencyWrapper:
         env_config_copy["control_freq"] = trajectory_target_freq
         self.ignore_done = env_config_copy.get("ignore_done", False)
         env_config_copy["ignore_done"] = True
+        env_config_copy["action_control_freq"] = action_control_freq
 
         # Create the environment with the high frequency, passing all arguments transparently
         self.env = env_class(**env_config_copy)

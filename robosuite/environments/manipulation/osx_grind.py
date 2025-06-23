@@ -233,6 +233,7 @@ class OSXGrind(ManipulationEnv):
         render_visual_mesh=True,
         render_gpu_device_id=-1,
         control_freq=20,
+        action_control_freq=None,
         lite_physics=True,
         horizon=1000,
         ignore_done=False,
@@ -302,9 +303,10 @@ class OSXGrind(ManipulationEnv):
 
         self.duration = self.task_config["duration"]
         self.duration_range = self.task_config["duration_range"]
-        scale_down = 10
-        self.num_waypoints = control_freq * self.duration // scale_down
-        self.seconds_per_waypoint = scale_down / control_freq
+        scale_down = 1
+        freq = action_control_freq if action_control_freq is not None else control_freq
+        self.num_waypoints = freq * self.duration // scale_down
+        self.seconds_per_waypoint = scale_down / freq
         self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
@@ -413,7 +415,8 @@ class OSXGrind(ManipulationEnv):
                 joint_indexes=self.robots[0].joint_indexes,
                 position_threshold=0.001,
                 rotation_threshold=0.01,
-                max_iterations=1000
+                time_limit=1.0,
+                base_body_name="robot0_base"
             )
 
         joint_reference_trajectory = []
@@ -852,7 +855,8 @@ class OSXGrind(ManipulationEnv):
                                          joint_indexes=self.robots[0].joint_indexes,
                                          position_threshold=0.001,
                                          rotation_threshold=0.01,
-                                         max_iterations=1000)
+                                         time_limit=1.0,
+                                         base_body_name="robot0_base")
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
