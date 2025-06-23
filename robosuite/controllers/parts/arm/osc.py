@@ -666,6 +666,11 @@ class OperationalSpaceController(Controller):
         """
         Convert action to joint positions
         """
+        # Sanity check: if the current joint positions are the same as the desired end-effector pose, return the current joint positions
+        fk_pos, fk_ori = self.ik_solver.forward_kinematics(self.joint_pos, frame='world')
+        if np.allclose(fk_pos, self.ref_pos, atol=1e-4) and np.allclose(fk_ori, self.ref_ori_mat, atol=1e-4):
+            return self.joint_pos
+
         abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
         abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
         ik_result = self.ik_solver.solve_ik(abs_pos, abs_ori, initial_guess=self.joint_pos, frame=self.input_ref_frame)

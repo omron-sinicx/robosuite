@@ -60,6 +60,7 @@ class MuJoCoIKSolver:
         self.rotation_threshold = rotation_threshold
         self.time_limit = time_limit
         self.joint_indexes = joint_indexes if joint_indexes else [i for i in range(model.nv)]
+        self.base_body_name = base_body_name
 
         # For time tracking during optimization
         self._start_time = None
@@ -188,13 +189,13 @@ class MuJoCoIKSolver:
 
         return distance_to_target <= total_reach
 
-    def forward_kinematics(self, q: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def forward_kinematics(self, q: np.ndarray, frame: str = 'world') -> Tuple[np.ndarray, np.ndarray]:
         """
         Compute forward kinematics for given joint angles.
 
         Args:
             q: Joint angles
-
+            frame: Frame to compute forward kinematics in ('world' or 'base')
         Returns:
             Tuple of end effector position and orientation
 
@@ -215,6 +216,13 @@ class MuJoCoIKSolver:
             # Get end effector position and orientation
             pos = self.data.site_xpos[self.ee_site_id].copy()
             rot = self.data.site_xmat[self.ee_site_id].reshape(3, 3).copy()
+
+            if frame == 'base':
+                pos, rot = self.transform_to_base_frame(pos, rot, from_frame='world')
+            elif frame == 'world':
+                pass
+            else:
+                raise ValueError(f"Unknown frame: {frame}. Use 'world' or 'base'")
 
             return pos, rot
 
