@@ -137,6 +137,7 @@ class Device(metaclass=abc.ABCMeta):
             ac_dict[f"{arm}_abs"] = arm_action["abs"]
             ac_dict[f"{arm}_delta"] = arm_action["delta"]
             ac_dict[f"{arm}_gripper"] = np.zeros(robot.gripper[arm].dof)
+            ac_dict[f"{arm}_joint"] = arm_action["joint"]
 
         if robot.is_mobile:
             base_mode = bool(state["base_mode"])
@@ -164,6 +165,7 @@ class Device(metaclass=abc.ABCMeta):
         ac_dict[f"{active_arm}_abs"] = arm_action["abs"]
         ac_dict[f"{active_arm}_delta"] = arm_action["delta"]
         ac_dict[f"{active_arm}_gripper"] = np.array([grasp] * gripper_dof)
+        ac_dict[f"{active_arm}_joint"] = arm_action["joint"]
 
         # clip actions between -1 and 1
         for (k, v) in ac_dict.items():
@@ -186,9 +188,11 @@ class Device(metaclass=abc.ABCMeta):
             arm_controller = robot.part_controllers[arm]
             delta_action = arm_controller.scale_action(norm_delta.copy())
             abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None)
+            joint_action = arm_controller.ik_action(delta_action, goal_update_mode=None)
             return {
                 "delta": norm_delta,
                 "abs": abs_action,
+                "joint": joint_action,
             }
         elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK"]:
             ref_frame = self.env.robots[0].composite_controller.composite_controller_specific_config.get(
