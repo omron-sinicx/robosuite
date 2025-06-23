@@ -124,8 +124,8 @@ GAMEPAD_SPEC = {
     'BTN_WEST': 'Y',
     'BTN_SOUTH': 'A',
     'BTN_EAST': 'B',
-    'BTN_TL': 'gripper',
-    'BTN_TR': 'gripper',
+    'BTN_TL': 'gripper_on',
+    'BTN_TR': 'gripper_off',
     'BTN_SELECT': 'back',
     'BTN_START': 'reset',
 }
@@ -297,9 +297,8 @@ class GamePad(Device):
                     if isinstance(btn, AxisSpec):
                         scaled_input = scale_to_control(event.state*btn.scale, BUTTONS_INFO[event.code]['max'], min_v=btn.range[0], max_v=btn.range[1])
                         self._control[btn.direction] = scaled_input if abs(scaled_input) > self.deadzone else 0.0
-                        # print(self._control)
-                    elif btn == 'gripper':
-                        self.control_gripper = float(event.state)
+                    elif 'gripper' in btn:  # Only trigger on button release
+                        self.control_gripper = 1 if btn == 'gripper_on' else 0
                     elif btn == 'reset':
                         self._reset_state = 1
                         self._enabled = False

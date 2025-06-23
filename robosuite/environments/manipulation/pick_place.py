@@ -204,6 +204,7 @@ class PickPlace(ManipulationEnv):
         camera_segmentations=None,  # {None, instance, class, element}
         renderer="mjviewer",
         renderer_config=None,
+        task_config=None,
     ):
         # task settings
         self.single_object_mode = single_object_mode
