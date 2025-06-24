@@ -583,30 +583,6 @@ class ForwardDynamicsComplianceController(Controller):
 
         return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
 
-    def pose_in_base_from_name(self, name):
-        """
-        A helper function that takes in a named data field and returns the pose
-        of that object in the base frame.
-
-        Args:
-            name (str): Name of body in sim to grab pose
-
-        Returns:
-            np.array: (4,4) array corresponding to the pose of @name in the base frame
-        """
-
-        pos_in_world = self.sim.data.get_body_xpos(name)
-        rot_in_world = self.sim.data.get_body_xmat(name).reshape((3, 3))
-        pose_in_world = T.make_pose(pos_in_world, rot_in_world)
-
-        base_pos_in_world = self.sim.data.get_body_xpos(f"{self.naming_prefix}base")
-        base_rot_in_world = self.sim.data.get_body_xmat(f"{self.naming_prefix}base").reshape((3, 3))
-        base_pose_in_world = T.make_pose(base_pos_in_world, base_rot_in_world)
-        world_pose_in_base = T.pose_inv(base_pose_in_world)
-
-        pose_in_base = T.pose_in_A_to_pose_in_B(pose_in_world, world_pose_in_base)
-        return pose_in_base
-
     def pose_in_A_to_pose_in_B_by_site_name(self, A, B):
         pos_in_A = self.sim.data.site_xpos[self.sim.model.site_name2id(A)]
         rot_in_A = self.sim.data.site_xmat[self.sim.model.site_name2id(A)].reshape([3, 3])

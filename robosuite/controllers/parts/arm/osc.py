@@ -232,8 +232,8 @@ class OperationalSpaceController(Controller):
         self.origin_ori = None
 
         self.ik_solver = MuJoCoIKSolver(
-            self.sim.model,
-            self.sim.data,
+            self.sim.model.get_xml(),
+            [],
             ref_name,
             position_threshold=0.001,
             rotation_threshold=0.01,
