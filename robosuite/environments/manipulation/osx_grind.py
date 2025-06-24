@@ -42,6 +42,7 @@ DEFAULT_GRIND_CONFIG = {
     "tracking_trajectory_method": 'per_error_threshold',
 
     "reset_with_ik": True,
+    "init_qpos": [-0.24317403, -0.82343785,  1.99487586, -2.74223148, -1.57079607,  1.32762232],
 
     # Trajectory settings
     "randomize_reference_trajectory": False,
@@ -290,9 +291,7 @@ class OSXGrind(ManipulationEnv):
         self.task_box = np.array([self.mortar_radius, self.mortar_radius, self.mortar_height+self.table_offset[2]]) + self.mortar_space_threshold_max
 
         # setting for the robot.
-        self.init_qpos = np.array(
-            [-0.24163013, -0.88630004,  1.99429391, -2.6787902, -1.57079633, -4.95401911]
-        )
+        self.init_qpos = self.task_config["init_qpos"]
 
         # references to follow
         self.current_waypoint_index = 0
@@ -303,11 +302,10 @@ class OSXGrind(ManipulationEnv):
 
         self.duration = self.task_config["duration"]
         self.duration_range = self.task_config["duration_range"]
-        scale_down = 1
         freq = action_control_freq if action_control_freq is not None else control_freq
-        self.num_waypoints = freq * self.duration // scale_down
-        self.seconds_per_waypoint = scale_down / freq
-        self.step_duration = max(1.0/500, self.duration / self.num_waypoints)  # Minimum 500Hz like in real UR5e
+        self.num_waypoints = freq * self.duration
+        self.seconds_per_waypoint = 1 / freq
+        self.step_duration = max(1.0/500, self.seconds_per_waypoint)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
         self.tracking_trajectory_method = self.task_config['tracking_trajectory_method']
@@ -406,18 +404,6 @@ class OSXGrind(ManipulationEnv):
         Raises:
             ValueError: If inverse kinematics fails to find a solution
         """
-        # Initialize IK solver if not already done
-        if self.ik is None:
-            self.ik = MuJoCoIKSolver(
-                self.sim.model,
-                self.sim.data,
-                "gripper0_right_grip_site",
-                joint_indexes=self.robots[0].joint_indexes,
-                position_threshold=0.001,
-                rotation_threshold=0.01,
-                time_limit=1.0,
-                base_body_name="robot0_base"
-            )
 
         joint_reference_trajectory = []
 
@@ -681,7 +667,7 @@ class OSXGrind(ManipulationEnv):
         # Get robot's contact geoms
         self.robot_contact_geoms = self.robots[0].robot_model.contact_geoms
 
-        self.robots[0].init_qpos = np.array([-0.24317403, -0.82343785,  1.99487586, -2.74223148, -1.57079607,  1.32762232])
+        self.robots[0].init_qpos = np.array(self.init_qpos, dtype=np.float32)
 
         # load model for table top workspace
         mujoco_arena = TableArena(
@@ -755,6 +741,18 @@ class OSXGrind(ManipulationEnv):
 
         self.model.merge_assets(self.force_cylinder)
 
+        # Initialize IK solver
+        self.ik = MuJoCoIKSolver(
+            self.model.get_xml(),
+            self._xml_processors,
+            "gripper0_right_grip_site",
+            joint_indexes=self.robots[0].joint_indexes,
+            position_threshold=0.001,
+            rotation_threshold=0.01,
+            time_limit=1.0,
+            base_body_name="robot0_base"
+        )
+
     def _setup_references(self):
         """
         Sets up references to important components. A reference is typically an
@@ -792,6 +790,14 @@ class OSXGrind(ManipulationEnv):
             return self.eef_wrench
 
         @sensor(modality=f"{pf}proprio")
+        def base_wrench(obs_cache):
+            return self.base_wrench
+
+        @sensor(modality=f"{pf}proprio")
+        def world_wrench(obs_cache):
+            return self.world_wrench
+
+        @sensor(modality=f"{pf}proprio")
         def eef_pos(obs_cache):
             return self.eef_pos
 
@@ -803,7 +809,7 @@ class OSXGrind(ManipulationEnv):
         def previous_action(obs_cache):
             return self.previous_action
 
-        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, relative_pose, relative_wrench, previous_action]
+        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, previous_action]
         names = [s.__name__ for s in sensors]
 
         # Create observables
@@ -846,18 +852,6 @@ class OSXGrind(ManipulationEnv):
         if self.randomize_reference_trajectory:
             self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
 
-        if self.robots[0].composite_controller is None or self.hard_reset:
-            # instantiate controllers, only once
-            super()._reset_internal()
-            if self.ik is None:
-                self.ik = MuJoCoIKSolver(self.sim.model, self.sim.data,
-                                         "gripper0_right_grip_site",
-                                         joint_indexes=self.robots[0].joint_indexes,
-                                         position_threshold=0.001,
-                                         rotation_threshold=0.01,
-                                         time_limit=1.0,
-                                         base_body_name="robot0_base")
-
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
             initial_pos = self.reference_trajectory[0][:3]
@@ -873,6 +867,7 @@ class OSXGrind(ManipulationEnv):
                 print("IK solution not found, using default init_q. Error msg: ", result.message)
 
         super()._reset_internal()
+
         self.joint_reference_trajectory = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
 
         self.last_step_time = self.sim.data._data.time
@@ -918,12 +913,12 @@ class OSXGrind(ManipulationEnv):
     def _update_waypoint_index(self, action):
         # Only update waypoint if we haven't reached the end of trajectory
         if self.current_waypoint_index < self.num_waypoints - 1:
-
-            if self.sim.data._data.time - self.last_step_time > self.step_duration:
+            time_diff = np.round(self.sim.data._data.time - self.last_step_time, 3)
+            if time_diff >= self.step_duration:
                 self.global_timestep += 1
                 self.previous_action = self.current_action.copy()
                 self.current_action = action.copy()
-                self.last_step_time = self.sim.data._data.time
+                self.last_step_time = np.round(self.sim.data._data.time, 3)
 
                 if self.tracking_trajectory_method == 'per_step':  # equivalent to DURATION mode
                     self.current_waypoint_index += 1
@@ -1118,6 +1113,14 @@ class OSXGrind(ManipulationEnv):
     @property
     def eef_wrench(self):
         return self.robots[0].composite_controller.part_controllers['right'].eef_wrench
+
+    @property
+    def base_wrench(self):
+        return self.robots[0].composite_controller.part_controllers['right'].base_wrench
+
+    @property
+    def world_wrench(self):
+        return self.robots[0].composite_controller.part_controllers['right'].world_wrench
 
     @property
     def eef_pos(self):
