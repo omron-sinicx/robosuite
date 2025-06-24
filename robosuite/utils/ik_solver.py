@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Union
 import logging
 import time
+from robosuite.utils.binding_utils import MjSim
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -35,7 +36,7 @@ class TimeoutError(IKError):
 
 
 class MuJoCoIKSolver:
-    def __init__(self, model: MjModel, data: MjData, end_effector_site: str,
+    def __init__(self, model_xml, xml_processors, end_effector_site: str,
                  position_threshold: float = 1e-4,
                  rotation_threshold: float = 1e-3,
                  time_limit: float = 1.0,
@@ -46,7 +47,7 @@ class MuJoCoIKSolver:
 
         Args:
             model: MuJoCo model
-            data: MuJoCo data
+            xml_processors: List of XML processors
             end_effector_site: Name of the site marking the end effector
             position_threshold: Maximum acceptable position error (meters)
             rotation_threshold: Maximum acceptable rotation error (radians)
@@ -54,12 +55,23 @@ class MuJoCoIKSolver:
             joint_indexes: Indexes of joints to control (default: all)
             base_body_name: Name of the robot base body for frame transformations (optional)
         """
-        self.model = model
-        self.data = data
+
+        # process the xml before initializing sim
+        for processor in xml_processors:
+            model_xml = processor(model_xml)
+
+        # Create the simulation instance
+        self.sim = MjSim.from_xml_string(model_xml)
+
+        # run a single step to make sure changes have propagated through sim state
+        self.sim.forward()
+
+        self.model = self.sim.model
+        self.data = self.sim.data
         self.position_threshold = position_threshold
         self.rotation_threshold = rotation_threshold
         self.time_limit = time_limit
-        self.joint_indexes = joint_indexes if joint_indexes else [i for i in range(model.nv)]
+        self.joint_indexes = joint_indexes if joint_indexes else [i for i in range(self.model.nv)]
         self.base_body_name = base_body_name
 
         # For time tracking during optimization
@@ -67,7 +79,7 @@ class MuJoCoIKSolver:
         self._timeout_occurred = False
 
         try:
-            self.ee_site_id = model.site(end_effector_site).id
+            self.ee_site_id = self.model.site(end_effector_site).id
         except Exception as e:
             raise IKError(f"End effector site '{end_effector_site}' not found in model: {str(e)}")
 
@@ -75,16 +87,16 @@ class MuJoCoIKSolver:
         self.base_body_id = None
         if base_body_name:
             try:
-                self.base_body_id = model.body(base_body_name).id
+                self.base_body_id = self.model.body(base_body_name).id
             except Exception as e:
                 logger.warning(f"Base body '{base_body_name}' not found: {str(e)}. Using world frame.")
 
         if self.base_body_id is None:
             # Try to find the first non-world body as base
-            for i in range(1, model.nbody):  # Skip world body (index 0)
-                if model.body_parentid[i] == 0:  # Direct child of world
+            for i in range(1, self.model.nbody):  # Skip world body (index 0)
+                if self.model.body_parentid[i] == 0:  # Direct child of world
                     self.base_body_id = i
-                    logger.info(f"Using body '{model.body(i).name}' as robot base")
+                    logger.info(f"Using body '{self.model.body(i).name}' as robot base")
                     break
 
     def get_base_transform(self) -> Tuple[np.ndarray, np.ndarray]:
