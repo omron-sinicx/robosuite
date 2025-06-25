@@ -365,6 +365,57 @@ def compute_max_step_size(trajectory):
     return max_step_sizes
 
 
+def get_circular_trajectory(p1, p2, steps, revolutions=1.0, from_center=False):
+    """
+    Generate a circular trajectory between two points.
+
+    Args:
+        p1 (np.ndarray): Starting point [x, y, z]
+        p2 (np.ndarray): Ending point [x, y, z] 
+        steps (int): Number of trajectory points
+        revolutions (float): Number of complete revolutions around the circle
+        from_center (bool): If True, treat p1 as center and spiral outward to p2
+        inverse (bool): If True, reverse the direction of rotation
+
+    Returns:
+        np.ndarray: Trajectory points of shape (steps, 3) with [x, y, z] coordinates
+    """
+    # Get 2D distance between points
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    distance = np.sqrt(dx*dx + dy*dy)
+
+    # Set up angle parameters
+    if from_center:
+        radius = np.linspace(0, distance, steps)
+        start_angle = 0.0
+    else:
+        # For circular trajectory, use constant radius (half the distance)
+        radius = distance / 2.0
+        # Calculate center point between p1 and p2
+        center_x = (p1[0] + p2[0]) / 2.0
+        center_y = (p1[1] + p2[1]) / 2.0
+        # Calculate start angle from center to p1
+        start_angle = np.arctan2(p1[1] - center_y, p1[0] - center_x)
+
+    # Generate angles
+    angles = np.linspace(0, 2*np.pi*revolutions, steps) + start_angle
+
+    # Calculate x, y coordinates
+    if from_center:
+        x = radius * np.cos(angles) + p1[0]  # Changed from p2[0] to p1[0]
+        y = radius * np.sin(angles) + p1[1]  # Changed from p2[1] to p1[1]
+    else:
+        x = radius * np.cos(angles) + center_x
+        y = radius * np.sin(angles) + center_y
+    
+    z = np.full(steps, p1[2])
+
+    # Combine into trajectory
+    trajectory = np.column_stack([x, y, z])
+    return trajectory
+
+
 @dataclass
 class TrajectoryState:
     position: np.ndarray          # Current position

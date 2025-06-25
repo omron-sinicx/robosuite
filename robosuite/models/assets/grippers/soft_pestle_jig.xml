@@ -11,17 +11,14 @@
 			<geom group="1" contype="0" conaffinity="0" rgba="0.1 0.1 0.1 1" />
 		</default>
 		<default class="pestle_collision">
-			<!-- <geom group="0" contype="0" conaffinity="1" solimp="0.9 0.95 0.001 0.5 2" solref="0.001 1"
-			density="1" friction="0.95 0.3 0.1" condim="4" rgba="0.1 0.1 0.1 0.1" priority="100"/> -->
-			<geom group="0" contype="0" conaffinity="1" solimp="0.998 0.998 0.001" solref="0.1 1" density="50" friction="0.95 0.3 0.1" 
-			      rgba="0.1 0.1 0.1 0.1" priority="100"/>
+			<geom group="0" contype="0" conaffinity="1" solimp="0.9 0.95 0.001 0.5 2" solref="0.02 2"
+			density="1" friction="0.95 0.3 0.1" condim="4" rgba="0.1 0.1 0.1 0.1" priority="100"/>
 		</default>
 	</default>
 	<worldbody>
 		<body name="pestle_body" pos="0 0 0" quat="1 0 0 0">
 			<site name="ft_frame" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1" />
-			<inertial pos="0 0 0.1"  mass="3e-2" diaginertia="1e-2 1e-2 1e-2" />
-			<geom pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" mesh="pestle_cage" name="pestle_cage_collision" class="pestle_collision" />
+			<!-- <geom pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" mesh="pestle_cage" name="pestle_cage_collision" class="pestle_collision" /> -->
 			<geom pos="0 0 0" quat="0.707107 0 0 0.707107" type="mesh" mesh="pestle_cage" name="pestle_cage_visualization" class="pestle_visual" />
 			<!-- This site was added for visualization. -->
 			<body name="eef" pos="0 0 0.1355" quat="1 0 0 0">
@@ -32,7 +29,8 @@
 				<!-- This site was added for visualization. -->
 				<site name="grip_site_cylinder" pos="0 0 0" size="0.005 1" rgba="0 1 0 0" type="cylinder" group="1" />
 			</body>
-			<body name="pestle_jig" pos="0 0 0.014" quat="0.707107 0 0 0.707107">
+			<body name="pestle_jig" pos="0 0 0.02" quat="0.707107 0 0 0.707107">
+				<inertial pos="0 0 0.08"  mass="3e-1" diaginertia="1e-2 1e-2 1e-2" />
 				<!-- joint of soft part -->
 				<!-- Note: x and y translation observed to be negligible due to moment arm induced by gripper length causing mostly rotation -->
 				<!--
@@ -44,9 +42,9 @@
 				-->
 				<geom pos="0 0 0" type="mesh" mesh="pestle" name="pestle_inner_collision" class="pestle_collision" />
 				<geom pos="0 0 0" type="mesh" mesh="pestle" name="pestle_inner_visualization" class="pestle_visual" />
-				<geom type="capsule" size="0.0135" fromto="0 0 0.02 0 0 0.1025" name="pestle_visualization" group="1" contype="0" conaffinity="0" rgba=".2 .8 .8 1" />
-				<!-- <geom type="capsule" size="0.0135" fromto="0 0 0.02 0 0 0.1025" name="pestle_collision" class="pestle_collision" /> -->
-				<geom type="cylinder" size="0.0135 0.055" pos="0 0 0.061" name="pestle_collision" class="pestle_collision" />
+				<geom type="capsule" size="0.0135" fromto="0 0 0.02 0 0 0.102" name="pestle_visualization" group="1" contype="0" conaffinity="0" rgba=".2 .8 .8 1" />
+				<geom type="capsule" size="0.0135" fromto="0 0 0.02 0 0 0.102" name="pestle_collision" class="pestle_collision" />
+				<!-- <geom type="cylinder" size="0.0135 0.055" pos="0 0 0.0605" name="pestle_collision" class="pestle_collision" /> -->
 			</body>
 		</body>
 	</worldbody>
