@@ -306,7 +306,7 @@ class JointPositionController(Controller):
         Returns:
             np.array: updated goal position in the controller frame
         """
-        return self.ref_pos - delta
+        return self.ref_pos + delta
 
     def compute_goal_ori(self, delta):
         """
@@ -341,7 +341,7 @@ class JointPositionController(Controller):
         ik_result = self.ik_solver.solve_ik(abs_pos, abs_ori, initial_guess=self.joint_pos)
         if not ik_result.success:
             raise ValueError(f"Inverse kinematics failed")
-        return ik_result.joint_angles, self.joint_pos - ik_result.joint_angles
+        return ik_result.joint_angles, ik_result.joint_angles - self.joint_pos
 
     def delta_to_abs_action(self, delta_ac):
         """
