@@ -2,8 +2,6 @@ import numpy as np
 
 from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.buffers import RingBuffer
-from robosuite.utils.sim_utils import compensate_ft_reading
-import robosuite.utils.transform_utils as T
 
 
 class JointVelocityController(Controller):
@@ -79,13 +77,6 @@ class JointVelocityController(Controller):
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
 
-        self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
-        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.wrench_in_world_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.gripper_body_name = gripper_body_name
-        if self.gripper_body_name:
-            self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{gripper_body_name}")
         super().__init__(
             sim,
             ref_name=ref_name,
@@ -94,6 +85,8 @@ class JointVelocityController(Controller):
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
             lite_physics=lite_physics,
+            ft_buffer_size=ft_buffer_size,
+            gripper_body_name=gripper_body_name,
         )
         # Control dimension
         self.control_dim = len(joint_indexes["joints"])
@@ -134,43 +127,6 @@ class JointVelocityController(Controller):
         self.goal_vel = None  # Goal velocity desired, pre-compensation
         self.current_vel = np.zeros(self.joint_dim)  # Current velocity setpoint, pre-compensation
         self.torques = None  # Torques returned every time run_controller is called
-
-    def update(self):
-        super().update()
-        self.transform_wrench_to_base_frame()
-
-    def get_wrench(self):
-        return np.concatenate([
-            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
-            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
-        ])
-
-    def transform_wrench_to_base_frame(self):
-        # Compute force/torque
-        # get sensor f/t measurements from gripper site, transform to world frame
-        gripper_in_robot_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")
-        world_pose = T.make_pose(self.ref_pos, self.ref_ori_mat)
-
-        wrench_force = self.get_wrench()
-        if self.gripper_body_name:
-            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
-                                                 self.gripper_inertial_properties['mass'],
-                                                 self.gripper_inertial_properties['local_com'],
-                                                 self.gripper_inertial_properties['world_rot_mat'],
-                                                 self.sim.model._model.opt.gravity)
-
-        world_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], world_pose)
-        base_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], gripper_in_robot_base)
-
-        base_wFtS = T.force_frame_transform(gripper_in_robot_base)
-        # world_wFtS = T.force_frame_transform(world_pose)
-        wrench_in_base_frame = np.dot(base_wFtS, wrench_force)  # compute force/torque reading in base_frame
-        # wrench_in_world_frame = np.dot(world_wFtS, wrench_force)
-
-        self.wrench_in_base_frame_buf.push(wrench_in_base_frame)
-        # self.wrench_in_base_frame_buf.push(np.concatenate(base_wrench_force).flat)
-        self.wrench_in_world_frame_buf.push(np.concatenate(world_wrench_force).flat)
-        self.wrench_in_eef_frame_buf.push(wrench_force)
 
     def get_sensor_measurement(self, sensor_name):
         """

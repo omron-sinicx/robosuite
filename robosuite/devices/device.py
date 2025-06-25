@@ -3,6 +3,7 @@ from typing import Dict, List, Optional  # for abstract base class definitions
 
 import numpy as np
 
+from robosuite.controllers.parts.generic.joint_pos import JointPositionController
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 
@@ -137,7 +138,7 @@ class Device(metaclass=abc.ABCMeta):
             ac_dict[f"{arm}_abs"] = arm_action["abs"]
             ac_dict[f"{arm}_delta"] = arm_action["delta"]
             ac_dict[f"{arm}_gripper"] = np.zeros(robot.gripper[arm].dof)
-            ac_dict[f"{arm}_joint"] = arm_action["joint"]
+            # ac_dict[f"{arm}_joint"] = arm_action["joint"]
 
         if robot.is_mobile:
             base_mode = bool(state["base_mode"])
@@ -165,7 +166,8 @@ class Device(metaclass=abc.ABCMeta):
         ac_dict[f"{active_arm}_abs"] = arm_action["abs"]
         ac_dict[f"{active_arm}_delta"] = arm_action["delta"]
         ac_dict[f"{active_arm}_gripper"] = np.array([grasp] * gripper_dof)
-        ac_dict[f"{active_arm}_joint"] = arm_action["joint"]
+        print(f"ac_dict: {ac_dict}")
+        # ac_dict[f"{active_arm}_joint"] = arm_action["joint"]
 
         # clip actions between -1 and 1
         for (k, v) in ac_dict.items():
@@ -193,6 +195,15 @@ class Device(metaclass=abc.ABCMeta):
                 "delta": norm_delta,
                 "abs": abs_action,
                 "joint": joint_action,
+            }
+        elif isinstance(robot.part_controllers[arm], JointPositionController):
+            arm_controller = robot.part_controllers[arm]
+            # TODO: how to do scale action for joint position controller?
+            joint_action, delta_action = arm_controller.ik_action(norm_delta.copy())
+
+            return {
+                "delta": delta_action,
+                "abs": joint_action,
             }
         elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK"]:
             ref_frame = self.env.robots[0].composite_controller.composite_controller_specific_config.get(
