@@ -753,6 +753,11 @@ class OSXGrind(ManipulationEnv):
             base_body_name="robot0_base"
         )
 
+        # output_path = "/root/osx-ur/catkin_ws/src/osx_powder_grinding/mjcf"
+        # xml_content = self.model.get_xml()
+        # with open(f"{output_path}/model.xml", "w") as f:
+        #     f.write(xml_content)
+
     def _setup_references(self):
         """
         Sets up references to important components. A reference is typically an
@@ -855,7 +860,6 @@ class OSXGrind(ManipulationEnv):
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
             initial_pos = self.reference_trajectory[0][:3]
-            initial_pos[2] += 0.001
             result = self.ik.solve_ik(target_pos=initial_pos,
                                       target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
                                       initial_guess=self.init_qpos)
@@ -867,6 +871,11 @@ class OSXGrind(ManipulationEnv):
                 print("IK solution not found, using default init_q. Error msg: ", result.message)
 
         super()._reset_internal()
+
+        # update the trajectory indicator
+        offset_cylinder_half_size = T.rotate_vector_by_quaternion([0, 0, -self.cylinder_length], self.reference_trajectory[self.current_waypoint_index][3:])
+        self.sim.model.body_pos[self.force_cylinder_body_id] = self.reference_trajectory[self.current_waypoint_index][:3] + offset_cylinder_half_size
+        self.sim.model.body_quat[self.force_cylinder_body_id] = T.convert_quat(self.reference_trajectory[self.current_waypoint_index][3:], "wxyz")
 
         self.joint_reference_trajectory = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
 

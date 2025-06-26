@@ -663,3 +663,11 @@ class OperationalSpaceController(Controller):
     @property
     def eef_wrench(self):
         return self.wrench_in_eef_frame_buf.average
+
+    @property
+    def base_wrench(self):
+        return self.wrench_in_base_frame_buf.average
+
+    @property
+    def world_wrench(self):
+        return self.wrench_in_world_frame_buf.average
