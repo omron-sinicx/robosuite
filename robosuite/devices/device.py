@@ -187,26 +187,8 @@ class Device(metaclass=abc.ABCMeta):
             "target",
         ]  # update next target either based on achieved pose or current target pose
 
-        # TODO: the logic between OSC and while body based ik is fragmented right now. Unify
-        if isinstance(robot.part_controllers[arm], OperationalSpaceController):
-            arm_controller = robot.part_controllers[arm]
-            delta_action = arm_controller.scale_action(norm_delta.copy())
-            abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None)
-            # joint_action = arm_controller.ik_action(delta_action, goal_update_mode=None)
-            return {
-                "delta": norm_delta,
-                "abs": abs_action,
-                # "joint": joint_action,
-            }
-        elif isinstance(robot.part_controllers[arm], JointPositionController):
-            arm_controller = robot.part_controllers[arm]
-            # TODO: how to do scale action for joint position controller?
-            joint_action, delta_action = arm_controller.ik_action(norm_delta.copy())
-
-            return {
-                "delta": delta_action,
-                "abs": joint_action,
-            }
+        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, JointPositionController)):
+            return get_arm_action_simple(robot, arm, norm_delta)
         elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK", "HYBRID_WHOLE_BODY_MINK_IK"]:
             ref_frame = self.env.robots[0].composite_controller.composite_controller_specific_config.get(
                 "ik_input_ref_frame", "world"
@@ -281,3 +263,29 @@ class Device(metaclass=abc.ABCMeta):
             }
         else:
             raise NotImplementedError
+
+
+def get_arm_action_simple(robot, arm, norm_delta):
+    # TODO: the logic between OSC and while body based ik is fragmented right now. Unify
+    if isinstance(robot.part_controllers[arm], OperationalSpaceController):
+        arm_controller = robot.part_controllers[arm]
+        delta_action = arm_controller.scale_action(norm_delta.copy())
+        abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None)
+        return {
+            "delta": norm_delta,
+            "abs": abs_action,
+            f"{arm}_delta": norm_delta,
+            f"{arm}_abs": abs_action,
+            # "joint": joint_action,
+        }
+    elif isinstance(robot.part_controllers[arm], JointPositionController):
+        arm_controller = robot.part_controllers[arm]
+        # TODO: how to do scale action for joint position controller?
+        joint_action, delta_action = arm_controller.ik_action(norm_delta.copy())
+
+        return {
+            "delta": delta_action,
+            "abs": joint_action,
+            f"{arm}_delta": norm_delta,
+            f"{arm}_abs": joint_action,
+        }
