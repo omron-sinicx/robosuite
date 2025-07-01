@@ -89,15 +89,7 @@ class MuJoCoIKSolver:
             try:
                 self.base_body_id = self.model.body(base_body_name).id
             except Exception as e:
-                logger.warning(f"Base body '{base_body_name}' not found: {str(e)}. Using world frame.")
-
-        if self.base_body_id is None:
-            # Try to find the first non-world body as base
-            for i in range(1, self.model.nbody):  # Skip world body (index 0)
-                if self.model.body_parentid[i] == 0:  # Direct child of world
-                    self.base_body_id = i
-                    logger.info(f"Using body '{self.model.body(i).name}' as robot base")
-                    break
+                raise IKError(f"Base body '{base_body_name}' not found: {str(e)}")
 
     def get_base_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -108,7 +100,7 @@ class MuJoCoIKSolver:
         """
         if self.base_body_id is None:
             # No base body defined, return identity transform
-            return np.zeros(3), np.eye(3)
+            raise IKError(f"Base body '{self.base_body_name}' not defined")
 
         base_pos = self.data.xpos[self.base_body_id].copy()
         base_rot = self.data.xmat[self.base_body_id].reshape(3, 3).copy()
