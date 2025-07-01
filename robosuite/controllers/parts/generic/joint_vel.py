@@ -130,21 +130,6 @@ class JointVelocityController(Controller):
 
         self.torque_compensation = kwargs.get("use_torque_compensation", True)
 
-    def get_sensor_measurement(self, sensor_name):
-        """
-        Grabs relevant sensor data from the sim object
-
-        Args:
-            sensor_name (str): name of the sensor
-
-        Returns:
-            np.array: sensor values
-        """
-        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
-        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
-
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
-
     def set_goal(self, velocities):
         """
         Sets goal based on input @velocities.
