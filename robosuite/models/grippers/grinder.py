@@ -23,7 +23,7 @@ class UR5eGrinder(GripperModel):
 
     @property
     def init_qpos(self):
-        return None
+        return np.zeros(1)
 
     @property
     def _important_geoms(self):

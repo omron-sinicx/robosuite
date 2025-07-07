@@ -11,8 +11,7 @@
 			<geom group="1" contype="0" conaffinity="0" rgba="0.1 0.1 0.1 1" />
 		</default>
 		<default class="pestle_collision">
-			<geom group="0" contype="0" conaffinity="1" solimp="0.9 0.95 0.001 0.5 2" solref="0.02 2"
-			density="1" friction="0.95 0.3 0.1" condim="4" rgba="0.1 0.1 0.1 0.1" priority="100"/>
+			<geom group="0" contype="0" conaffinity="1" solimp="0.9 0.95 0.001 0.5 2" solref="0.02 2" density="1" friction="0.95 0.3 0.1" condim="4" rgba="0.1 0.1 0.1 0.1" priority="100"/>
 		</default>
 	</default>
 	<worldbody>
@@ -30,11 +29,11 @@
 				<site name="grip_site_cylinder" pos="0 0 0" size="0.005 1" rgba="0 1 0 0" type="cylinder" group="1" />
 			</body>
 			<body name="pestle_jig" pos="0 0 0.02" quat="0.707107 0 0 0.707107">
-				<inertial pos="0 0 0.08"  mass="3e-1" diaginertia="1e-2 1e-2 1e-2" />
+				<inertial pos="0 0 0.08" mass="3e-1" diaginertia="1e-2 1e-2 1e-2" />
+				<joint name="flex_wrist_z" axis="0 0 1" type="slide" stiffness="100000" damping="1.0" range="-0.005 0.0" />
 				<!-- joint of soft part -->
 				<!-- Note: x and y translation observed to be negligible due to moment arm induced by gripper length causing mostly rotation -->
 				<!--
-				<joint name="flex_wrist_z" axis="0 0 1" type="slide" stiffness="1000" damping="100.0" range="0.005 0.02" />
 				<inertial pos="0 0 0.07" quat="0.707107 0.707107 0 0" mass="1" diaginertia="0.09 0.07 0.05" />
 				<joint name="flex_wrist_rx" axis="1 0 0" type="hinge" stiffness="0.5" damping="0.005" />
 				<joint name="flex_wrist_ry" axis="0 1 0" type="hinge" stiffness="0.5" damping="0.005" />

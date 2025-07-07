@@ -71,7 +71,7 @@ class MuJoCoIKSolver:
         self.position_threshold = position_threshold
         self.rotation_threshold = rotation_threshold
         self.time_limit = time_limit
-        self.joint_indexes = joint_indexes if joint_indexes else [i for i in range(self.model.nv)]
+        self.joint_indexes = joint_indexes if joint_indexes is not None else [i for i in range(self.model.nv)]
         self.base_body_name = base_body_name
 
         # For time tracking during optimization
@@ -387,7 +387,7 @@ class MuJoCoIKSolver:
                 )
 
             # Set bounds for joint angles
-            bounds = (self.model.jnt_range[:6, 0], self.model.jnt_range[:6, 1])
+            bounds = (self.model.jnt_range[self.joint_indexes, 0], self.model.jnt_range[self.joint_indexes, 1])
 
             # Keep track of best solution found so far
             best_result = None
@@ -399,7 +399,7 @@ class MuJoCoIKSolver:
             if initial_guess is not None:
                 initial_guesses.append(initial_guess.copy())
             else:
-                initial_guesses.append(self.data.qpos.copy())
+                initial_guesses.append(self.data.qpos[self.joint_indexes].copy())
 
             # Strategy 2: Add some common robot configurations
             if len(initial_guesses) < 5:  # Add more initial guesses if we have time
@@ -531,8 +531,8 @@ class MuJoCoIKSolver:
             if not np.all(np.isfinite(q)):
                 raise IKError("Joint angles contain NaN or inf values")
 
-            self.data.qpos[:] = q
-            mujoco.mj_forward(self.model, self.data)
+            self.data.qpos[self.joint_indexes] = q
+            mujoco.mj_forward(self.model._model, self.data._data)
 
             # Get position Jacobian
             jacp = np.zeros((3, self.model.nv))
