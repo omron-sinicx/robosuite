@@ -534,10 +534,7 @@ class OSXGrind(ManipulationEnv):
         """
 
         action = policy_action.copy()
-        if self.controller_type == 'OSC_POSE':
-            assert isinstance(action, dict), f"Expected action to be a dict, got {type(action)}"
-        else:
-            assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
+        assert action.shape == (self.action_ndim,), f"Invalid action shape: {action.shape} != {self.action_ndim}"
 
         self._update_waypoint_index(action)
         if self.controller_type == "FDCC":
@@ -547,28 +544,7 @@ class OSXGrind(ManipulationEnv):
         elif self.controller_type == "JOINT_POSITION":
             controller_targets = action
         elif self.controller_type == 'OSC_POSE':
-
-            # Convert rotation to axis angle if necessary
-            if 'action.rotation_ortho6' in action:
-                action['action.rotation_axis_angle'] = [T.ortho62axisangle(action['action.rotation_ortho6'][0])]
-
-            print(f"action: {action['action.rotation_axis_angle']}")
-
-            if self.controller_configs['body_parts']['right']['impedance_mode'] == 'fixed':
-                controller_targets = np.concatenate([
-                    action['action.position'][0],
-                    action['action.rotation_axis_angle'][0],
-                ])
-            else:
-                # Get the expected stiffness format depending on the controller's impedance mode
-                stiffness_type = 'cholesky' if self.controller_configs['body_parts']['right']['impedance_mode'] == 'variable_full_kp' else 'diag'
-                stiffness_key = f'action.stiffness_{stiffness_type}'
-
-                controller_targets = np.concatenate([
-                    action[stiffness_key][0],
-                    action['action.position'][0],
-                    action['action.rotation_axis_angle'][0],
-                ])
+            controller_targets = action
         else:
             raise ValueError(f"Unsupported controller type: {self.controller_type}. Only 'FDCC' and 'JOINT_VELOCITY' are supported.")
 
@@ -746,7 +722,7 @@ class OSXGrind(ManipulationEnv):
             self.model.get_xml(),
             self._xml_processors,
             "gripper0_right_grip_site",
-            joint_indexes=self.robots[0].joint_indexes,
+            joint_indexes=np.arange(6),
             position_threshold=0.001,
             rotation_threshold=0.01,
             time_limit=1.0,
