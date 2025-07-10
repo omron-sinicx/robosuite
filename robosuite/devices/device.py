@@ -280,7 +280,6 @@ def get_arm_action_simple(robot, arm, norm_delta):
         }
     elif isinstance(robot.part_controllers[arm], JointPositionController):
         arm_controller = robot.part_controllers[arm]
-        # TODO: how to do scale action for joint position controller?
         joint_action, delta_action = arm_controller.ik_action(norm_delta.copy())
 
         return {

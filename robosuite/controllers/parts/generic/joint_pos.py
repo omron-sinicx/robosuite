@@ -108,6 +108,7 @@ class JointPositionController(Controller):
         interpolator=None,
         input_type: Literal["delta", "absolute"] = "delta",
         ft_buffer_size=10,
+        initial_rot=None,
         gripper_body_name=None,
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
@@ -180,6 +181,7 @@ class JointPositionController(Controller):
 
         # initialize
         self.goal_qpos = None
+        self.initial_rot = initial_rot
 
         self.use_torque_compensation = kwargs.get("use_torque_compensation", True)
 
@@ -189,7 +191,7 @@ class JointPositionController(Controller):
             ref_name,
             position_threshold=0.001,
             rotation_threshold=0.01,
-            time_limit=10,
+            time_limit=0.1,
             joint_indexes=self.qpos_index,
             base_body_name=None
         )
@@ -323,6 +325,9 @@ class JointPositionController(Controller):
         Returns:
             np.array: updated goal orientation in the controller frame
         """
+        if np.all(delta == 0.0):
+            return self.ref_ori_mat
+
         self.goal_ori = self.ref_ori_mat
 
         # convert axis-angle value to rotation matrix
@@ -334,7 +339,7 @@ class JointPositionController(Controller):
 
     def ik_action(self, delta_ac):
         """
-        Convert action to joint positions
+        Convert delta pose action to absolute joint action
 
         Returns:
             np.array: joint action positions
@@ -343,9 +348,15 @@ class JointPositionController(Controller):
 
         abs_pos = self.compute_goal_pos(delta_ac[0:3])
         abs_ori = self.compute_goal_ori(delta_ac[3:6])
+        if self.initial_rot is not None:
+            abs_ori = T.quat2mat(self.initial_rot)
+
         ik_result = self.ik_solver.solve_ik(abs_pos, abs_ori, initial_guess=self.joint_pos)
+
         if not ik_result.success:
-            raise ValueError(f"Inverse kinematics failed")
+            print("Inverse kinematics failed")
+            return self.joint_pos, np.zeros_like(self.joint_pos)
+
         return ik_result.joint_angles, ik_result.joint_angles - self.joint_pos
 
     def delta_to_abs_action(self, delta_ac):
