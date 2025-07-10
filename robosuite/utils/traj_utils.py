@@ -191,7 +191,7 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
     circle_radius = np.sqrt(radius**2 - (radius - desired_height)**2)
 
     # Step 4: Generate points along a circle at desired height
-    theta = np.linspace(0, 2*np.pi, n_steps)
+    theta = np.linspace(np.pi/2, np.pi/2 + 2*np.pi, n_steps)
 
     # Step 5: Calculate normal vectors at each point on the original circle
     # For an upward facing bowl, the normal vector points outward from the center of curvature
@@ -408,7 +408,7 @@ def get_circular_trajectory(p1, p2, steps, revolutions=1.0, from_center=False):
     else:
         x = radius * np.cos(angles) + center_x
         y = radius * np.sin(angles) + center_y
-    
+
     z = np.full(steps, p1[2])
 
     # Combine into trajectory

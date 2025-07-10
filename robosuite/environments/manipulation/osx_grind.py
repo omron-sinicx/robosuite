@@ -725,7 +725,7 @@ class OSXGrind(ManipulationEnv):
             joint_indexes=np.arange(6),
             position_threshold=0.001,
             rotation_threshold=0.01,
-            time_limit=1.0,
+            time_limit=0.05,
             base_body_name="robot0_base"
         )
 
