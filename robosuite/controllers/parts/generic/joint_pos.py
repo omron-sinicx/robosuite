@@ -181,6 +181,8 @@ class JointPositionController(Controller):
 
         # initialize
         self.goal_qpos = None
+        self.goal_pos = None
+        self.goal_ori = None
         self.initial_rot = initial_rot
 
         self.use_torque_compensation = kwargs.get("use_torque_compensation", True)
@@ -298,6 +300,8 @@ class JointPositionController(Controller):
         Resets joint position goal to be current position
         """
         self.goal_qpos = self.joint_pos
+        self.goal_pos = self.ref_pos.copy()
+        self.goal_ori = self.ref_ori_mat.copy()
 
         # Reset interpolator if required
         if self.interpolator is not None:
@@ -313,7 +317,7 @@ class JointPositionController(Controller):
         Returns:
             np.array: updated goal position in the controller frame
         """
-        return self.ref_pos + delta
+        return self.goal_pos + delta
 
     def compute_goal_ori(self, delta):
         """
@@ -326,9 +330,7 @@ class JointPositionController(Controller):
             np.array: updated goal orientation in the controller frame
         """
         if np.all(delta == 0.0):
-            return self.ref_ori_mat
-
-        self.goal_ori = self.ref_ori_mat
+            return self.goal_ori
 
         # convert axis-angle value to rotation matrix
         quat_error = T.axisangle2quat(delta)
@@ -356,6 +358,9 @@ class JointPositionController(Controller):
         if not ik_result.success:
             print("Inverse kinematics failed")
             return self.joint_pos, np.zeros_like(self.joint_pos)
+
+        self.goal_pos = abs_pos
+        self.goal_ori = abs_ori
 
         return ik_result.joint_angles, ik_result.joint_angles - self.joint_pos
 
