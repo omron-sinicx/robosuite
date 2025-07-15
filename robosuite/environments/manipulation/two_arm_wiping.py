@@ -404,7 +404,6 @@ class TwoArmWiping(TwoArmEnv):
             return isLeft(X, Y, P) < 0 and isLeft(Y, Z, P) < 0 and isLeft(Z, W, P) < 0 and isLeft(W, X, P) < 0
 
         # Only go into this computation if there are contact points
-        print("ncon", self.sim.data.ncon)
         if self.sim.data.ncon != 0:
 
             # Check each marker that is still active
@@ -484,17 +483,14 @@ class TwoArmWiping(TwoArmEnv):
 
         # Neg Reward from collisions of the arm with the table
         if self.check_contact(self.robots[1].robot_model):
-            print("in contact")
             if self.reward_shaping:
                 reward = self.arm_limit_collision_penalty
             self.collisions += 1
         elif self.robots[1].check_q_limits():
-            print("in joint limits")
             if self.reward_shaping:
                 reward = self.arm_limit_collision_penalty
             self.collisions += 1
         else:
-            print("not colliding or in joint limits")
             # If the arm is not colliding or in joint limits, we check if we are wiping
             # (we don't want to reward wiping if there are unsafe situations)
             active_markers = []

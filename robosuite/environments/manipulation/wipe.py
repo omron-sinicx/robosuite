@@ -2,7 +2,7 @@ import multiprocessing
 from collections import OrderedDict
 
 import numpy as np
-
+from robosuite.utils import transform_utils as T
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import WipeArena
 from robosuite.models.tasks import ManipulationTask
@@ -302,6 +302,15 @@ class Wipe(ManipulationEnv):
         # set after init to ensure self.robots is set
         self.ee_force_bias = {arm: np.zeros(3) for arm in self.robots[0].arms}
         self.ee_torque_bias = {arm: np.zeros(3) for arm in self.robots[0].arms}
+
+    def step(self, raw_action):
+        if len(raw_action) == 9:
+            action = np.zeros(self.robots[0].dof)
+            action[:3] = raw_action[:3]
+            action[3:] = T.ortho62axisangle(raw_action[3:])
+        else:
+            action = raw_action
+        return super().step(action)
 
     def _get_active_markers(self, c_geoms):
         """
