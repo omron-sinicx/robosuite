@@ -1,5 +1,5 @@
 ````markdown
-# Diffusion Policies w/ Reinforcement Learning for Contact‑Rich Manipulation
+# Diffusion Policies with Reinforcement Learning for Contact‑Rich Manipulation
 
 This branch implements Diffusion Policies with RL for contact‑rich robotic manipulation. Below are the steps to get started and test the ScuHand gripper with various robots.
 
@@ -10,7 +10,7 @@ This branch implements Diffusion Policies with RL for contact‑rich robotic man
 Due to MuJoCo’s current `flexcomp` limitations, you must use an **absolute path** to load the mesh. Open:
 
 ```xml
-models/assets/grippers/scu_hand.xml
+robosuite/models/assets/grippers/scu_hand.xml
 ````
 
 and update the `<flexcomp>` tag:
@@ -19,17 +19,7 @@ and update the `<flexcomp>` tag:
 <flexcomp
     type="mesh"
     file="/home/yongliangwang/Projects/robosuite_yl/robosuite/models/assets/grippers/meshes/scu_hand/sheet.obj"
-    pos="0 -0.177269 0.1"
-    quat="0.270598 0.653281 0.653282 -0.270598"
-    dim="2"
-    origin="0 0 0"
-    radius="0.0001"
-    rgba="0 1 0 0.3"
-    mass="0.001"
-    name="c">
-  <contact   condim="3" solimp="0.99 0.99 0.01" solref="0.002 1"/>
-  <edge      equality="true" solref="1e-5 1" solimp="1 1 0 0 1" damping="0.0"/>
-  <elasticity poisson="0.49" thickness="0.0002" young="9e7" damping="0.00" elastic2d="bend"/>
+......
 </flexcomp>
 ```
 
