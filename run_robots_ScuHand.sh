@@ -24,7 +24,7 @@ robots=(
 
 for robot in "${robots[@]}"; do
   echo "=== Running $robot + ScuHand ==="
-  python robosuite/demos/demo_composite_robot.py \
+  python robosuite/demos/demo_composite_robot_ScuHand.py \
     --robot "$robot" \
     --grippers "ScuHand"
   echo "=== Done with $robot ==="
