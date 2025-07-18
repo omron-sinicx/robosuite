@@ -1,5 +1,5 @@
 ````markdown
-# Diffusion Policies w/ Reinforcement Learning for Contact‑Rich Manipulation
+# Diffusion Policies with Reinforcement Learning for Contact‑Rich Manipulation
 
 This branch implements Diffusion Policies with RL for contact‑rich robotic manipulation. Below are the steps to get started and test the ScuHand gripper with various robots.
 
