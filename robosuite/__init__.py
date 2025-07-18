@@ -12,9 +12,7 @@ from robosuite.environments.manipulation.two_arm_lift import TwoArmLift
 from robosuite.environments.manipulation.two_arm_peg_in_hole import TwoArmPegInHole
 from robosuite.environments.manipulation.two_arm_handover import TwoArmHandover
 from robosuite.environments.manipulation.two_arm_transport import TwoArmTransport
-from robosuite.environments.manipulation.two_arm_osx import TwoArmOSX
-from robosuite.environments.manipulation.two_arm_wiping import TwoArmWiping
-from robosuite.environments.manipulation.osx_grind import OSXGrind
+from robosuite.environments.manipulation.scoop import Scoop
 
 from robosuite.environments import ALL_ENVIRONMENTS
 from robosuite.controllers import (
@@ -44,7 +42,7 @@ except:
         "Could not load the mink-based whole-body IK. Make sure you install related import properly, otherwise you will not be able to use the default IK controller setting for GR1 robot."
     )
 
-__version__ = "1.5.0"
+__version__ = "1.5.1"
 __logo__ = """
       ;     /        ,--.
      ["]   ["]  ,<  |__**|
