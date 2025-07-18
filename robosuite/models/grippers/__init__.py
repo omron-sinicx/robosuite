@@ -13,7 +13,10 @@ from .wiping_gripper import WipingGripper
 from .bd_gripper import BDGripper
 from .null_gripper import NullGripper
 from .inspire_hands import InspireLeftHand, InspireRightHand
-from .grinder import UR5eGrinder
+from .fourier_hands import FourierLeftHand, FourierRightHand
+from .xarm7_gripper import XArm7Gripper
+
+from .scu_hand import ScuHand
 
 GRIPPER_MAPPING = {
     "RethinkGripper": RethinkGripper,
@@ -28,8 +31,10 @@ GRIPPER_MAPPING = {
     "BDGripper": BDGripper,
     "InspireLeftHand": InspireLeftHand,
     "InspireRightHand": InspireRightHand,
-    None: NullGripper,
-    "Grinder": UR5eGrinder,
+    "FourierLeftHand": FourierLeftHand,
+    "FourierRightHand": FourierRightHand,
+    "XArm7Gripper": XArm7Gripper,
+    "ScuHand": ScuHand,
     None: NullGripper,
 }
 
