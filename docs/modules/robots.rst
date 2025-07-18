@@ -1,25 +1,25 @@
 Robots
 =======
 
-.. figure:: ../images/robot_module.png
+.. figure:: ../images/robots_module_v15.png
 
-**Robots** are a key component in **robosuite**, and serve as the embodiment of a given agent as well as the central interaction point within an environment and key interface to MuJoCo for the robot-related state and control. **robosuite** captures this level of abstraction with the `Robot <../simulation/robot.html>`_-based classes, with support for both single-armed and bimanual variations. In turn, the Robot class is centrally defined by a `RobotModel <../modeling/robot_model.html>`_, `MountModel <../modeling/robot_model.html#mount-model>`_, and `Controller(s) <../simulation/controller.html>`_. Subclasses of the :class:`RobotModel` class may also include additional models as well; for example, the `ManipulatorModel <../modeling/robot_model.html#manipulator-model>`_ class also includes `GripperModel(s) <../modeling/robot_model.html#gripper-model>`_ (with no gripper being represented by a dummy class).
+**Robots** are a key component in **robosuite**, and serve as the embodiment of a given agent as well as the central interaction point within an environment and key interface to MuJoCo for the robot-related state and control. **robosuite** captures this level of abstraction with the `Robot <../simulation/robot>`_-based classes, with support for both single-armed and bimanual variations, as well as robots with mobile manipulation capabilities, including both legged and wheeled variants. In turn, the Robot class is centrally defined by a `RobotModel <../modeling/robot_model>`_, `RobotBaseModel <../modeling/robot_model.html#robot-base-model>`_, `GripperModel <../modeling/robot_model.html#gripper-model>`_, and `Controller(s) <../simulation/controller>`_. Subclasses of the ``RobotModel`` class may also include additional models as well; for example, the `ManipulatorModel <../modeling/robot_model.html#manipulator-model>`_ class also includes `GripperModel(s) <../modeling/robot_model.html#gripper-model>`_ (with no gripper being represented by a dummy class).
 
 The high-level features of **robosuite**'s robots are described as follows:
 
-* **Diverse and Realistic Models**: **robosuite** provides models for 8 commercially-available manipulator robots (including the bimanual Baxter robot), 7 grippers (including the popular Robotiq 140 / 85 models), and 6 controllers, with model properties either taken directly from the company website or raw spec sheets.
+* **Diverse and Realistic Models**: **robosuite** provides models for 10 commercially-available robots (including the humanoid GR1 Robot), 9 grippers (including the inspire dexterous hand model), 4 bases (including the Omron wheeled mobile base), and 6 body-part controllers, with model properties either taken directly from official product documentation or raw spec sheets. An additional 8 robots, 8 grippers, and 3 bases can be installed separately from the `robosuite-models <https://github.com/ARISE-Initiative/robosuite_models>`_ repository.
 
 * **Modularized Support**: Robots are designed to be plug-n-play -- any combinations of robots, models, and controllers can be used, assuming the given environment is intended for the desired robot configuration. Because each robot is assigned a unique ID number, multiple instances of identical robots can be instantiated within the simulation without error.
 
 * **Self-Enclosed Abstraction**: For a given task and environment, any information relevant to the specific robot instance can be found within the properties and methods within that instance. This means that each robot is responsible for directly setting its initial state within the simulation at the start of each episode, and also directly controls the robot in simulation via torques outputted by its controller's transformed actions.
 
 Usage
-======
+=====
 Below, we discuss the usage and functionality of the robots over the course of its program lifetime.
 
 Initialization
 --------------
-During environment creation (``suite.make(...)``), individual robots are both instantiated and initialized. The desired RobotModel, MountModel, and Controller(s) (where multiple and/or additional models may be specified, e.g. for manipulator bimanual robots) are loaded into each robot, with the models being passed into the environment to compose the final MuJoCo simulation object. Each robot is then set to its initial state.
+During environment creation (``suite.make(...)``), individual robots are both instantiated and initialized. The desired RobotModel, RobotBaseModel, and Controller(s) (where multiple and/or additional models may be specified, e.g. for manipulator bimanual robots) are loaded into each robot, with the models being passed into the environment to compose the final MuJoCo simulation object. Each robot is then set to its initial state.
 
 Runtime
 -------
@@ -35,130 +35,176 @@ Models
 
 Manipulators
 ------------
-**robosuite** currently supports seven commercially-available manipulator robot models. We briefly describe each individual model along with its features below:
 
+.. list-table::
+   :widths: 15 50 35
+   :header-rows: 1
 
-Panda
-~~~~~
-.. image:: ../images/models/robot_model_Panda.png
-   :alt: panda_robot
-   :align: left
-   :width: 50%
+   * - Robot
+     - Image
+     - Description
+   * - **Panda**
+     - .. image:: ../images/models/robot_model_Panda_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 7
+       - **Default Gripper:** PandaGripper
+       - **Default Base:** RethinkMount
+   * - **Sawyer**
+     - .. image:: ../images/models/robot_model_Sawyer_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 7
+       - **Default Gripper:** RethinkGripper
+       - **Default Base:** RethinkMount
+   * - **IIWA**
+     - .. image:: ../images/models/robot_model_IIWA_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 7
+       - **Default Gripper:** Robotiq140Gripper
+       - **Default Base:** RethinkMount
+   * - **Jaco**
+     - .. image:: ../images/models/robot_model_Jaco_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 7
+       - **Default Gripper:** JacoThreeFingerGripper
+       - **Default Base:** RethinkMount
+   * - **Kinova3**
+     - .. image:: ../images/models/robot_model_Kinova3_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 7
+       - **Default Gripper:** Robotiq85Gripper
+       - **Default Base:** RethinkMount
+   * - **UR5e**
+     - .. image:: ../images/models/robot_model_UR5e_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 6
+       - **Default Gripper:** Robotiq85Gripper
+       - **Default Base:** RethinkMount
+   * - **Baxter**
+     - .. image:: ../images/models/robot_model_Baxter_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 14
+       - **Default Gripper:** RethinkGripper
+       - **Default Base:** RethinkMount
+   * - **GR1**
+     - .. image:: ../images/models/robot_model_GR1_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 24
+       - **Default Gripper:** InspireHands
+       - **Default Base:** NoActuationBase
+       - **Variants**: GR1FixedLowerBody, GR1FloatingBody, GR1ArmsOnly
+   * - **Spot**
+     - .. image:: ../images/models/robot_model_Spot_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 19
+       - **Default Gripper:** BDGripper
+       - **Default Base:** Spot
+       - **Variants**: SpotWithArmFloating
+   * - **Tiago**
+     - .. image:: ../images/models/robot_model_Tiago_isaac.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 20
+       - **Default Gripper:** Robotiq85Gripper
+       - **Default Base:** NullMobileBase
 
-- DoF: 7
-- Parallel jaw gripper
-- Fixed base
+Grippers
+--------
 
-Sawyer
-~~~~~~
-.. image:: ../images/models/robot_model_Sawyer.png
-   :alt: sawyer_robot
-   :align: left
-   :width: 50%
+.. list-table::
+   :widths: 20 45 35
+   :header-rows: 1
 
-- DoF: 7
-- Parallel jaw gripper
-- Fixed base
+   * - Gripper
+     - Image
+     - Description
+   * - **BD Gripper**
+     - .. image:: ../images/models/bd_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 1
+   * - **Inspire Hands**
+     - .. image:: ../images/models/inspire_hands.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 6
+   * - **Jaco Three Finger Gripper**
+     - .. image:: ../images/models/jaco_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 1 (3 for dexterous version)
+   * - **Panda Gripper**
+     - .. image:: ../images/models/panda_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 1
+   * - **Rethink Gripper**
+     - .. image:: ../images/models/rethink_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 1
+   * - **Robotiq 85 Gripper**
+     - .. image:: ../images/models/robotiq85_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 1
+   * - **Robotiq 140 Gripper**
+     - .. image:: ../images/models/robotiq140_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 1
+   * - **Robotiq Three Finger Gripper**
+     - .. image:: ../images/models/robotiq_three_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 1
+   * - **Wiping Gripper**
+     - .. image:: ../images/models/wiping_gripper.png
+          :width: 90%
+          :align: center
+     - - **DoF:** 0
 
-LBR IIWA 7
-~~~~~~~~~~
-.. image:: ../images/models/robot_model_IIWA.png
-   :alt: iiwa_robot
-   :align: left
-   :width: 50%
+Bases
+-----
 
-- DoF: 7
-- ...
-- ...
+.. list-table::
+   :widths: 20 45 35
+   :header-rows: 1
 
-Jaco
-~~~~
-.. image:: ../images/models/robot_model_Jaco.png
-   :alt: jaco_robot
-   :align: left
-   :width: 50%
-
-- DoF: 7
-- ...
-- ...
-
-Kinova Gen3
-~~~~~~~~~~~
-.. image:: ../images/models/robot_model_Kinova3.png
-   :alt: kinova3_robot
-   :align: left
-   :width: 50%
-
-
-
-- DoF: 7
-- Parallel jaw gripper
-- Fixed base
-
-UR5e
-~~~~
-.. image:: ../images/models/robot_model_UR5e.png
-   :alt: ur5e_robot
-   :align: left
-   :width: 50%
-
-- DoF: 6
-- Parallel jaw gripper
-- Fixed base
-
-Baxter
-~~~~~~
-.. image:: ../images/models/robot_model_Baxter.png
-   :alt: baxter_robot
-   :align: left
-   :width: 50%
-
-- DoF: 14
-- ...
-- ...
-
-Tiago
-~~~~~~
-.. image:: ...
-   :alt: tiago_robot
-   :align: left
-   :width: 50%
-
-- DoF: ...
-- ...
-- ...
-
-GR1
-~~~~~~
-.. image:: ...
-   :alt: gr1_robot
-   :align: left
-   :width: 50%
-
-- DoF: ...
-- ...
-- ...
+   * - Gripper
+     - Image
+     - Description
+   * - **Rethink Mount**
+     - .. image:: ../images/models/rethink_base.png
+          :width: 90%
+          :align: center
+     - - **Type:** Fixed
+   * - **Rethink Minimal Mount**
+     - .. image:: ../images/models/rethink_minimal_base.png
+          :width: 90%
+          :align: center
+     - - **Type:** Fixed
+   * - **Omron Mobile Base**
+     - .. image:: ../images/models/omron_base.png
+          :width: 90%
+          :align: center
+     - - **Type:** Mobile
+   * - **Spot Base**
+     - .. image:: ../images/models/spot_base.png
+          :width: 90%
+          :align: center
+     - - **Type:** Legged
 
 Create Your Own Robot
 ----------------------
 
-<link_to_menagerine>
+As of v1.5, users can create composite robots to match their specification. Specificially, arms, grippers, and bases can be swapped to create new robots configurations. We also provide several other robot models in an external repo. For more information, please refer to `here <https://github.com/ARISE-Initiative/robosuite_models>`_. 
 
-.. code-block:: python
-
-  @register_robot_class("LeggedRobot")
-  class GR1SchunkSVH(GR1):
-      """
-      Variant of GR1 robot with SchunkSVH hands.
-      """
-
-      @property
-      def default_gripper(self):
-          """
-          Since this is bimanual robot, returns dict with `'right'`, `'left'` keywords corresponding to their respective
-          values
-
-          Returns:
-              dict: Dictionary containing arm-specific gripper names
-          """
-          return {"right": "SchunkSvhRightHand", "left": "SchunkSvhLeftHand"}

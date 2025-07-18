@@ -1,92 +1,51 @@
-````markdown
-# Diffusion Policies with Reinforcement Learning for Contact‑Rich Manipulation
+# robosuite
 
-This branch implements Diffusion Policies with RL for contact‑rich robotic manipulation. Below are the steps to get started and test the ScuHand gripper with various robots.
+![gallery of_environments](docs/images/gallery.png)
 
----
+[**[Homepage]**](https://robosuite.ai/) &ensp; [**[White Paper]**](https://arxiv.org/abs/2009.12293) &ensp; [**[Documentations]**](https://robosuite.ai/docs/overview.html) &ensp; [**[ARISE Initiative]**](https://github.com/ARISE-Initiative)
 
-## 1. Modify `scu_hand.xml`
+-------
+## Latest Updates
 
-Due to MuJoCo’s current `flexcomp` limitations, you must use an **absolute path** to load the mesh. Open:
+- [10/28/2024] **v1.5**: Added support for diverse robot embodiments (including humanoids), custom robot composition, composite controllers (including whole body controllers), more teleoperation devices, photo-realistic rendering. [[release notes]](https://github.com/ARISE-Initiative/robosuite/releases/tag/v1.5.0) [[documentation]](http://robosuite.ai/docs/overview.html)
 
-```xml
-robosuite/models/assets/grippers/scu_hand.xml
-````
+- [11/15/2022] **v1.4**: Backend migration to DeepMind's official [MuJoCo Python binding](https://github.com/deepmind/mujoco), robot textures, and bug fixes :robot: [[release notes]](https://github.com/ARISE-Initiative/robosuite/releases/tag/v1.4.0) [[documentation]](http://robosuite.ai/docs/v1.4/)
 
-and update the `<flexcomp>` tag:
+- [10/19/2021] **v1.3**: Ray tracing and physically based rendering tools :sparkles: and access to additional vision modalities 🎥 [[video spotlight]](https://www.youtube.com/watch?v=2xesly6JrQ8) [[release notes]](https://github.com/ARISE-Initiative/robosuite/releases/tag/v1.3) [[documentation]](http://robosuite.ai/docs/v1.3/)
 
-```xml
-<flexcomp
-    type="mesh"
-    file="/home/yongliangwang/Projects/robosuite_yl/robosuite/models/assets/grippers/meshes/scu_hand/sheet.obj"
-............
-</flexcomp>
-```
+- [02/17/2021] **v1.2**: Added observable sensor models :eyes: and dynamics randomization :game_die: [[release notes]](https://github.com/ARISE-Initiative/robosuite/releases/tag/v1.2)
 
-> **Tip:** Replace the `file` attribute with the absolute path to your local `sheet.obj`.
+- [12/17/2020] **v1.1**: Refactored infrastructure and standardized model classes for much easier environment prototyping :wrench: [[release notes]](https://github.com/ARISE-Initiative/robosuite/releases/tag/v1.1)
 
----
+-------
 
-## 2. Run UR5e with Different Grippers
+**robosuite** is a simulation framework powered by the [MuJoCo](http://mujoco.org/) physics engine for robot learning. It also offers a suite of benchmark environments for reproducible research. The current release (v1.5) features support for diverse robot embodiments (including humanoids), custom robot composition, composite controllers (including whole body controllers), more teleoperation devices, photo-realistic rendering. This project is part of the broader [Advancing Robot Intelligence through Simulated Environments (ARISE) Initiative](https://github.com/ARISE-Initiative), with the aim of lowering the barriers of entry for cutting-edge research at the intersection of AI and Robotics.
 
-To quickly benchmark UR5e paired with all available gripper models (including ScuHand), execute:
+Data-driven algorithms, such as reinforcement learning and imitation learning, provide a powerful and generic tool in robotics. These learning paradigms, fueled by new advances in deep learning, have achieved some exciting successes in a variety of robot control problems. However, the challenges of reproducibility and the limited accessibility of robot hardware (especially during a pandemic) have impaired research progress. The overarching goal of **robosuite** is to provide researchers with:
 
-```bash
-./run_ur5e_grippers.sh
-```
+* a standardized set of benchmarking tasks for rigorous evaluation and algorithm development;
+* a modular design that offers great flexibility in designing new robot simulation environments;
+* a high-quality implementation of robot controllers and off-the-shelf learning algorithms to lower the barriers to entry.
 
-This script loops through each gripper in `robosuite/models/assets/grippers/` and launches the `demo_composite_robot.py` demo.
+This framework was originally developed in late 2017 by researchers in [Stanford Vision and Learning Lab](http://svl.stanford.edu) (SVL) as an internal tool for robot learning research. Now, it is actively maintained and used for robotics research projects in SVL, the [UT Robot Perception and Learning Lab](http://rpl.cs.utexas.edu) (RPL) and NVIDIA [Generalist Embodied Agent Research Group](https://research.nvidia.com/labs/gear/) (GEAR). We welcome community contributions to this project. For details, please check out our [contributing guidelines](CONTRIBUTING.md).
 
----
+**Robosuite** offers a modular design of APIs for building new environments, robot embodiments, and robot controllers with procedural generation. We highlight these primary features below:
 
-## 3. Test ScuHand on Multiple Robot Platforms
+* **standardized tasks**: a set of standardized manipulation tasks of large diversity and varying complexity and RL benchmarking results for reproducible research;
+* **procedural generation**: modular APIs for programmatically creating new environments and new tasks as combinations of robot models, arenas, and parameterized 3D objects. Check out our repo [robosuite_models](https://github.com/ARISE-Initiative/robosuite_models) for extra robot models tailored to robosuite.
+* **robot controllers**: a selection of controller types to command the robots, such as joint-space velocity control, inverse kinematics control, operational space control, and whole body control;
+* **teleoperation devices**: a selection of teleoperation devices including keyboard, spacemouse and MuJoCo viewer drag-drop;
+* **multi-modal sensors**: heterogeneous types of sensory signals, including low-level physical states, RGB cameras, depth maps, and proprioception;
+* **human demonstrations**: utilities for collecting human demonstrations, replaying demonstration datasets, and leveraging demonstration data for learning. Check out our sister project [robomimic](https://arise-initiative.github.io/robomimic-web/);
+* **photorealistic rendering**: integration with advanced graphics tools that provide real-time photorealistic renderings of simulated scenes, including support for NVIDIA Isaac Sim rendering.
 
-If you want to see ScuHand mounted on different robots, run:
-
-```bash
-./run_robots_ScuHand.sh
-```
-
-This script iterates through every robot class in your branch and attaches ScuHand for a quick sanity check.
-
----
-
-## 4. Customize the Demo Script
-
-Edit the demo script to control simulation length or make the robot static:
-
-```python
-# File: demos/demo_composite_robot_ScuHand.py
-
-# Change the number of simulation steps (default: 100)
-for i in range(100):
-    start = time.time()
-
-    # Sample a random action
-    action = np.random.uniform(low, high)
-
-    # Uncomment the next line to hold the robot static
-    # action = np.zeros(7)
-
-    obs, reward, done, _ = env.step(action)
-
-    # Cap frame rate if desired
-    if max_fr is not None:
-        elapsed = time.time() - start
-        delay   = 1.0 / max_fr - elapsed
-        if delay > 0:
-            time.sleep(delay)
-
-env.close()
-```
-
-* **To change the simulation length**, update `range(100)` to your desired number of steps.
-* **To freeze the robot**, comment out the random action and uncomment `action = np.zeros(7)`.
-
----
-
-Happy experimenting!
-Feel free to open an issue or PR if you run into any problems.
-
-```
+## Citation
+Please cite [**robosuite**](https://robosuite.ai) if you use this framework in your publications:
+```bibtex
+@inproceedings{robosuite2020,
+  title={robosuite: A Modular Simulation Framework and Benchmark for Robot Learning},
+  author={Yuke Zhu and Josiah Wong and Ajay Mandlekar and Roberto Mart\'{i}n-Mart\'{i}n and Abhishek Joshi and Soroush Nasiriany and Yifeng Zhu and Kevin Lin},
+  booktitle={arXiv preprint arXiv:2009.12293},
+  year={2020}
+}
 ```

@@ -155,7 +155,7 @@ class GymWrapper(Wrapper, gym.Env):
                 - (np.array) observations from the environment
                 - (float) reward from the environment
                 - (bool) episode ending after reaching an env terminal state
-                - (bool) episode ending after an externally defined condition - removed
+                - (bool) episode ending after an externally defined condition
                 - (dict) misc information
         """
         ob_dict, reward, terminated, info = self.env.step(action)

@@ -1,13 +1,11 @@
 from collections import OrderedDict
 from copy import deepcopy
-from typing import List
 
 import numpy as np
 
 import robosuite.macros as macros
 from robosuite.environments.base import MujocoEnv
 from robosuite.robots import ROBOT_CLASS_MAPPING
-from robosuite.robots.robot import Robot
 from robosuite.utils.mjcf_utils import IMAGE_CONVENTION_MAPPING
 from robosuite.utils.observables import Observable, sensor
 
@@ -27,9 +25,9 @@ class RobotEnv(MujocoEnv):
             dict if same controller is to be used for all robots or else it should be a list of the same length as
             "robots" param
 
-        mount_types (None or str or list of str): type of mount, used to instantiate mount models from mount factory.
+        mount_types (str or list of str): type of mount, used to instantiate mount models from mount factory.
             Default is "default", which is the default mount associated with the robot(s) the 'robots' specification.
-            None results in no mount, and any other (valid) model overrides the default mount. Should either be
+            "NullMount" results in no mount, and any other (valid) model overrides the default mount. Should either be
             single str if same mount type is to be used for all robots or else it should be a list of the same
             length as "robots" param
 
@@ -55,9 +53,9 @@ class RobotEnv(MujocoEnv):
 
         has_offscreen_renderer (bool): True if using off-screen rendering
 
-        render_camera (str): Name of camera to render if `has_renderer` is True. Setting this value to 'None'
+        render_camera (str or list of str): Name of camera to render if `has_renderer` is True. Setting this value to 'None'
             will result in the default angle being applied, which is useful as it can be dragged / panned by
-            the user using the mouse
+            the user using the mouse. When a list of strings is provided, it will render from multiple camera angles.
 
         render_collision_mesh (bool): True if rendering collision meshes in camera. False otherwise.
 
@@ -159,7 +157,7 @@ class RobotEnv(MujocoEnv):
         robots = list(robots) if type(robots) is list or type(robots) is tuple else [robots]
         self.num_robots = len(robots)
         self.robot_names = robots
-        self.robots: List[Robot] = self._input2list(None, self.num_robots)
+        self.robots = self._input2list(None, self.num_robots)
         self._action_dim = None
 
         # Robot base
@@ -545,17 +543,17 @@ class RobotEnv(MujocoEnv):
                     self.camera_widths = (
                         self.camera_widths[:start_idx]
                         + [self.camera_widths[start_idx]] * (end_idx - start_idx)
-                        + self.camera_widths[(start_idx + 1):]
+                        + self.camera_widths[(start_idx + 1) :]
                     )
                     self.camera_heights = (
                         self.camera_heights[:start_idx]
                         + [self.camera_heights[start_idx]] * (end_idx - start_idx)
-                        + self.camera_heights[(start_idx + 1):]
+                        + self.camera_heights[(start_idx + 1) :]
                     )
                     self.camera_depths = (
                         self.camera_depths[:start_idx]
                         + [self.camera_depths[start_idx]] * (end_idx - start_idx)
-                        + self.camera_depths[(start_idx + 1):]
+                        + self.camera_depths[(start_idx + 1) :]
                     )
                 else:
                     # We simply add this camera to the temp_names
@@ -565,7 +563,7 @@ class RobotEnv(MujocoEnv):
 
     def _pre_action(self, action, policy_step=False):
         """
-        Overrides the superclass method to control the robot(s) within this environment using their respective
+        Overrides the superclass method to control the robot(s) within this enviornment using their respective
         controllers using the passed actions and gripper control.
 
         Args:
@@ -587,7 +585,7 @@ class RobotEnv(MujocoEnv):
         # Update robot joints based on controller actions
         cutoff = 0
         for idx, robot in enumerate(self.robots):
-            robot_action = action[cutoff: cutoff + robot.action_dim]
+            robot_action = action[cutoff : cutoff + robot.action_dim]
             robot.control(robot_action, policy_step=policy_step)
             cutoff += robot.action_dim
 

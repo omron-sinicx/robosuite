@@ -2,7 +2,6 @@
 Collection of useful simulation utilities
 """
 
-import numpy as np
 from robosuite.models.base import MujocoModel
 
 
@@ -66,46 +65,3 @@ def get_contacts(sim, model):
         elif g2 in model.contact_geoms and g1 not in model.contact_geoms:
             contact_set.add(g1)
     return contact_set
-
-
-def compensate_ft_reading(force_reading, torque_reading, mass, com, world_rot, gravity):
-    """
-    Compensate for the gripper's payload in FT sensor readings by adding the gravitational effects.
-    This assumes the force/torque readings are in the sensor frame and are already negative when 
-    experiencing forces/torques in the positive axis directions.
-
-    Args:
-        force_reading (ndarray): Current force reading from sensor [fx, fy, fz] in sensor frame
-        torque_reading (ndarray): Current torque reading from sensor [tx, ty, tz] in sensor frame
-        mass (float): Mass of the payload (gripper) in kg
-        com (ndarray): Center of mass of the payload [x, y, z] in sensor frame
-        world_rot (ndarray): 3x3 rotation matrix from world to sensor frame
-        gravity (ndarray): Gravity vector [gx, gy, gz] in world frame (typically [0, 0, -9.81])
-
-    Returns:
-        ndarray: Concatenated compensated force and torque [fx, fy, fz, tx, ty, tz] in sensor frame
-                Where positive values indicate forces/torques in the positive axis directions
-
-    Note:
-        - The compensation ADDS the gravitational effects because sensor readings are typically
-          negative when experiencing forces in the positive direction
-        - world_rot.T @ force transforms the force from world frame to sensor frame
-        - The cross product (com × force) gives the torque caused by the offset COM
-    """
-
-    # Calculate gravitational force in world frame
-    force_gravity_world = mass * gravity
-
-    # Transform gravitational force to sensor frame
-    # Note: The rotation matrix transforms from world to body frame
-    force_gravity_sensor = world_rot.T @ force_gravity_world
-
-    # Calculate torque due to gravity
-    # Cross product of COM vector and gravitational force in sensor frame
-    torque_gravity_sensor = np.cross(com, force_gravity_sensor)
-
-    # Compensate the readings
-    compensated_force = force_reading + force_gravity_sensor
-    compensated_torque = torque_reading + torque_gravity_sensor
-
-    return np.concatenate([compensated_force, compensated_torque])

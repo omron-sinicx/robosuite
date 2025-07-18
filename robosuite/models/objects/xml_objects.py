@@ -41,10 +41,7 @@ class LemonObject(MujocoXMLObject):
 
     def __init__(self, name):
         super().__init__(
-            xml_path_completion("objects/lemon.xml"),
-            name=name,
-            obj_type="all",
-            duplicate_collision_geoms=True
+            xml_path_completion("objects/lemon.xml"), name=name, obj_type="all", duplicate_collision_geoms=True
         )
 
 
@@ -300,68 +297,3 @@ class DoorObject(MujocoXMLObject):
         dic = super().important_sites
         dic.update({"handle": self.naming_prefix + "handle"})
         return dic
-
-
-class MortarObject(MujocoXMLObject):
-    """
-    Mortar object (used for grinding safety controller)     
-    TODO maybe add friction and damping functions 
-    """
-
-    def __init__(self, name):
-        super().__init__(
-            xml_path_completion("objects/mortar_mesh.xml"),
-            name=name,
-            joints=None,
-            obj_type="all",
-            duplicate_collision_geoms=True,
-        )
-
-
-class MortarSDFObject(MujocoXMLObject):
-    """
-    Mortar object (used for grinding safety controller)     
-    TODO maybe add friction and damping functions 
-    """
-
-    def __init__(self, name, height=0.0, radius=0.08, thickness=0.03, base_size=[0.015, 0.003], base_pos=None):
-        super().__init__(
-            xml_path_completion("objects/mortar_sdf.xml"),
-            name=name,
-            joints=None,
-            obj_type="all",
-            duplicate_collision_geoms=True,
-        )
-
-        instance = find_elements(root=self.root, tags="instance", return_first=True)
-        instance.set("name", "bowl")  # Do not change
-        height_ = find_elements(root=self.root, tags="config", attribs={"key": 'height'}, return_first=True)
-        height_.set("value", str(height))
-        radius_ = find_elements(root=self.root, tags="config", attribs={"key": 'radius'}, return_first=True)
-        radius_.set("value", str(radius))
-        thickness_ = find_elements(root=self.root, tags="config", attribs={"key": 'thickness'}, return_first=True)
-        thickness_.set("value", str(thickness))
-        bowl_base = find_elements(root=self.worldbody, tags="geom", attribs={"name": f'{name}_bowl_base'}, return_first=True)
-        bowl_base.set("size", array_to_string(base_size))
-        if base_pos is None:
-            bowl_base.set("pos", array_to_string(np.array([0, 0, -radius])))
-        else:
-            bowl_base.set("pos", array_to_string(base_pos))
-
-
-class MortarVisualObject(MujocoXMLObject):
-    """
-    Visual fiducial of mortar (used for grinding safety controller)
-
-    Fiducial objects are not involved in collision physics.
-    They provide a point of reference to indicate a position.
-    """
-
-    def __init__(self, name):
-        super().__init__(
-            xml_path_completion("objects/mortar-visual.xml"),
-            name=name,
-            joints=None,
-            obj_type="visual",
-            duplicate_collision_geoms=True,
-        )

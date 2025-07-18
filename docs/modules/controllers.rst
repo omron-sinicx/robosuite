@@ -4,16 +4,36 @@ Controllers
 Composite Controllers
 ---------------------
 
-Basic
+Robosuite's composite controllers assumes that a robot consists of multiple "body parts", such as arms, torso, head, base, and legs, and that each body part has
+a "body part" controller (e.g., ``OSC_POSE``, ``JOINT_POSITION``). The composite controller orchestrates these body part controllers.
+Composite controllers are controllers that are composed of multiple body-part controllers. 
+They are used to control the entire robot, including all of its parts. 
+
+When an action vector is commanded to the robot, the action will be split into multiple body-part actions, each of which will be sent to the corresponding body-part 
+controller. To understand the action split, use the function ``robosuite.robots.robot.print_action_info()``. 
+To create the action easily, we also provide a helper function ``robosuite.robots.robot.create_action_vector()`` which takes the action dictionary as 
+inputs and return the action vector with correct dimensions. For controller actions whose input dimentions does not match the robot's degrees of freedoms, 
+you need to write your own ``create_action_vector()`` function inside the custom composite controller so that the robot's function can retrieve the information properly.
+
+**Basic**
 ******
 
+The "Basic" composite controller consists of individual part controllers that operate independently to control various parts of the robot, such as arms, torso, head, base, and legs.
+Each part can be assigned a specific controller type (e.g., ``OSC_POSE``, ``JOINT_POSITION``) depending on the desired control behavior for that part. 
+For example, arms may use ``OSC_POSE`` for precise end-effector control, while the base may use JOINT_VELOCITY for movement across the ground. 
 
-WholeBody IK
+
+**WholeBodyIK**
 *************
 
+The "WholeBodyIK" composite controller takes in end effector targets, and converts them into joint angle targets for the corresponding body parts' joints.
 
-ThirdParty Controllers
+
+**Third-party Controllers**
 ***********************
+
+Third-party controllers integrate custom or external control algorithms into robosuite. Examples include https://github.com/kevinzakka/mink. We provide 
+an example of adding a third-party controller in https://robosuite.ai/docs/tutorials/add_controller.html.
 
 
 Workflow of Loading Configs
@@ -30,7 +50,7 @@ An example of the controller config file is shown below (many parameters are omi
 
         {
         "type": "BASIC",
-        "body_parts_controller_configs": {
+        "body_parts": {
             "arms": {
                 "right": {
                     "type": "OSC_POSE",
@@ -222,19 +242,19 @@ Controller Settings
 
 Loading a Controller
 ---------------------
-By default, if no controller configuration is specified during environment creation, then ``JOINT_VELOCITY`` controllers with robot-specific configurations will be used. 
+By default, user will use the `load_composite_controller_config()` method to create a controller configuration.
 
 Using a Default Controller Configuration
 *****************************************
-Any controller can be used with its default configuration, and can be easily loaded into a given environment by calling its name as shown below (where ``controller_name`` is one of acceptable controller ``type`` strings):
+Any controller can be used with its default configuration, and can be easily loaded into a given environment by calling its name as shown below (where ``controller`` is one of acceptable controller ``type`` strings):
 
 .. code-block:: python
 
     import robosuite as suite
-    from robosuite import load_controller_config
+    from robosuite import load_composite_controller_config
 
-    # Load the desired controller's default config as a dict
-    config = load_controller_config(default_controller=controller_name)
+    # Load the desired controller config with default Basic controller
+    config = load_composite_controller_config(controller="BASIC")
 
     # Create environment
     env = suite.make("Lift", robots="Panda", controller_configs=config, ... )
@@ -248,13 +268,13 @@ A custom controller configuration can also be used by simply creating a new conf
 .. code-block:: python
 
     import robosuite as suite
-    from robosuite import load_controller_config
+    from robosuite import load_composite_controller_config
 
     # Path to config file
     controller_fpath = "/your/custom/config/filepath/here/filename.json"
 
     # Import the file as a dict
-    config = load_controller_config(custom_fpath=controller_fpath)
+    config = load_composite_controller_config(controller=controller_fpath)
 
     # Create environment
     env = suite.make("Lift", robots="Panda", controller_configs=config, ... )

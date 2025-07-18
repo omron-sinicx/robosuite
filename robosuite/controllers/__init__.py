@@ -7,12 +7,8 @@ PART_CONTROLLER_INFO = {
     "JOINT_VELOCITY": "Joint Velocity",
     "JOINT_TORQUE": "Joint Torque",
     "JOINT_POSITION": "Joint Position",
-    "COMPLIANCE": "Operational Space Control with Compliance",
     "OSC_POSITION": "Operational Space Control (Position Only)",
     "OSC_POSE": "Operational Space Control (Position + Orientation)",
-    "OSC_POSITION_FT": "Operational Space Control with force reference (Position Only)",
-    "OSC_POSE_FT": "Operational Space Control with force reference (Position + Orientation)",
-
     "IK_POSE": "Inverse Kinematics Control (Position + Orientation) (Note: must have PyBullet installed)",
 }
 

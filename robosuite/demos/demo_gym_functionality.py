@@ -26,11 +26,6 @@ The following snippet was used to demo basic functionality.
 
 To adapt our APIs to be compatible with OpenAI Gym's style, this script
 demonstrates how this can be easily achieved by using the GymWrapper.
-
-
-! Changed such that code works with gym, not gymnasium: additionally, code works with stable-baselines3 v1.6.2,
-later versions will ask for an extra truncated argument from the env.step() function
-TODO check OpenGL warnings
 """
 
 import robosuite as suite
@@ -41,9 +36,8 @@ if __name__ == "__main__":
     # Notice how the environment is wrapped by the wrapper
     env = GymWrapper(
         suite.make(
-            env_name="Lift",
-            robots="Panda",
-            gripper_types="PandaGripper",
+            "Lift",
+            robots="Sawyer",  # use Sawyer robot
             use_camera_obs=False,  # do not use pixel observations
             has_offscreen_renderer=False,  # not needed since not using pixel obs
             has_renderer=True,  # make sure we can render to the screen
@@ -53,10 +47,10 @@ if __name__ == "__main__":
     )
 
     env.reset(seed=0)
-    ep_nr = 2
-    for i_episode in range(ep_nr):
+
+    for i_episode in range(20):
         observation = env.reset()
-        for t in range(1000):
+        for t in range(500):
             env.render()
             action = env.action_space.sample()
             observation, reward, terminated, truncated, info = env.step(action)

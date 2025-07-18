@@ -70,6 +70,7 @@ class Robot(object):
             self.composite_controller_config = composite_controller_config
         else:
             self.composite_controller_config = load_composite_controller_config(robot=robot_type)
+
         self.part_controller_config = copy.deepcopy(self.composite_controller_config.get("body_parts", {}))
 
         self.gripper = self._input2dict(None)
@@ -147,7 +148,7 @@ class Robot(object):
         """
         for part_name, controller_config in self.composite_controller_config.get("body_parts", {}).items():
             if not self.has_part(part_name):
-                ROBOSUITE_DEFAULT_LOGGER.warn(
+                ROBOSUITE_DEFAULT_LOGGER.warning(
                     f'The config has defined for the controller "{part_name}", '
                     "but the robot does not have this component. Skipping, but make sure this is intended."
                     f"Removing the controller config for {part_name} from self.part_controller_config."
@@ -355,9 +356,14 @@ class Robot(object):
         def joint_vel(obs_cache):
             return np.array([self.sim.data.qvel[x] for x in self._ref_joint_vel_indexes])
 
-        sensors = [joint_pos, joint_pos_cos, joint_pos_sin, joint_vel]
-        names = ["joint_pos", "joint_pos_cos", "joint_pos_sin", "joint_vel"]
-        actives = [True, True, True, True]
+        @sensor(modality=modality)
+        def joint_acc(obs_cache):
+            return np.array([self.sim.data.qacc[x] for x in self._ref_joint_vel_indexes])
+
+        sensors = [joint_pos, joint_pos_cos, joint_pos_sin, joint_vel, joint_acc]
+        names = ["joint_pos", "joint_pos_cos", "joint_pos_sin", "joint_vel", "joint_acc"]
+        # We don't want to include the direct joint pos sensor outputs
+        actives = [True, True, True, True, True]
 
         for arm in self.arms:
             arm_sensors, arm_sensor_names = self._create_arm_sensors(arm, modality=modality)
@@ -451,19 +457,11 @@ class Robot(object):
             """
             return T.mat2quat(self.sim.data.site_xmat[self.eef_site_id[arm]].reshape((3, 3)))
 
-        @sensor(modality=modality)
-        def eef_vel_lin(obs_cache):
-            return np.array(self.sim.data.get_body_xvelp(self.robot_model.eef_name[arm]))
-
-        @sensor(modality=modality)
-        def eef_vel_ang(obs_cache):
-            return np.array(self.sim.data.get_body_xvelr(self.robot_model.eef_name[arm]))
-
         # only consider prefix if there is more than one arm
         pf = f"{arm}_" if len(self.arms) > 1 else ""
 
-        sensors = [eef_pos, eef_quat, eef_quat_site, eef_vel_lin, eef_vel_ang]
-        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site", f"{pf}eef_vel_lin", f"{pf}eef_vel_ang"]
+        sensors = [eef_pos, eef_quat, eef_quat_site]
+        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site"]
 
         # add in gripper sensors if this robot has a gripper
         if self.has_gripper[arm]:
@@ -516,7 +514,7 @@ class Robot(object):
             zip(self.sim.data.qpos[self._ref_joint_pos_indexes], self.sim.model.jnt_range[self._ref_joint_indexes])
         ):
             if q_limits[0] != q_limits[1] and not (q_limits[0] + tolerance < q < q_limits[1] - tolerance):
-                ROBOSUITE_DEFAULT_LOGGER.warn("Joint limit reached in joint " + str(qidx))
+                ROBOSUITE_DEFAULT_LOGGER.warning("Joint limit reached in joint " + str(qidx))
                 return True
         return False
 
@@ -694,7 +692,7 @@ class Robot(object):
         """
         sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
         sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
+        return np.array(self.sim.data.sensordata[sensor_idx : sensor_idx + sensor_dim])
 
     def visualize(self, vis_settings):
         """
@@ -914,7 +912,7 @@ class Robot(object):
                 self.part_controller_config[gripper_name]["ndim"] = self.gripper[arm].dof
                 self.part_controller_config[gripper_name]["policy_freq"] = self.control_freq
                 self.part_controller_config[gripper_name]["joint_indexes"] = {
-                    "joints": self.gripper_joints[arm],
+                    "joints": self._ref_joints_indexes_dict[gripper_name],
                     "actuators": self._ref_joint_gripper_actuator_indexes[arm],
                     "qpos": self._ref_gripper_joint_pos_indexes[arm],
                     "qvel": self._ref_gripper_joint_vel_indexes[arm],

@@ -18,7 +18,7 @@ This framework was originally developed in late 2017 by researchers in [Stanford
 * **standardized tasks**: a set of standardized manipulation tasks of large diversity and varying complexity and RL benchmarking results for reproducible research;
 * **procedural generation**: modular APIs for programmatically creating new environments and new tasks as combinations of robot models, arenas, and parameterized 3D objects. Check out our repo [robosuite_models](https://github.com/ARISE-Initiative/robosuite_models) for extra robot models tailored to robosuite.
 * **robot controllers**: a selection of controller types to command the robots, such as joint-space velocity control, inverse kinematics control, operational space control, and whole body control;
-* **teleoperation devices**: a selection of teleoperation devices including keyboard, spacemouse and MuJoCo viewer drag-drop;
+* **teleoperation devices**: a selection of teleoperation devices including keyboard, spacemouse, dualsense and MuJoCo viewer drag-drop;
 * **multi-modal sensors**: heterogeneous types of sensory signals, including low-level physical states, RGB cameras, depth maps, and proprioception;
 * **human demonstrations**: utilities for collecting human demonstrations, replaying demonstration datasets, and leveraging demonstration data for learning. Check out our sister project [robomimic](https://arise-initiative.github.io/robomimic-web/);
 * **photorealistic rendering**: integration with advanced graphics tools that provide real-time photorealistic renderings of simulated scenes, including support for NVIDIA Isaac Sim rendering.
@@ -28,7 +28,7 @@ Please cite [**robosuite**](https://robosuite.ai) if you use this framework in y
 ```bibtex
 @inproceedings{robosuite2020,
   title={robosuite: A Modular Simulation Framework and Benchmark for Robot Learning},
-  author={Yuke Zhu and Josiah Wong and Ajay Mandlekar and Roberto Mart\'{i}n-Mart\'{i}n and Abhishek Joshi and Kevin Lin and Soroush Nasiriany and Yifeng Zhu},
+  author={Yuke Zhu and Josiah Wong and Ajay Mandlekar and Roberto Mart\'{i}n-Mart\'{i}n and Abhishek Joshi and Kevin Lin and Abhiram Maddukuri and Soroush Nasiriany and Yifeng Zhu},
   booktitle={arXiv preprint arXiv:2009.12293},
   year={2020}
 }

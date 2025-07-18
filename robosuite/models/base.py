@@ -40,7 +40,6 @@ class MujocoXML(object):
         self.tendon = self.create_default_element("tendon")
         self.equality = self.create_default_element("equality")
         self.contact = self.create_default_element("contact")
-        self.extension = self.create_default_element("extension")
 
         # Parse any default classes and replace them inline
         default = self.create_default_element("default")
@@ -172,21 +171,6 @@ class MujocoXML(object):
                 parsed_xml = xml.dom.minidom.parseString(xml_str)
                 xml_str = parsed_xml.toprettyxml(newl="")
             f.write(xml_str)
-
-    def merge_extensions(self, other):
-        """
-        Merges @other's extensions in a custom logic.
-
-        Args:
-            other (MujocoXML or MujocoObject): other xml file whose extensions will be merged into this one
-        """
-        if other.extension:
-            for extension in other.extension:
-                if (
-                    find_elements(root=self.extension, tags=extension.tag, attribs={"name": extension.get("name")}, return_first=True)
-                    is None
-                ):
-                    self.extension.append(extension)
 
     def merge_assets(self, other):
         """

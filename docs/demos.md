@@ -99,9 +99,7 @@ The `demo_device_control.py` scripts shows how to teleoperate robot with [contro
 
 * **Keyboard**
     We use the keyboard to control the end-effector of the robot.
-    The keyboard provides 6-DoF control commands through various keys.
-    The commands are mapped to joint velocities through an inverse kinematics
-    solver from Bullet physics.
+    The keyboard provides 6-DoF control commands through various keyboard keys.
 
     **Note:**
         To run this script with macOS, you must run it with root access.
@@ -123,19 +121,27 @@ The `demo_device_control.py` scripts shows how to teleoperate robot with [contro
         This current implementation only supports macOS (Linux support can be added).
         Download and install the [driver](https://www.3dconnexion.com/service/drivers.html) before running the script.
 
+* **DualSense**
+    We use the DualSense joystick from [DualSense](https://www.playstation.com/en-us/accessories/dualsense-wireless-controller/) to control the end-effector of the robot. The joystick provides 6-DoF control commands.
+
+    **Note:**
+        Make sure `hidapi` can detect your DualSense in your computer. In Linux, you may add udev rules in `/etc/udev/rules.d` to get access to the device without root privilege. For the rules content you can refer to [game-device-udev](https://codeberg.org/fabiscafe/game-devices-udev).
+
+* **Mujoco GUI**
+        The Mujoco GUI provides a graphical user interface for viewing and interacting with a mujoco simulation. We use the GUI and a mouse to drag and drop mocap bodies, whose
+        poses are tracked by a controller. More specifically, once the mujoco GUI is loaded from running `python demo_device_control.py`, you first need to hit the <Tab> key to reach the interactive mujoco viewer state. Then, you should double click on
+        a mocap body. Finally, to drag the mocap body, you can hit to <Ctrl> or <Shift> key to translate or rotate the mocap body. For Mac users, you need to use `mjpython demo_device_control.py`. See the note from [mujoco](https://mujoco.readthedocs.io/en/stable/python.html#passive-viewer) for more details.
+
+
 Additionally, `--pos_sensitivity` and `--rot_sensitivity` provide relative gains for increasing / decreasing the user input
-device sensitivity. The `--controller` argument determines the choice of using either inverse kinematics controller (`ik`) or operational space controller (`osc`). The main difference is that user inputs with `ik`'s rotations are always taken relative to eef coordinate frame, whereas user inputs with `osc`'s rotations are taken relative to global frame (i.e., static / camera frame of reference). `osc` also tends to be more computationally efficient since `ik` relies on the backend [mink](https://github.com/kevinzakka/mink) IK solver.
+device sensitivity.
 
 
 Furthermore, please choose environment specifics with the following arguments:
 
 * `--environment`: Task to perform, e.g., `Lift`, `TwoArmPegInHole`, `NutAssembly`, etc.
 
-* `--robots`: Robot(s) with which to perform the task. Can be any in
-        {`Panda`, `Sawyer`, `IIWA`, `Jaco`, `Kinova3`, `UR5e`, `Baxter`}. Note that the environments include sanity
-        checks, such that a `TwoArm...` environment will only accept either a 2-tuple of robot names or a single
-        bimanual robot name, according to the specified configuration (see below), and all other environments will
-        only accept a single single-armed robot name
+* `--robots`: Robot(s) with which to perform the task, e.g., `Tiago`, `Panda`, `GR1`, `Sawyer`, etc. Note that the environments include sanity checks, such that a `TwoArm...` environment will not accept configurations with a single, one-armed robot.
 
 * `--config`: Exclusively applicable and only should be specified for `TwoArm...` environments. Specifies the robot
         configuration desired for the task when two robots are inputted. Options are {`parallel` and `opposed`}
@@ -148,30 +154,20 @@ Furthermore, please choose environment specifics with the following arguments:
                 each other, facing each other from opposite directions. Expects a 2-tuple of robot names
                 to be specified in the `--robots` argument.
 
-* `--arm`: Exclusively applicable and only should be specified for `TwoArm...` environments. Specifies which of the
-        multiple arm eef's to control. The other (passive) arm will remain stationary. Options are {`right`, `left`}
-        (from the point of view of the robot(s) facing against the viewer direction)
-
-* `--switch-on-click`: Exclusively applicable and only should be specified for `TwoArm...` environments. If enabled,
-        will switch the current arm being controlled every time the gripper input is pressed
-
-* `--toggle-camera-on-click`: If enabled, gripper input presses will cycle through the available camera angles
 
 Examples:
 * For normal single-arm environment:
 ```
-$ python demo_device_control.py --environment PickPlaceCan --robots Sawyer --controller osc
+$ python demo_device_control.py --environment PickPlaceCan --robots Sawyer
 ```
 * For two-arm bimanual environment:
 ```
-$ python demo_device_control.py --environment TwoArmLift --robots Baxter --config bimanual --arm left --controller osc
+$ python demo_device_control.py --environment TwoArmLift --robots Tiago
 ```
 * For two-arm multi single-arm robot environment:
 ```
-$ python demo_device_control.py --environment TwoArmLift --robots Sawyer Sawyer --config parallel --controller osc
+$ python demo_device_control.py --environment TwoArmLift --robots Sawyer Sawyer --config parallel
 ```
-In **robosuite**, we use this teleoperation script extensively for debugging environment designs, tuning reward functions, and collecting human demonstration data.
-
 
 ### Video Recording
 The `demo_video_recording.py` script shows how to record a video of robot roll-out with the `imageio` library. This script uses offscreen rendering. This is useful for generating qualitative videos of robot policy behaviors. The generated video is in the mp4 format. Example:
@@ -184,7 +180,7 @@ The `demo_renderers.py` script shows how to use different renderers with the sim
 ```sh
 $ python demo_renderers.py --renderer default
 ```
-The `--renderer` flag can be set to `mujoco` or `default(default)
+The `--renderer` flag can be set to `mujoco` or `default`
 
 ### Exporting to USD
 Exporting to USD allows users to render **robosuite** trajectories in external renderers such as NVIDIA Omniverse and Blender. In order to export to USD you must install the required dependencies for the exporter.

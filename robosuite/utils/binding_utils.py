@@ -2,11 +2,6 @@
 Useful classes for supporting DeepMind MuJoCo binding.
 """
 
-import robosuite.macros as macros
-import subprocess
-import platform
-import ctypes.util
-import ctypes
 import gc
 import os
 from tempfile import TemporaryDirectory
@@ -19,6 +14,13 @@ import numpy as np
 
 _MjSim_render_lock = Lock()
 
+import ctypes
+import ctypes.util
+import os
+import platform
+import subprocess
+
+import robosuite.macros as macros
 
 _SYSTEM = platform.system()
 if _SYSTEM == "Windows":
@@ -233,8 +235,8 @@ class MjSimState:
         idx_qvel = idx_qpos + sim.model.nq
 
         time = array[idx_time]
-        qpos = array[idx_qpos: idx_qpos + sim.model.nq]
-        qvel = array[idx_qvel: idx_qvel + sim.model.nv]
+        qpos = array[idx_qpos : idx_qpos + sim.model.nq]
+        qvel = array[idx_qvel : idx_qvel + sim.model.nv]
         assert sim.model.na == 0
 
         return cls(time=time, qpos=qpos, qvel=qvel)
@@ -255,8 +257,8 @@ class _MjModelMeta(type):
             if not attr.startswith("_"):
                 if attr not in dct:
                     # pylint: disable=protected-access
-                    def fget(self, attr=attr): return getattr(self._model, attr)
-                    def fset(self, value, attr=attr): return setattr(self._model, attr, value)
+                    fget = lambda self, attr=attr: getattr(self._model, attr)
+                    fset = lambda self, value, attr=attr: setattr(self._model, attr, value)
                     # pylint: enable=protected-access
                     dct[attr] = property(fget, fset)
         return super().__new__(cls, name, bases, dct)
@@ -564,8 +566,8 @@ class _MjDataMeta(type):
             if not attr.startswith("_"):
                 if attr not in dct:
                     # pylint: disable=protected-access
-                    def fget(self, attr=attr): return getattr(self._data, attr)
-                    def fset(self, value, attr=attr): return setattr(self._data, attr, value)
+                    fget = lambda self, attr=attr: getattr(self._data, attr)
+                    fset = lambda self, value, attr=attr: setattr(self._data, attr, value)
                     # pylint: enable=protected-access
                     dct[attr] = property(fget, fset)
         return super().__new__(cls, name, bases, dct)
@@ -1061,8 +1063,8 @@ class MjSim:
             model: should be an MjModel instance created via a factory function
                 such as mujoco.MjModel.from_xml_string(xml)
         """
-        self.model: MjModel = MjModel(model)
-        self.data: MjData = MjData(self.model)
+        self.model = MjModel(model)
+        self.data = MjData(self.model)
 
         # offscreen render context object
         self._render_context_offscreen = None
@@ -1183,60 +1185,3 @@ class MjSim:
         del self.model
         del self
         gc.collect()
-
-    def get_body_inertial_properties(self, body_name):
-        """
-        Get inertial properties of a specified body in MuJoCo.
-
-        Args:
-            model: MuJoCo model object
-            data: MuJoCo data object
-            body_name: String name of the body
-
-        Returns:
-            dict: Dictionary containing inertial properties
-        """
-        # Get body ID from name
-        body_id = self.model.body_name2id(body_name)
-
-        if body_id == -1:
-            raise ValueError(f"Body '{body_name}' not found in the model")
-
-        # Get inertial properties
-        mass = self.model._model.body_mass[body_id]
-        inertia = self.model._model.body_inertia[body_id].copy()  # Principal moments of inertia [ixx, iyy, izz]
-
-        # Get center of mass position in body frame
-        com = self.model._model.body_ipos[body_id].copy()
-
-        # Get inertial frame orientation (quaternion)
-        quat = self.model._model.body_iquat[body_id].copy()
-
-        # Get current position and orientation in world frame
-        pos = self.data.get_body_xpos(body_name)
-        rot_mat = self.data.get_body_xmat(body_name).reshape(3, 3)
-
-        return {
-            'mass': mass,
-            'inertia': inertia,
-            'local_com': com,
-            'inertial_frame_quat': quat,
-            'world_pos': pos,
-            'world_rot_mat': rot_mat
-        }
-
-
-class MjSimInteractive(MjSim):
-    """
-    Modified version of MjSim that enables interactive visualization through mujoco.viewer
-    """
-
-    def __init__(self, model):
-        super().__init__(model)
-
-        import mujoco.viewer
-        self.viewer = mujoco.viewer.launch_passive(self.model._model, self.data._data)
-
-    def step(self, with_udd=True):
-        super().step(with_udd=with_udd)
-        self.viewer.sync()

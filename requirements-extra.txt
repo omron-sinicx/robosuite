@@ -1,5 +1,4 @@
 # required for GymWrapper
-gym
 gymnasium
 
 # macOS only
@@ -9,10 +8,10 @@ hidapi
 h5py
 
 # for mujoco ik
-# mink
+mink
 
 # for extra robosuite_models
 robosuite-models==1.0.0
 
-# required for gamepad
-inputs
+# for USD export and rendering
+usd-core

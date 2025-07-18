@@ -1,7 +1,7 @@
 Device
 ======
 
-Devices allow for direct real-time interfacing with the MuJoCo simulation. The current support devices are ``Keyboard`` and ``SpaceMouse``.
+Devices allow for direct real-time interfacing with the MuJoCo simulation. The currently supported devices are ``Keyboard``. ``SpaceMouse``. ``DualSense`` and ``MjGUI``.
 
 Base Device
 -----------
@@ -30,6 +30,26 @@ SpaceMouse Device
 
   .. automethod:: get_controller_state
   .. automethod:: run
-  .. autoproperty:: control
-  .. autoproperty:: control_gripper
+  .. automethod:: control
+  .. automethod:: control_gripper
+  .. automethod:: _display_controls
+
+DualSense Device
+-----------------
+
+.. autoclass:: robosuite.devices.dualsense.DualSense
+
+  .. automethod:: get_controller_state
+  .. automethod:: run
+  .. automethod:: control
+  .. automethod:: control_gripper
+  .. automethod:: _display_controls
+  .. automethod:: _check_connection_type
+
+MjGUI Device
+------------
+.. autoclass:: robosuite.devices.mjgui.MJGUI
+
+  .. automethod:: get_controller_state
+  .. automethod:: input2action
   .. automethod:: _display_controls

@@ -53,7 +53,6 @@ class MujocoObject(MujocoModel):
 
     def __init__(self, obj_type="all", duplicate_collision_geoms=True):
         super().__init__()
-        self.extension = ET.Element("extension")
         self.asset = ET.Element("asset")
         assert obj_type in GEOM_GROUPS, "object type must be one in {}, got: {} instead.".format(GEOM_GROUPS, obj_type)
         self.obj_type = obj_type
@@ -111,6 +110,7 @@ class MujocoObject(MujocoModel):
         raise NotImplementedError
 
     def _get_object_subtree(self):
+
         """
         Returns a ET.Element
         It is a <body/> subtree that defines all collision and / or visualization related fields

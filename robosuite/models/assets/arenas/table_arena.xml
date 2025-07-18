@@ -37,16 +37,10 @@
       <geom pos="0 0 0" size="0.05 0.1" type="cylinder" conaffinity="0" contype="0" group="1" name="table_leg2_visual" material="table_legs_metal"/>
       <geom pos="0 0 0" size="0.05 0.1" type="cylinder" conaffinity="0" contype="0" group="1" name="table_leg3_visual" material="table_legs_metal"/>
       <geom pos="0 0 0" size="0.05 0.1" type="cylinder" conaffinity="0" contype="0" group="1" name="table_leg4_visual" material="table_legs_metal"/>
-      
-      <!-- Incline table for test -->
-      <!-- <geom pos="0.1 0 0.1" euler="0 -45.0 0" size="0.1 0.1 0.01" type="box" group="0" name="table_incline_collision" friction="1 0.005 0.0001"/> -->
-      <!-- <geom pos="0.1 0 0.1" euler="0 -45.0 0" size="0.1 0.1 0.01" type="box" group="1" name="table_incline_visual" friction="1 0.005 0.0001" rgba="1 0 0 0.5"/> -->
     </body>
     <light pos="1.0 1.0 1.5" dir="-0.2 -0.2 -1" specular="0.3 0.3 0.3" directional="true" castshadow="false"/>
     <!-- front view -->
     <camera mode="fixed" name="frontview" pos="1.6 0 1.45" quat="0.56 0.43 0.43 0.56"/>
-    <!-- close view -->
-    <camera mode="fixed" name="closeview" pos="0.7 0 1.15" quat="0.56 0.43 0.43 0.56"/>
     <!-- bird view -->
     <camera mode="fixed" name="birdview" pos="-0.2 0 3.0" quat="0.7071 0 0 0.7071"/>
     <!-- agent view -->

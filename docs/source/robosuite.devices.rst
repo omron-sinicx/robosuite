@@ -12,10 +12,26 @@ robosuite.devices.device module
    :undoc-members:
    :show-inheritance:
 
+robosuite.devices.dualsense module
+----------------------------------
+
+.. automodule:: robosuite.devices.dualsense
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 robosuite.devices.keyboard module
 ---------------------------------
 
 .. automodule:: robosuite.devices.keyboard
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+robosuite.devices.mjgui module
+------------------------------
+
+.. automodule:: robosuite.devices.mjgui
    :members:
    :undoc-members:
    :show-inheritance:

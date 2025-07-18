@@ -5,6 +5,7 @@ from robosuite.environments.robot_env import RobotEnv
 from robosuite.models.base import MujocoModel
 from robosuite.models.grippers import GripperModel
 from robosuite.robots import ROBOT_CLASS_MAPPING, FixedBaseRobot, MobileRobot
+from robosuite.robots.legged_robot import LeggedRobot
 from robosuite.utils.observables import Observable, sensor
 
 
@@ -24,9 +25,9 @@ class ManipulationEnv(RobotEnv):
             dict if same controller is to be used for all robots or else it should be a list of the same length as
             "robots" param
 
-        base_types (None or str or list of str): type of base, used to instantiate base models from base factory.
+        base_types (str or list of str): type of base, used to instantiate base models from base factory.
             Default is "default", which is the default base associated with the robot(s) the 'robots' specification.
-            None results in no base, and any other (valid) model overrides the default base. Should either be
+            "NullMount" results in no base, and any other (valid) model overrides the default base. Should either be
             single str if same base type is to be used for all robots or else it should be a list of the same
             length as "robots" param
 
@@ -58,9 +59,9 @@ class ManipulationEnv(RobotEnv):
 
         has_offscreen_renderer (bool): True if using off-screen rendering
 
-        render_camera (str): Name of camera to render if `has_renderer` is True. Setting this value to 'None'
+        render_camera (str or list of str): Name of camera to render if `has_renderer` is True. Setting this value to 'None'
             will result in the default angle being applied, which is useful as it can be dragged / panned by
-            the user using the mouse
+            the user using the mouse. When a list of strings is provided, it will render from multiple camera angles.
 
         render_collision_mesh (bool): True if rendering collision meshes in camera. False otherwise.
 
@@ -486,5 +487,5 @@ class ManipulationEnv(RobotEnv):
             robots = [robots]
         for robot in robots:
             assert issubclass(ROBOT_CLASS_MAPPING[robot], FixedBaseRobot) or issubclass(
-                ROBOT_CLASS_MAPPING[robot], MobileRobot
+                ROBOT_CLASS_MAPPING[robot], MobileRobot or issubclass(ROBOT_CLASS_MAPPING[robot], LeggedRobot)
             ), f"Only manipulator robots supported for manipulation environment! Got {ROBOT_CLASS_MAPPING[robot]}"

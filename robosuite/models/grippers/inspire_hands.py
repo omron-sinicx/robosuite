@@ -24,12 +24,19 @@ class InspireLeftHand(GripperModel):
         # 0 is thumb rot, no copying. Thumb bend has 3 joints, so copy 3 times. Other fingers has 2 joints, so copy 2 times.
         assert len(action) == self.dof
         action = np.array(action)
-        indices = np.array([0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
+        indices = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5])
         return action[indices]
 
     @property
     def init_qpos(self):
         return np.array([0.0] * 12)
+
+    @property
+    def grasp_qpos(self):
+        return {
+            -1: np.array([-1.5, -1.5, -1.5, -1.5, -3, 3]),  # open
+            1: np.array([1.5, 1.5, 1.5, 1.5, 3, 3]),  # close
+        }
 
     @property
     def speed(self):
@@ -94,12 +101,19 @@ class InspireRightHand(GripperModel):
         # 0 is thumb rot, no copying. Thumb bend has 3 joints, so copy 3 times. Other fingers has 2 joints, so copy 2 times.
         assert len(action) == self.dof
         action = np.array(action)
-        indices = np.array([0, 1, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5])
+        indices = np.array([0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 4, 5])
         return action[indices]
 
     @property
     def init_qpos(self):
         return np.array([0.0] * 12)
+
+    @property
+    def grasp_qpos(self):
+        return {
+            -1: np.array([-1.5, -1.5, -1.5, -1.5, -3, 3]),  # open
+            1: np.array([1.5, 1.5, 1.5, 1.5, 3, 3]),  # close
+        }
 
     @property
     def speed(self):
