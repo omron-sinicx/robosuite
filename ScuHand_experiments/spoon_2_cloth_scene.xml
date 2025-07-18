@@ -1,0 +1,167 @@
+<mujoco model="spoon_cloth_scene">
+    <compiler angle="radian" coordinate="local"/>
+    <option timestep="0.002"/>
+
+    <asset>
+        <material name="cloth_mat" rgba="1 0 0 0.3"/>
+        <material name="table_mat" rgba="0.64 0.4 0.2 1"/>
+    </asset>
+
+    <worldbody>
+
+        <!-- Cloth patch 1 -->
+        <composite prefix="spoon_head1" type="grid" count="11 6 1" spacing="0.01" offset="0.0 0.0 0.1">
+            <joint kind="main" stiffness="1" damping="0.02"
+                   solimpfix="0.9 0.95 0.001" solreffix="0.01 1"/>
+            <tendon kind="shear" stiffness="1" damping="0.02"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1" width="0.001"/>
+            <tendon kind="main" stiffness="1" damping="0.02"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1"/>
+            <skin material="cloth_mat" texcoord="true" inflate="0.0001" subgrid="3" rgba="1 1 1 0.6"/>
+            <geom group="0" type="sphere" size="0.005" rgba="0 0 1 0.8"
+                  friction="0.8 0.8 0.8" solimp="0.9 0.95 0.001"
+                  solref="0.01 1" condim="4"/>
+        </composite>
+
+        <!-- Cloth patch 2 -->
+        <composite prefix="spoon_head2" type="grid" count="11 6 1" spacing="0.01" offset="0.0 0.06 0.1">
+            <joint kind="main" stiffness="0.1" damping="0.02"
+                   solimpfix="0.9 0.95 0.001" solreffix="0.01 1"/>
+            <tendon kind="shear" stiffness="1" damping="0.02"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1" width="0.001"/>
+            <tendon kind="main" stiffness="1" damping="0.02"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1"/>
+            <skin material="cloth_mat" texcoord="true" inflate="0.0001" subgrid="3" rgba="1 1 1 0.6"/>
+            <geom group="0" type="sphere" size="0.005" rgba="0 0 1 0.8"
+                  friction="0.8 0.8 0.8" solimp="0.9 0.95 0.001"
+                  solref="0.01 1" condim="4"/>
+        </composite>
+
+
+        <body name="spoon_base" pos="0.0 0.0 0.108">
+            <joint name="base_free" type="free"/>
+            <geom name="spoon_handle" pos="0.045 0.02 0.0" type="cylinder"
+                size="0.0035 0.05" mass="0.01"
+                quat="0 0.707 0 0.707" rgba="0.4 0.4 0.4 1"/>
+
+            <body name="handle0" pos="-0.005 0.02 0.0">
+                <geom name="handle0" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle1" pos="0.005 0.02 0.0">
+                <geom name="handle1" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle2" pos="0.015 0.02 0.0">
+                <geom name="handle2" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle3" pos="0.025 0.02 0.0">
+                <geom name="handle3" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle4" pos="0.035 0.02 0.0">
+                <geom name="handle4" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle5" pos="0.045 0.02 0.0">
+                <geom name="handle5" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+        </body>
+
+
+
+        <body name="table" pos="0 0 0.05"><geom type="box" size="0.2 0.2 0.02" pos="0 0 0.02" material="table_mat"/></body>
+
+        <!-- <body name="test_ball" pos="0.0 0.0 0.3">
+            <joint type="free"/>
+            <geom type="sphere" size="0.007" mass="0.0001" rgba="0 1 0 1"/>
+        </body> -->
+
+    </worldbody>
+
+
+    <actuator>
+        <!-- Position actuators for x, y, z -->
+        <general joint="base_free" gainprm="200 0 0" gear="1 0 0 0 0 0"/>  <!-- x -->
+        <general joint="base_free" gainprm="200 0 0" gear="0 1 0 0 0 0"/>  <!-- y -->
+        <general joint="base_free" gainprm="200 0 0" gear="0 0 1 0 0 0"/>  <!-- z -->
+
+        <!-- Orientation actuators (quaternion parts q1, q2, q3) -->
+        <general joint="base_free" gainprm="100 0 0" gear="0 0 0 1 0 0"/>  <!-- q1 -->
+        <general joint="base_free" gainprm="100 0 0" gear="0 0 0 0 1 0"/>  <!-- q2 -->
+        <general joint="base_free" gainprm="100 0 0" gear="0 0 0 0 0 1"/>  <!-- q3 -->
+    </actuator>
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- Weld connections -->
+    <equality>
+        <!-- Weld right edge between cloth patches -->
+        <weld body1="spoon_head1B0_5" body2="spoon_head2B0_0"/>
+        <weld body1="spoon_head1B1_5" body2="spoon_head2B1_0"/>
+        <weld body1="spoon_head1B2_5" body2="spoon_head2B2_0"/>
+        <weld body1="spoon_head1B3_5" body2="spoon_head2B3_0"/>
+        <weld body1="spoon_head1B4_5" body2="spoon_head2B4_0"/>
+
+        <!-- Weld left edge to handles -->
+        <weld body1="spoon_head1B5_5" body2="handle0"/>
+        <weld body1="spoon_head1B6_5" body2="handle1"/>
+        <weld body1="spoon_head1B7_5" body2="handle2"/>
+        <weld body1="spoon_head1B8_5" body2="handle3"/>
+        <weld body1="spoon_head1B9_5" body2="handle4"/>
+        <weld body1="spoon_head1B10_5" body2="handle5"/>
+    </equality>
+
+</mujoco>
+
+
+
+
+
+        <!-- <weld body1="spoon_head1B5_0" body2="handle0"/>
+        <weld body1="spoon_head1B6_0" body2="handle1"/>
+        <weld body1="spoon_head1B7_0" body2="handle2"/>
+        <weld body1="spoon_head1B8_0" body2="handle3"/>
+        <weld body1="spoon_head1B9_0" body2="handle4"/>
+        <weld body1="spoon_head1B10_0" body2="handle5"/> -->
+
+        <!-- <weld body1="spoon_head1B0_5" body2="handle6"/>
+        <weld body1="spoon_head1B1_5" body2="handle7"/>
+        <weld body1="spoon_head1B2_5" body2="handle8"/>
+        <weld body1="spoon_head1B3_5" body2="handle9"/>
+        <weld body1="spoon_head1B4_5" body2="handle10"/>
+        <weld body1="spoon_head1B5_5" body2="handle11"/>
+
+        <weld body1="spoon_head1B0_0" body2="handle6"/>
+        <weld body1="spoon_head1B1_0" body2="handle7"/>
+        <weld body1="spoon_head1B2_0" body2="handle8"/>
+        <weld body1="spoon_head1B3_0" body2="handle9"/>
+        <weld body1="spoon_head1B4_0" body2="handle10"/>
+        <weld body1="spoon_head1B5_0" body2="handle11"/> -->
+
+
+            <!-- <body name="handle6" pos="-0.04 0.045 0.0">
+                <geom name="handle6" type="sphere" size="0.005" mass="0" rgba="1 0.8 0 1"/>
+            </body>
+
+            <body name="handle7" pos="-0.06 0.045 0.0">
+                <geom name="handle7" type="sphere" size="0.005" mass="0" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle8" pos="-0.08 0.045 0.0">
+                <geom name="handle8" type="sphere" size="0.005" mass="0" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle9" pos="-0.10 0.045 0.0">
+                <geom name="handle9" type="sphere" size="0.005" mass="0" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle10" pos="-0.12 0.045 0.0">
+                <geom name="handle10" type="sphere" size="0.005" mass="0" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle11" pos="-0.14 0.045 0.0">
+                <geom name="handle11" type="sphere" size="0.005" mass="0" rgba="1 0.8 0 1"/>
+            </body> -->

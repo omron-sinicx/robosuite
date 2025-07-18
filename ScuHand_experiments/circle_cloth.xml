@@ -1,0 +1,133 @@
+<mujoco model="Pancake">
+  <include file="scene.xml"/>
+
+  <option timestep="0.001" solver="CG" tolerance="1e-6" integrator="implicitfast"/>
+
+  <size memory="10M"/>
+
+  <visual>
+    <map stiffness="100"/>
+  </visual>
+
+  <default>
+    <default class="wall">
+      <geom type="plane" size=".5 .5 .05"/>
+    </default>
+  </default>
+
+  <worldbody>
+
+    <geom type="box" pos="1.5 0 0.25" size=".5 2 .25"/>
+    <geom type="box" pos="0 0 0.25" size="5 5 .05"/>
+
+    <!-- <flexcomp type="disc" count="9 9 1" spacing=".1 .1 .1" pos="0 0 .5"
+              radius=".001" mass=".5" name="plate" dim="2">
+      <contact condim="3" solref="0.01 1" solimp=".95 .99 .0001"/>
+      <edge equality="true" damping="10"/>
+      <elasticity poisson="0" thickness="8e-3" young="3e5" elastic2d="bend"/>
+    </flexcomp> -->
+
+    <!-- <flexcomp type="mesh" file="cut_disc_3d.obj" pos="-0.5 0 5.5" dim="3" euler="0 -90 0"
+              origin="0 0 0" radius=".001" rgba="0 .7 .7 1" mass=".5" name="left">
+      <contact condim="3" solref="0.01 1" solimp=".95 .99 .0001"/>   
+      <edge equality="true" solimp="0.95 0.99 0.001 0.5 2"/>
+      <elasticity poisson="0" thickness="0.0001" young="3e5" elastic2d="bend"/>
+    </flexcomp> -->
+
+
+    <!-- <flexcomp type="mesh" file="clipped_circle.obj" pos="-0.5 0 0.33" dim="2"
+              origin="0 0 0" radius="0.001" rgba="0 0.7 0.2 0.5" mass="10" name="cut_circle">
+      <contact condim="3" solref="0.01 1" solimp=".95 .99 .0001"/>   
+      <edge equality="true" solimp="0.95 0.99 0.001 0.5 2"/>
+      <elasticity poisson="0" thickness="0.0001" young="3e5" elastic2d="bend"/>
+    </flexcomp> -->
+
+
+    <flexcomp type="mesh" file="cut_circle.obj" pos="-0.5 0 3.5" dim="2"
+              origin="0 0 0" radius="0.001" rgba="0 0.7 0.2 0.5" mass="10" name="cut_circle">
+      <contact condim="3" solref="0.01 1" solimp=".95 .99 .0001"/>   
+      <edge equality="true" solimp="0.95 0.99 0.001 0.5 2"/>
+      <elasticity poisson="0" thickness="0.0001" young="3e5" elastic2d="bend"/>
+    </flexcomp>
+
+    <flexcomp type="mesh" file="cut_circle1.obj" pos="-3.0 0 3.5" dim="2"
+              origin="0 0 0" radius="0.001" rgba="0 0.7 0.2 0.5" mass="10" name="cut_circle1">
+      <contact condim="3" solref="0.01 1" solimp=".95 .99 .0001"/>
+      <edge equality="true" solimp="0.95 0.99 0.001 0.5 2"/>
+      <elasticity poisson="0" thickness="0.0001" young="3e5" elastic2d="bend"/>
+    </flexcomp>
+
+
+
+    <!-- <geom type="cylinder" pos="0 0 0.28" size="0.05 0.001" rgba="1 0 0 1"/> -->
+    <!-- <geom name="table1" type="box" pos="0 0 0.28" size="0.05 0.05 0.001" rgba="1 0 0 1"/> -->
+    <!-- Cloth body -->
+    <!-- <body name="head" pos="0 0 0">
+      <joint name="head" type="slide" axis="0 0 1"/>
+      <geom type="cylinder" size="0.002 0.01" rgba="1 0 0 1"/>
+      <flexcomp type="mesh" file="clipped_circle.obj" pos="0 0 0.5" dim="2"
+                origin="0 0 0" radius="0.001" rgba="0 0.7 0.2 0.5" mass="1" name="cut_circle">
+        <contact condim="3" solref="0.01 1" solimp="0.95 0.99 0.0001"/>
+        <edge equality="true" solimp="0.99 0.999 0.0001 1 10"/>
+        <elasticity poisson="0" thickness="0.002" young="1e5" elastic2d="bend"/>
+      </flexcomp>
+    </body> -->
+
+    <!-- <flexcomp type="mesh" file="clipped_circle.obj" pos="0 0 0.5" dim="2"
+              origin="0 0 0" radius="0.001" rgba="0 0.7 0.2 0.5" mass="0.1" name="cut_circle">
+      <contact condim="3" solref="0.01 1" solimp="0.95 0.99 0.0001"/>
+      <edge equality="true" solimp="0.99 0.999 0.0001 1 10"/>
+      <elasticity poisson="0.4" thickness="0.0008" young="1e6" damping="0.0" elastic2d="bend" />
+    </flexcomp> -->
+
+
+
+    <!-- External handle bodies: root at world (or attach to other parents) -->
+    <!-- <body name="handle_left" pos="0.0 0.0 0.5">
+      <joint name="handle_left" type="free"/>
+      <geom type="sphere" size="0.01" rgba="1 0 0 1"/>
+    </body>
+
+    <body name="handle_right" pos="0.0 0.0 0.5">
+      <joint name="handle_right" type="free"/>
+      <geom type="sphere" size="0.01" rgba="0 1 0 1"/>
+    </body> -->
+
+
+    <!-- External handle bodies: root at world (or attach to other parents) -->
+    <!-- <body name="handle_left" pos="1.0 0.0 0.5">
+      <joint name="handle_left" type="free"/>
+      <geom type="sphere" size="0.01" rgba="1 0 0 1"/>
+    </body>
+
+    <body name="handle_right" pos="1.0 0.0 0.5">
+      <joint name="handle_right" type="free"/>
+      <geom type="sphere" size="0.01" rgba="0 1 0 1"/>
+    </body> -->
+
+
+  </worldbody>
+
+
+
+
+</mujoco>
+
+
+
+
+
+    <!-- <flexcomp type="disc" count="9 9 1" spacing=".1 .1 .1" pos="0 0 .5"
+              radius=".01" mass=".5" name="plate" dim="2">
+      <contact condim="3" solref="0.01 1" solimp=".95 .99 .0001"/>
+      <edge equality="true" damping="10"/>
+      <elasticity poisson="0" thickness="8e-3" young="3e5" elastic2d="bend"/>
+      <pin id="0 1 2 3 4 5 6 7 9 11 13 15 17 19 41 45 46 50 53 57 58 61 62 63 64"/>
+
+    </flexcomp> -->
+
+    <!-- <flexcomp type="circle" name="ring" count="9 9 1" spacing=".1 .1 .1" radius="0.01" mass="0.1" dim="1" pos="0 0 0.1">
+      <contact condim="3" solref="0.01 1" solimp="0.95 0.99 0.0001"/>
+      <edge damping="2"/>
+      <elasticity poisson="0.0" young="1e5" thickness="0.003"/>
+    </flexcomp> -->

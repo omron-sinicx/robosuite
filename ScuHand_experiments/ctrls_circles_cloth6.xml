@@ -1,0 +1,701 @@
+<mujoco model="Ctrl_circle_cloth">
+
+    <include file="scene.xml"/>
+    <include file="auxiliary_objects.xml"/>
+
+    <asset>
+        <mesh name="scu_hand" file="SCU-Hnad_UR_no_sheet.STL" scale="0.001 0.001 0.001"/>
+        <mesh name="scroll_stick" file="hexagonal_prism.obj" scale="0.0003 0.0003 0.003"/>
+        <mesh name="half_funnel" file="half_funnel3.obj" scale="2 1 3"/>
+
+    </asset>
+
+    <option timestep="0.001"/>
+    <option gravity="0 0 0"/>
+
+
+    <!-- <option timestep="0.002" iterations="100" integrator="implicitfast"/> -->
+
+    <worldbody>
+
+        <flexcomp type="mesh" file="clipped_concentric_circle_1.obj" pos="-0.0087 0.177269  0.2" quat="0.653281 -0.270598 -0.270598 -0.653282" dim="2"
+                    origin="0 0 0" radius="0.0001" rgba="0 0.7 0 0.3" mass="0.01" name="c">
+            <contact condim="3" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+            <edge equality="true" solref="1e-5 1" solimp="1 1 0 0 1" damping="0.0"/>
+            <elasticity poisson="0.49" thickness="0.0002" young="5e8" damping="0.00" elastic2d="bend"/>
+        </flexcomp>
+
+        <body name="scu_hand" pos="0.0 0.0 0.3" quat="0 -1 0 0">
+            <geom name="scu_hand_geom" quat="0 0 0 1" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" mesh="scu_hand"/>
+            <body name="scroll_stick" pos="-0.0003 -0.105  0.035" quat="0.92387953 0.38268343 0. 0.">
+                <joint name="scroll_stick_joint" type="hinge" axis="0 0 1"/>
+                <geom name="scroll_stick_geom" type="mesh" rgba="0.6 0.6 0.6 1" mass="150" mesh="scroll_stick"/>
+            </body>
+
+            <!-- <body name="fix_1" pos="0 -0.15 0.075" quat="0.92387953 0.38268343 0. 0.">
+                <geom type="box" size="0.04 0.001 0.01" rgba="1 0 0 0.1"/>
+            </body>
+            <body name="fix_2" pos="0 -0.15 0.04" quat="0.92387953 0.38268343 0. 0.">
+                <geom type="box" size="0.04 0.001 0.02" rgba="0 0 1 0.1"/>
+            </body> -->
+
+            <!-- <body name="half_funnel1" pos="0 -0.15 0.04" quat="0.92387953 0.38268343 0. 0.">
+                <geom name="half_funnel_geom" type="mesh" rgba="0.6 0.6 0.6 1" mass="0.01" mesh="half_funnel"/>
+            </body> -->
+
+
+
+            <body name="h2c0" pos="-0.0087 -0.139508  0.064412"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c1" pos="-0.0087 -0.144439  0.07269"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c2" pos="-0.0087 -0.152029 0.079453"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c3" pos="-0.0087 -0.159381 0.08427"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+        </body>
+
+
+        <body name="ctrl_0" pos="-0.0087 0.177269 0.2">
+            <joint name="ctrl_0_joint" type="free"/>
+            <geom name="ctrl_0_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_1" pos="-0.00868547 0.17137645 0.20589255">
+            <joint name="ctrl_1_joint" type="free"/>
+            <geom name="ctrl_1_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_2" pos="-0.00529814 0.17188979 0.20537921">
+            <joint name="ctrl_2_joint" type="free"/>
+            <geom name="ctrl_2_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_3" pos="-0.00249871 0.17333273 0.20393626">
+            <joint name="ctrl_3_joint" type="free"/>
+            <geom name="ctrl_3_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_4" pos="-0.00077094 0.17545592 0.20181308">
+            <joint name="ctrl_4_joint" type="free"/>
+            <geom name="ctrl_4_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_5" pos="-0.00041344 0.17789243 0.19937656">
+            <joint name="ctrl_5_joint" type="free"/>
+            <geom name="ctrl_5_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_6" pos="-0.00148796 0.1802212 0.19704779">
+            <joint name="ctrl_6_joint" type="free"/>
+            <geom name="ctrl_6_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_7" pos="-0.00380884 0.18203979 0.1952292">
+            <joint name="ctrl_7_joint" type="free"/>
+            <geom name="ctrl_7_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_8" pos="-0.00697498 0.18303393 0.19423507">
+            <joint name="ctrl_8_joint" type="free"/>
+            <geom name="ctrl_8_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_9" pos="-0.01043923 0.1830318 0.19423721">
+            <joint name="ctrl_9_joint" type="free"/>
+            <geom name="ctrl_9_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_10" pos="-0.01360291 0.18203377 0.19523524">
+            <joint name="ctrl_10_joint" type="free"/>
+            <geom name="ctrl_10_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_11" pos="-0.01591929 0.18021232 0.19705669">
+            <joint name="ctrl_11_joint" type="free"/>
+            <geom name="ctrl_11_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_12" pos="-0.01698809 0.17788222 0.19938679">
+            <joint name="ctrl_12_joint" type="free"/>
+            <geom name="ctrl_12_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_13" pos="-0.01662457 0.17544615 0.20182285">
+            <joint name="ctrl_13_joint" type="free"/>
+            <geom name="ctrl_13_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_14" pos="-0.01489159 0.1733251 0.20394391">
+            <joint name="ctrl_14_joint" type="free"/>
+            <geom name="ctrl_14_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_15" pos="-0.0120886 0.17188561 0.20538339">
+            <joint name="ctrl_15_joint" type="free"/>
+            <geom name="ctrl_15_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_16" pos="-0.00870001 0.17137644 0.20589255">
+            <joint name="ctrl_16_joint" type="free"/>
+            <geom name="ctrl_16_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_17" pos="-0.00867093 0.1654839 0.21178509">
+            <joint name="ctrl_17_joint" type="free"/>
+            <geom name="ctrl_17_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_18" pos="-0.00189628 0.16651058 0.21075841">
+            <joint name="ctrl_18_joint" type="free"/>
+            <geom name="ctrl_18_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_19" pos="0.00370259 0.16939646 0.20787253">
+            <joint name="ctrl_19_joint" type="free"/>
+            <geom name="ctrl_19_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_20" pos="0.00715811 0.17364283 0.20362616">
+            <joint name="ctrl_20_joint" type="free"/>
+            <geom name="ctrl_20_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_21" pos="0.00787312 0.17851586 0.19875313">
+            <joint name="ctrl_21_joint" type="free"/>
+            <geom name="ctrl_21_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_22" pos="0.00572406 0.18317341 0.19409558">
+            <joint name="ctrl_22_joint" type="free"/>
+            <geom name="ctrl_22_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_23" pos="0.00108232 0.1868106 0.1904584">
+            <joint name="ctrl_23_joint" type="free"/>
+            <geom name="ctrl_23_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_24" pos="-0.00524996 0.18879885 0.18847015">
+            <joint name="ctrl_24_joint" type="free"/>
+            <geom name="ctrl_24_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_25" pos="-0.01217845 0.18879458 0.18847442">
+            <joint name="ctrl_25_joint" type="free"/>
+            <geom name="ctrl_25_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_26" pos="-0.01850581 0.18679853 0.19047048">
+            <joint name="ctrl_26_joint" type="free"/>
+            <geom name="ctrl_26_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_27" pos="-0.02313859 0.18315563 0.19411338">
+            <joint name="ctrl_27_joint" type="free"/>
+            <geom name="ctrl_27_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_28" pos="-0.02527617 0.17849545 0.19877356">
+            <joint name="ctrl_28_joint" type="free"/>
+            <geom name="ctrl_28_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_29" pos="-0.02454915 0.1736233 0.20364571">
+            <joint name="ctrl_29_joint" type="free"/>
+            <geom name="ctrl_29_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_30" pos="-0.02108316 0.1693812 0.20788781">
+            <joint name="ctrl_30_joint" type="free"/>
+            <geom name="ctrl_30_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_31" pos="-0.01547719 0.16650221 0.21076679">
+            <joint name="ctrl_31_joint" type="free"/>
+            <geom name="ctrl_31_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_32" pos="-0.00870002 0.16548388 0.21178511">
+            <joint name="ctrl_32_joint" type="free"/>
+            <geom name="ctrl_32_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_33" pos="-0.0086564 0.15959136 0.21767764">
+            <joint name="ctrl_33_joint" type="free"/>
+            <geom name="ctrl_33_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_34" pos="0.00150558 0.16113137 0.21613762">
+            <joint name="ctrl_34_joint" type="free"/>
+            <geom name="ctrl_34_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_35" pos="0.00990388 0.16546019 0.21180879">
+            <joint name="ctrl_35_joint" type="free"/>
+            <geom name="ctrl_35_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_36" pos="0.01508717 0.17182975 0.20543923">
+            <joint name="ctrl_36_joint" type="free"/>
+            <geom name="ctrl_36_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_37" pos="0.01615968 0.17913929 0.1981297">
+            <joint name="ctrl_37_joint" type="free"/>
+            <geom name="ctrl_37_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_38" pos="0.0129361 0.18612561 0.19114337">
+            <joint name="ctrl_38_joint" type="free"/>
+            <geom name="ctrl_38_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_39" pos="0.00597347 0.19158139 0.1856876">
+            <joint name="ctrl_39_joint" type="free"/>
+            <geom name="ctrl_39_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_40" pos="-0.00352494 0.19456378 0.18270522">
+            <joint name="ctrl_40_joint" type="free"/>
+            <geom name="ctrl_40_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_41" pos="-0.01391768 0.19455738 0.18271163">
+            <joint name="ctrl_41_joint" type="free"/>
+            <geom name="ctrl_41_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_42" pos="-0.02340872 0.1915633 0.18570572">
+            <joint name="ctrl_42_joint" type="free"/>
+            <geom name="ctrl_42_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_43" pos="-0.03035788 0.18609895 0.19117006">
+            <joint name="ctrl_43_joint" type="free"/>
+            <geom name="ctrl_43_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_44" pos="-0.03356426 0.17910867 0.19816035">
+            <joint name="ctrl_44_joint" type="free"/>
+            <geom name="ctrl_44_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_45" pos="-0.03247372 0.17180046 0.20546855">
+            <joint name="ctrl_45_joint" type="free"/>
+            <geom name="ctrl_45_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_46" pos="-0.02727475 0.16543729 0.21183172">
+            <joint name="ctrl_46_joint" type="free"/>
+            <geom name="ctrl_46_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_47" pos="-0.01886579 0.16111882 0.21615018">
+            <joint name="ctrl_47_joint" type="free"/>
+            <geom name="ctrl_47_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_48" pos="-0.00870003 0.15959133 0.21767767">
+            <joint name="ctrl_48_joint" type="free"/>
+            <geom name="ctrl_48_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_49" pos="-0.00864186 0.15369881 0.22357018">
+            <joint name="ctrl_49_joint" type="free"/>
+            <geom name="ctrl_49_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_50" pos="0.00490743 0.15575215 0.22151683">
+            <joint name="ctrl_50_joint" type="free"/>
+            <geom name="ctrl_50_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_51" pos="0.01610517 0.16152392 0.21574506">
+            <joint name="ctrl_51_joint" type="free"/>
+            <geom name="ctrl_51_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_52" pos="0.02301623 0.17001667 0.20725231">
+            <joint name="ctrl_52_joint" type="free"/>
+            <geom name="ctrl_52_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_53" pos="0.02444624 0.17976272 0.19750626">
+            <joint name="ctrl_53_joint" type="free"/>
+            <geom name="ctrl_53_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_54" pos="0.02014812 0.18907782 0.18819116">
+            <joint name="ctrl_54_joint" type="free"/>
+            <geom name="ctrl_54_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_55" pos="0.01086462 0.19635219 0.1809168">
+            <joint name="ctrl_55_joint" type="free"/>
+            <geom name="ctrl_55_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_56" pos="-0.00179992 0.20032871 0.17694029">
+            <joint name="ctrl_56_joint" type="free"/>
+            <geom name="ctrl_56_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_57" pos="-0.0156569 0.20032017 0.17694884">
+            <joint name="ctrl_57_joint" type="free"/>
+            <geom name="ctrl_57_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_58" pos="-0.02831163 0.19632807 0.18094095">
+            <joint name="ctrl_58_joint" type="free"/>
+            <geom name="ctrl_58_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_59" pos="-0.03757718 0.18904228 0.18822675">
+            <joint name="ctrl_59_joint" type="free"/>
+            <geom name="ctrl_59_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_60" pos="-0.04185234 0.17972189 0.19754714">
+            <joint name="ctrl_60_joint" type="free"/>
+            <geom name="ctrl_60_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_61" pos="-0.0403983 0.16997762 0.2072914">
+            <joint name="ctrl_61_joint" type="free"/>
+            <geom name="ctrl_61_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_62" pos="-0.03346633 0.16149339 0.21577562">
+            <joint name="ctrl_62_joint" type="free"/>
+            <geom name="ctrl_62_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_63" pos="-0.02225438 0.15573543 0.22153358">
+            <joint name="ctrl_63_joint" type="free"/>
+            <geom name="ctrl_63_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_64" pos="-0.00870004 0.15369877 0.22357022">
+            <joint name="ctrl_64_joint" type="free"/>
+            <geom name="ctrl_64_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_65" pos="-0.00862733 0.14780626 0.22946273">
+            <joint name="ctrl_65_joint" type="free"/>
+            <geom name="ctrl_65_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_66" pos="0.00830929 0.15037294 0.22689604">
+            <joint name="ctrl_66_joint" type="free"/>
+            <geom name="ctrl_66_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_67" pos="0.02230646 0.15758765 0.21968132">
+            <joint name="ctrl_67_joint" type="free"/>
+            <geom name="ctrl_67_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_68" pos="0.03094527 0.16820358 0.20906539">
+            <joint name="ctrl_68_joint" type="free"/>
+            <geom name="ctrl_68_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_69" pos="0.03273281 0.18038615 0.19688282">
+            <joint name="ctrl_69_joint" type="free"/>
+            <geom name="ctrl_69_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_70" pos="0.02736016 0.19203003 0.18523895">
+            <joint name="ctrl_70_joint" type="free"/>
+            <geom name="ctrl_70_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_71" pos="0.01575578 0.20112299 0.176146">
+            <joint name="ctrl_71_joint" type="free"/>
+            <geom name="ctrl_71_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_72" pos="-7.48970739e-05 0.20609364 0.17117537">
+            <joint name="ctrl_72_joint" type="free"/>
+            <geom name="ctrl_72_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_73" pos="-0.01739613 0.20608297 0.17118605">
+            <joint name="ctrl_73_joint" type="free"/>
+            <geom name="ctrl_73_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_74" pos="-0.03321454 0.20109283 0.17617619">
+            <joint name="ctrl_74_joint" type="free"/>
+            <geom name="ctrl_74_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_75" pos="-0.04479648 0.1919856 0.18528344">
+            <joint name="ctrl_75_joint" type="free"/>
+            <geom name="ctrl_75_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_76" pos="-0.05014043 0.18033512 0.19693391">
+            <joint name="ctrl_76_joint" type="free"/>
+            <geom name="ctrl_76_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_77" pos="-0.04832287 0.16815477 0.20911426">
+            <joint name="ctrl_77_joint" type="free"/>
+            <geom name="ctrl_77_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_78" pos="-0.03965792 0.15754949 0.21971953">
+            <joint name="ctrl_78_joint" type="free"/>
+            <geom name="ctrl_78_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_79" pos="-0.02564298 0.15035203 0.22691697">
+            <joint name="ctrl_79_joint" type="free"/>
+            <geom name="ctrl_79_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_80" pos="-0.00870005 0.14780621 0.22946278">
+            <joint name="ctrl_80_joint" type="free"/>
+            <geom name="ctrl_80_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_81" pos="-0.00861279 0.14191371 0.23535528">
+            <joint name="ctrl_81_joint" type="free"/>
+            <geom name="ctrl_81_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_82" pos="0.01171115 0.14499373 0.23227524">
+            <joint name="ctrl_82_joint" type="free"/>
+            <geom name="ctrl_82_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_83" pos="0.02850776 0.15365138 0.22361759">
+            <joint name="ctrl_83_joint" type="free"/>
+            <geom name="ctrl_83_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_84" pos="0.03887433 0.16639049 0.21087847">
+            <joint name="ctrl_84_joint" type="free"/>
+            <geom name="ctrl_84_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_85" pos="0.04101937 0.18100957 0.19625939">
+            <joint name="ctrl_85_joint" type="free"/>
+            <geom name="ctrl_85_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_86" pos="0.03457218 0.19498223 0.18228674">
+            <joint name="ctrl_86_joint" type="free"/>
+            <geom name="ctrl_86_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_87" pos="0.02064694 0.20589378 0.17137521">
+            <joint name="ctrl_87_joint" type="free"/>
+            <geom name="ctrl_87_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_88" pos="0.00165011 0.21185856 0.16541044">
+            <joint name="ctrl_88_joint" type="free"/>
+            <geom name="ctrl_88_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_89" pos="-0.01913536 0.21184576 0.16542325">
+            <joint name="ctrl_89_joint" type="free"/>
+            <geom name="ctrl_89_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_90" pos="-0.03811745 0.20585759 0.17141144">
+            <joint name="ctrl_90_joint" type="free"/>
+            <geom name="ctrl_90_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_91" pos="-0.05201578 0.19492891 0.18234013">
+            <joint name="ctrl_91_joint" type="free"/>
+            <geom name="ctrl_91_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_92" pos="-0.05842851 0.18094834 0.1963207">
+            <joint name="ctrl_92_joint" type="free"/>
+            <geom name="ctrl_92_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_93" pos="-0.05624745 0.16633192 0.21093711">
+            <joint name="ctrl_93_joint" type="free"/>
+            <geom name="ctrl_93_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_94" pos="-0.04584949 0.15360559 0.22366343">
+            <joint name="ctrl_94_joint" type="free"/>
+            <geom name="ctrl_94_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_95" pos="-0.02903158 0.14496864 0.23230037">
+            <joint name="ctrl_95_joint" type="free"/>
+            <geom name="ctrl_95_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+        <body name="ctrl_96" pos="-0.00870006 0.14191366 0.23535533">
+            <joint name="ctrl_96_joint" type="free"/>
+            <geom name="ctrl_96_geom" type="sphere" size="0.001" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+
+    </worldbody>
+
+    <equality>
+        <weld body1="ctrl_0" body2="c_0" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_1" body2="c_1" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_2" body2="c_2" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_3" body2="c_3" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_4" body2="c_4" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_5" body2="c_5" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_6" body2="c_6" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_7" body2="c_7" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_8" body2="c_8" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_9" body2="c_9" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_10" body2="c_10" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_11" body2="c_11" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_12" body2="c_12" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_13" body2="c_13" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_14" body2="c_14" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_15" body2="c_15" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_16" body2="c_16" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_17" body2="c_17" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_18" body2="c_18" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_19" body2="c_19" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_20" body2="c_20" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_21" body2="c_21" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_22" body2="c_22" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_23" body2="c_23" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_24" body2="c_24" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_25" body2="c_25" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_26" body2="c_26" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_27" body2="c_27" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_28" body2="c_28" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_29" body2="c_29" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_30" body2="c_30" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_31" body2="c_31" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_32" body2="c_32" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_33" body2="c_33" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_34" body2="c_34" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_35" body2="c_35" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_36" body2="c_36" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_37" body2="c_37" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_38" body2="c_38" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_39" body2="c_39" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_40" body2="c_40" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_41" body2="c_41" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_42" body2="c_42" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_43" body2="c_43" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_44" body2="c_44" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_45" body2="c_45" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_46" body2="c_46" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_47" body2="c_47" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_48" body2="c_48" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_49" body2="c_49" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_50" body2="c_50" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_51" body2="c_51" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_52" body2="c_52" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_53" body2="c_53" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_54" body2="c_54" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_55" body2="c_55" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_56" body2="c_56" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_57" body2="c_57" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_58" body2="c_58" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_59" body2="c_59" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_60" body2="c_60" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_61" body2="c_61" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_62" body2="c_62" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_63" body2="c_63" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_64" body2="c_64" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_65" body2="c_65" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_66" body2="c_66" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_67" body2="c_67" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_68" body2="c_68" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_69" body2="c_69" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_70" body2="c_70" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_71" body2="c_71" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_72" body2="c_72" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_73" body2="c_73" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_74" body2="c_74" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_75" body2="c_75" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_76" body2="c_76" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_77" body2="c_77" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_78" body2="c_78" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_79" body2="c_79" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_80" body2="c_80" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_81" body2="c_81" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_82" body2="c_82" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_83" body2="c_83" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_84" body2="c_84" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_85" body2="c_85" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_86" body2="c_86" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_87" body2="c_87" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_88" body2="c_88" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_89" body2="c_89" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_90" body2="c_90" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_91" body2="c_91" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_92" body2="c_92" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_93" body2="c_93" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_94" body2="c_94" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_95" body2="c_95" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_96" body2="c_96" solref="1e-7 1" solimp="1 1 0.001"/>
+
+
+    </equality>
+
+
+    <equality>
+        <weld name="lock_1" body1="h2c0" body2="c_1" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_2" body1="h2c0" body2="c_2" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_3" body1="h2c0" body2="c_3" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+
+    </equality>
+
+
+
+
+    <equality>
+        <weld body1="h2c3" body2="c_48" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c2" body2="c_64" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c1" body2="c_80" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c0" body2="c_96" solref="1e-7 1" solimp="1 1 0.001"/>
+    </equality>
+
+
+    <!-- <actuator>
+        <position name="17_x_pos" joint="ctrl_17_joint" kp="0.1"/>
+        <position name="17_y_pos" joint="ctrl_17_joint" kp="0.1"/>
+        <position name="17_z_pos" joint="ctrl_17_joint" kp="0.1"/>
+    </actuator> -->
+
+    <!-- <actuator>
+        <position name="1_x_pos" joint="ctrl_1_joint" kp="0.1"/>
+        <position name="1_y_pos" joint="ctrl_1_joint" kp="0.1"/>
+        <position name="1_z_pos" joint="ctrl_1_joint" kp="0.1"/>
+    </actuator> -->
+
+    <actuator>
+        <velocity name="scroll_stick_joint" joint="scroll_stick_joint" ctrlrange="0 100"/>
+    </actuator>
+
+    <!-- <actuator>
+        <general joint="right" gainprm="200 0 0" gear="1 0 0 0 0 0"/>  
+        <general joint="right" gainprm="200 0 0" gear="0 1 0 0 0 0"/>  
+        <general joint="right" gainprm="200 0 0" gear="0 0 1 0 0 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 1 0 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 0 1 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 0 0 1"/>  
+    </actuator> -->
+
+
+</mujoco>
+
+
+

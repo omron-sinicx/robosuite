@@ -1,0 +1,153 @@
+<mujoco model="Ctrl_circle_cloth">
+
+    <include file="scene.xml"/>
+    <include file="auxiliary_objects.xml"/>
+
+    <asset>
+        <mesh name="scu_hand" file="SCU-Hnad_UR_no_sheet.STL" scale="0.001 0.001 0.001"/>
+    </asset>
+
+    <!-- <option timestep="0.002" iterations="100" integrator="implicitfast"/> -->
+
+    <worldbody>
+
+        <flexcomp type="mesh" file="clipped_concentric_circle_1.obj" pos="-0.0087 0.177269  0.13" quat="0.653281 -0.270598 -0.270598 -0.653282" dim="2"
+                    origin="0 0 0" radius="0.0001" rgba="0 0.7 0 0.3" mass="0.01" name="c">
+            <contact condim="3" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+            <edge equality="true" solref="1e-5 1" solimp="1 1 0 0 1" damping="0.0"/>
+            <elasticity poisson="0.49" thickness="0.0002" young="5e8" damping="0.00" elastic2d="bend"/>
+        </flexcomp>
+
+        <body name="scu_hand" pos="0.0 0.0 0.23" quat="0 -1 0 0">
+            <geom name="scu_hand_visual" quat="0 0 0 1" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" mesh="scu_hand"/>
+            <body name="h2c0" pos="-0.0087 -0.139508  0.064412"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c1" pos="-0.0087 -0.144439  0.07269"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c2" pos="-0.0087 -0.152029 0.079453"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c3" pos="-0.0087 -0.159381 0.08427"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+        </body>
+
+        <body name="left" pos="-0.0087 0.177269  0.13" quat="0.653281 -0.270598 -0.270598 -0.653282">
+            <joint name="left" type="free"/>
+
+            <geom name="left" pos="0.0287 0.0051 0.001" type="cylinder"
+                size="0.0001 0.022" mass="0.001"
+                quat="0.7071 -0.1228 0.6964 0.0" rgba="0.4 0.4 0.4 0"/>
+
+            <body name="left1" pos="0.00820673 0.00144707 0.0">
+                <geom name="left1" type="sphere" size="0.0005" mass="0.0001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="left2" pos="0.01641346 0.00289414 00.0">
+                <geom name="left2" type="sphere" size="0.0005" mass="0.0001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="left3" pos="0.02462019 0.0043412 0.0">
+                <geom name="left3" type="sphere" size="0.0005" mass="0.0001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="left4" pos="0.03282693 0.00578827 0.0">
+                <geom name="left4" type="sphere" size="0.0005" mass="0.0001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="left5" pos="0.04103366 0.00723534 0.0">
+                <geom name="left5" type="sphere" size="0.0005" mass="0.0001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="left6" pos="0.04924039 0.00868241 0.0">
+                <geom name="left6" type="sphere" size="0.0005" mass="0.0001" rgba="1 0.8 0 1"/>
+            </body>
+        </body>
+
+        <body name="right" pos="-0.0087 0.177269  0.13" quat="0.653281 -0.270598 -0.270598 -0.653282">
+            <joint name="right" type="free"/>
+            <geom name="right" pos="0.0287 0.0 0.001" type="cylinder"
+                size="0.0001 0.022" mass="0.0001"
+                quat="0 0.707 0 0.707" rgba="0.4 0.4 0.4 1"/>
+
+            <body name="right1" pos="0.00833333 0.0 0.0">
+                <geom name="right1" type="sphere" size="0.0005" mass="0.0001" rgba="0 1 1 1"/>
+            </body>
+            <body name="right2" pos="0.01666667 0.0 0.0">
+                <geom name="right2" type="sphere" size="0.0005" mass="0.0001" rgba="0 1 1 1"/>
+            </body>
+            <body name="right3" pos="0.025 0.0 0.0">
+                <geom name="right3" type="sphere" size="0.0005" mass="0.0001" rgba="0 1 1 1"/>
+            </body>
+            <body name="right4" pos="0.03333333 0.0 0.0">
+                <geom name="right4" type="sphere" size="0.0005" mass="0.0001" rgba="0 1 1 1"/>
+            </body>
+            <body name="right5" pos="0.04166667 0.0 0.0">
+                <geom name="right5" type="sphere" size="0.0005" mass="0.0001" rgba="0 1 1 1"/>
+            </body>
+            <body name="right6" pos="0.05 0.0 0.0">
+                <geom name="right6" type="sphere" size="0.0005" mass="0.0001" rgba="0 1 1 1"/>
+            </body>
+        </body>
+
+    </worldbody>
+
+
+
+    <equality>
+        <weld body1="h2c3" body2="c_48" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c2" body2="c_64" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c1" body2="c_80" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c0" body2="c_96" solref="1e-7 1" solimp="1 1 0.001"/>
+    </equality>
+
+    <equality>
+        <!-- <weld body1="c_1" body2="c_16" solref="1e-7 1" solimp="1 1 0.001"/> -->
+        <!-- <weld body1="c_17" body2="c_32" solref="1e-7 1" solimp="1 1 0.001"/> -->
+    </equality>
+
+    <!-- <equality>
+        <weld body1="h2c3" body2="c_33" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c2" body2="c_49" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c1" body2="c_65" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c0" body2="c_81" solref="1e-7 1" solimp="1 1 0.001"/>
+    </equality> -->
+
+    <equality>
+        <weld body1="left1" body2="c_1" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="left2" body2="c_17" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="left3" body2="c_33" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="left4" body2="c_49" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="left5" body2="c_65" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="left6" body2="c_81" solref="1e-7 1" solimp="1 1 0.001"/>
+    </equality>
+
+    <equality>
+        <weld body1="right1" body2="c_16" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="right2" body2="c_32" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="right3" body2="c_48" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="right4" body2="c_64" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="right5" body2="c_80" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="right6" body2="c_96" solref="1e-7 1" solimp="1 1 0.001"/>
+    </equality>
+
+    <actuator>
+        <general joint="left" gainprm="200 0 0" gear="1 0 0 0 0 0"/>  
+        <general joint="left" gainprm="200 0 0" gear="0 1 0 0 0 0"/>  
+        <general joint="left" gainprm="200 0 0" gear="0 0 1 0 0 0"/>  
+        <general joint="left" gainprm="100 0 0" gear="0 0 0 1 0 0"/>  
+        <general joint="left" gainprm="100 0 0" gear="0 0 0 0 1 0"/>  
+        <general joint="left" gainprm="100 0 0" gear="0 0 0 0 0 1"/>  
+    </actuator>
+
+    <actuator>
+        <general joint="right" gainprm="200 0 0" gear="1 0 0 0 0 0"/>  
+        <general joint="right" gainprm="200 0 0" gear="0 1 0 0 0 0"/>  
+        <general joint="right" gainprm="200 0 0" gear="0 0 1 0 0 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 1 0 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 0 1 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 0 0 1"/>  
+    </actuator>
+
+
+</mujoco>
+
+
+

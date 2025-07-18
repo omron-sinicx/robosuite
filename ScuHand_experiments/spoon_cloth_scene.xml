@@ -1,0 +1,84 @@
+<mujoco model="spoon_cloth_scene">
+    <compiler angle="radian" coordinate="local"/>
+    <option timestep="0.002"/>
+
+    <asset>
+        <material name="cloth_mat" rgba="1 0 0 0.3"/>
+    </asset>
+
+    <worldbody>
+
+
+        <!-- Spoon head: soft cloth grid aligned with the same plane -->
+        <!-- <composite prefix="spoon_head" type="grid" count="5 9 1" spacing="0.01" offset="0.5 0.0 0.1">
+            <joint kind="main" stiffness="0.01" damping="0.1"
+                   solimpfix="0.9 0.95 0.001" solreffix="0.01 1"/>
+            <tendon kind="shear" stiffness="0.1" damping="0.1"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1" width="0.001"/>
+            <tendon kind="main" stiffness="0.1" damping="0.1"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1"/>
+            <skin material="cloth_mat" texcoord="true" inflate="0.001" subgrid="3" rgba="0.8 0.8 0.2 0.7"/>
+            <geom group="0" type="sphere" size="0.005" rgba="0.2 0.2 1 0.8"
+                  friction="0.8 0.8 0.8" solimp="0.9 0.95 0.001"
+                  solref="0.01 1" condim="4"/>
+        </composite> -->
+
+        <composite prefix="spoon_head" type="grid" count="21 21 1" spacing="0.005" offset="0.5 0.0 0.05">
+            <joint kind="main" stiffness="0.1" damping="0.02"
+                solimpfix="0.9 0.95 0.001" solreffix="0.01 1"/>
+            <tendon kind="shear" stiffness="0.1" damping="0.02"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1" width="0.001"/>
+            <tendon kind="main" stiffness="0.1" damping="0.02"
+                    solimpfix="0.6 0.9 0.001" solreffix="0.01 1"/>
+            <skin material="cloth_mat" texcoord="true" inflate="0.001" subgrid="3" rgba="1 1 1 0.6"/>
+            <geom group="0" type="sphere" size="0.0015" rgba="0 0 1 0.8"
+                friction="0.8 0.8 0.8" solimp="0.9 0.95 0.001"
+                solref="0.01 1" condim="4"/>
+        </composite>
+
+
+        <!-- Spoon base with free joint -->
+        <body name="spoon_base" pos="0.0 0.0 0.1">
+            <!-- <joint name="spoon_free" type="free"/> -->
+
+            <geom name="spoon_handle" type="cylinder" size="0.004 0.05" mass="0"
+                  quat="0 0.707 0 0.707" rgba="0.4 0.4 0.4 1"/>
+
+            <body name="handle1" pos="0.05 0 0">
+                <geom name="handle1" size="0.005" type="sphere" mass="0" rgba="1 1 0 1"/>
+            </body>
+            <body name="handle2" pos="0.04 0 0">
+                <geom name="handle2" size="0.005" type="sphere" mass="0" rgba="1 1 0 1"/>
+            </body>
+            <body name="handle3" pos="0.03 0 0">
+                <geom name="handle3" size="0.005" type="sphere" mass="0" rgba="1 1 0 1"/>
+            </body>
+            <body name="handle4" pos="0.02 0 0">
+                <geom name="handle4" size="0.005" type="sphere" mass="0" rgba="1 1 0 1"/>
+            </body>
+            <body name="handle5" pos="0.01 0 0">
+                <geom name="handle5" size="0.005" type="sphere" mass="0" rgba="1 1 0 1"/>
+            </body>
+            <body name="handle6" pos="0.00 0 0">
+                <geom name="handle6" size="0.005" type="sphere" mass="0" rgba="1 1 0 1"/>
+            </body>
+        </body>
+
+
+
+
+
+
+    </worldbody>
+
+    <!-- Weld cloth nodes to handle anchor bodies -->
+    <equality>
+        <weld body1="handle1" body2="spoon_headB1_0"/>
+        <weld body1="handle2" body2="spoon_headB6_1"/>
+        <weld body1="handle3" body2="spoon_headB11_2"/>
+        <weld body1="handle4" body2="spoon_headB16_3"/>
+        <weld body1="handle5" body2="spoon_headB19_4"/>
+        <weld body1="handle6" body2="spoon_headB2_5"/>
+    </equality>
+
+</mujoco>

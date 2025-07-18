@@ -1,0 +1,758 @@
+<mujoco model="Ctrl_circle_cloth">
+
+    <include file="scene.xml"/>
+    <include file="auxiliary_objects.xml"/>
+
+    <asset>
+        <mesh name="scu_hand" file="SCU-Hnad_UR_no_sheet.STL" scale="0.001 0.001 0.001"/>
+        <mesh name="scroll_stick" file="hexagonal_prism.obj" scale="0.0003 0.0003 0.003"/>
+        <mesh name="half_funnel" file="half_funnel3.obj" scale="2 1 3"/>
+
+    </asset>
+
+    <option timestep="0.001"/>
+    <option gravity="0 0 0"/>
+
+
+    <!-- <option timestep="0.002" iterations="100" integrator="implicitfast"/> -->
+
+    <worldbody>
+
+
+
+        <flexcomp type="mesh" file="clipped_concentric_circle_12.obj" pos="0 0.177269  0.2" quat="0.653281 -0.270598 -0.270598 -0.653282" dim="2"
+                    origin="0 0 0" radius="0.0001" rgba="0 0.7 0 0.3" mass="0.001" name="c">
+            <contact condim="3" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+            <edge equality="true" solref="1e-5 1" solimp="1 1 0 0 1" damping="0.0"/>
+            <elasticity poisson="0.49" thickness="0.0002" young="8e8" damping="0.00" elastic2d="bend"/>
+        </flexcomp>
+
+        <body name="scu_hand" pos="0.0 0.0 0.3" quat="0 -1 0 0">
+            <geom name="scu_hand_geom" quat="0 0 0 1" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" mesh="scu_hand"/>
+            <body name="scroll_stick" pos="-0.0003 -0.105  0.035" quat="0.92387953 0.38268343 0. 0.">
+                <joint name="scroll_stick_joint" type="hinge" axis="0 0 1"/>
+                <geom name="scroll_stick_geom" type="mesh" rgba="0.6 0.6 0.6 1" mass="150" mesh="scroll_stick"/>
+            </body>
+
+            <body name="h2c0" pos="0 -0.139508  0.064412"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c1" pos="0 -0.144439  0.07269"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c2" pos="0 -0.152029 0.079453"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c3" pos="0 -0.159381 0.08427"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+        </body>
+
+
+
+    <body name="ctrl_0" pos="0.00000000 0.17726900 0.20000000">
+      <joint name="ctrl_0_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_0_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_0_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_0_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_1" pos="0.00003488 0.16312688 0.21414211">
+      <joint name="ctrl_1_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_1_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_1_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_1_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_2" pos="0.00725544 0.16409025 0.21317874">
+      <joint name="ctrl_2_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_2_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_2_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_2_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_3" pos="0.01349664 0.16683250 0.21043648">
+      <joint name="ctrl_3_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_3_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_3_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_3_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_4" pos="0.01791605 0.17098348 0.20628550">
+      <joint name="ctrl_4_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_4_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_4_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_4_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_5" pos="0.01991713 0.17598290 0.20128609">
+      <joint name="ctrl_5_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_5_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_5_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_5_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_6" pos="0.01922977 0.18115591 0.19611308">
+      <joint name="ctrl_6_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_6_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_6_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_6_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_7" pos="0.01594674 0.18580426 0.19146473">
+      <joint name="ctrl_7_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_7_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_7_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_7_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_8" pos="0.01051120 0.18930051 0.18796849">
+      <joint name="ctrl_8_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_8_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_8_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_8_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_9" pos="0.00365685 0.19117273 0.18609627">
+      <joint name="ctrl_9_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_9_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_9_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_9_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_10" pos="-0.00369111 0.19116821 0.18610080">
+      <joint name="ctrl_10_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_10_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_10_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_10_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_11" pos="-0.01054084 0.18928755 0.18798147">
+      <joint name="ctrl_11_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_11_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_11_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_11_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_12" pos="-0.01596775 0.18578461 0.19148441">
+      <joint name="ctrl_12_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_12_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_12_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_12_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_13" pos="-0.01923931 0.18113222 0.19613680">
+      <joint name="ctrl_13_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_13_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_13_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_13_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_14" pos="-0.01991392 0.17595837 0.20131065">
+      <joint name="ctrl_14_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_14_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_14_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_14_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_15" pos="-0.01790053 0.17096143 0.20630758">
+      <joint name="ctrl_15_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_15_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_15_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_15_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_16" pos="-0.01347090 0.16681590 0.21045311">
+      <joint name="ctrl_16_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_16_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_16_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_16_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_17" pos="-0.00722294 0.16408133 0.21318767">
+      <joint name="ctrl_17_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_17_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_17_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_17_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_18" pos="-0.00000003 0.16312686 0.21414213">
+      <joint name="ctrl_18_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_18_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_18_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_18_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_19" pos="0.00005232 0.15605583 0.22121316">
+      <joint name="ctrl_19_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_19_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_19_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_19_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_20" pos="0.01088315 0.15750087 0.21976811">
+      <joint name="ctrl_20_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_20_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_20_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_20_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_21" pos="0.02024496 0.16161425 0.21565473">
+      <joint name="ctrl_21_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_21_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_21_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_21_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_22" pos="0.02687407 0.16784073 0.20942825">
+      <joint name="ctrl_22_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_22_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_22_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_22_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_23" pos="0.02987569 0.17533985 0.20192913">
+      <joint name="ctrl_23_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_23_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_23_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_23_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_24" pos="0.02884464 0.18309936 0.19416962">
+      <joint name="ctrl_24_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_24_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_24_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_24_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_25" pos="0.02392010 0.19007189 0.18719710">
+      <joint name="ctrl_25_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_25_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_25_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_25_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_26" pos="0.01576680 0.19531626 0.18195273">
+      <joint name="ctrl_26_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_26_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_26_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_26_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_27" pos="0.00548528 0.19812459 0.17914441">
+      <joint name="ctrl_27_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_27_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_27_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_27_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_28" pos="-0.00553666 0.19811781 0.17915120">
+      <joint name="ctrl_28_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_28_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_28_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_28_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_29" pos="-0.01581126 0.19529682 0.18197219">
+      <joint name="ctrl_29_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_29_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_29_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_29_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_30" pos="-0.02395163 0.19004242 0.18722661">
+      <joint name="ctrl_30_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_30_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_30_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_30_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_31" pos="-0.02885897 0.18306383 0.19420519">
+      <joint name="ctrl_31_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_31_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_31_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_31_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_32" pos="-0.02987089 0.17530306 0.20196597">
+      <joint name="ctrl_32_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_32_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_32_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_32_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_33" pos="-0.02685080 0.16780765 0.20946137">
+      <joint name="ctrl_33_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_33_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_33_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_33_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_34" pos="-0.02020635 0.16158934 0.21567967">
+      <joint name="ctrl_34_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_34_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_34_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_34_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_35" pos="-0.01083442 0.15748750 0.21978150">
+      <joint name="ctrl_35_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_35_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_35_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_35_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_36" pos="-0.00000004 0.15605579 0.22121320">
+      <joint name="ctrl_36_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_36_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_36_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_36_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_37" pos="0.00006976 0.14898477 0.22828422">
+      <joint name="ctrl_37_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_37_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_37_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_37_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_38" pos="0.01451087 0.15091150 0.22635748">
+      <joint name="ctrl_38_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_38_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_38_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_38_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_39" pos="0.02699328 0.15639600 0.22087297">
+      <joint name="ctrl_39_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_39_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_39_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_39_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_40" pos="0.03583209 0.16469797 0.21257100">
+      <joint name="ctrl_40_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_40_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_40_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_40_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_41" pos="0.03983426 0.17469680 0.20257217">
+      <joint name="ctrl_41_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_41_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_41_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_41_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_42" pos="0.03845952 0.18504282 0.19222615">
+      <joint name="ctrl_42_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_42_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_42_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_42_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_43" pos="0.03189348 0.19433952 0.18292946">
+      <joint name="ctrl_43_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_43_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_43_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_43_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_44" pos="0.02102240 0.20133202 0.17593697">
+      <joint name="ctrl_44_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_44_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_44_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_44_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_45" pos="0.00731370 0.20507646 0.17219254">
+      <joint name="ctrl_45_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_45_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_45_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_45_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_46" pos="-0.00738222 0.20506741 0.17220160">
+      <joint name="ctrl_46_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_46_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_46_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_46_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_47" pos="-0.02108168 0.20130609 0.17596293">
+      <joint name="ctrl_47_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_47_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_47_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_47_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_48" pos="-0.03193550 0.19430022 0.18296881">
+      <joint name="ctrl_48_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_48_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_48_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_48_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_49" pos="-0.03847862 0.18499544 0.19227359">
+      <joint name="ctrl_49_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_49_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_49_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_49_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_50" pos="-0.03982785 0.17464774 0.20262129">
+      <joint name="ctrl_50_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_50_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_50_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_50_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_51" pos="-0.03580106 0.16465386 0.21261516">
+      <joint name="ctrl_51_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_51_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_51_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_51_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_52" pos="-0.02694180 0.15636279 0.22090622">
+      <joint name="ctrl_52_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_52_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_52_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_52_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_53" pos="-0.01444589 0.15089367 0.22637533">
+      <joint name="ctrl_53_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_53_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_53_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_53_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_54" pos="-0.00000005 0.14898473 0.22828427">
+      <joint name="ctrl_54_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_54_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_54_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_54_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_55" pos="0.00008721 0.14191371 0.23535528">
+      <joint name="ctrl_55_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_55_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_55_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_55_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_56" pos="0.01813859 0.14432212 0.23294685">
+      <joint name="ctrl_56_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_56_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_56_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_56_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_57" pos="0.03374160 0.15117775 0.22609122">
+      <joint name="ctrl_57_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_57_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_57_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_57_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_58" pos="0.04479012 0.16155522 0.21571374">
+      <joint name="ctrl_58_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_58_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_58_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_58_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_59" pos="0.04979281 0.17405374 0.20321522">
+      <joint name="ctrl_59_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_59_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_59_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_59_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_60" pos="0.04807441 0.18698628 0.19028269">
+      <joint name="ctrl_60_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_60_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_60_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_60_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_61" pos="0.03986685 0.19860715 0.17866183">
+      <joint name="ctrl_61_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_61_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_61_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_61_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_62" pos="0.02627801 0.20734778 0.16992121">
+      <joint name="ctrl_62_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_62_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_62_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_62_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_63" pos="0.00914212 0.21202833 0.16524068">
+      <joint name="ctrl_63_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_63_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_63_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_63_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_64" pos="-0.00922778 0.21201702 0.16525200">
+      <joint name="ctrl_64_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_64_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_64_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_64_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_65" pos="-0.02635209 0.20731537 0.16995366">
+      <joint name="ctrl_65_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_65_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_65_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_65_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_66" pos="-0.03991937 0.19855802 0.17871101">
+      <joint name="ctrl_66_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_66_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_66_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_66_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_67" pos="-0.04809828 0.18692705 0.19034199">
+      <joint name="ctrl_67_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_67_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_67_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_67_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_68" pos="-0.04978481 0.17399243 0.20327661">
+      <joint name="ctrl_68_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_68_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_68_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_68_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_69" pos="-0.04475133 0.16150008 0.21576895">
+      <joint name="ctrl_69_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_69_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_69_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_69_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_70" pos="-0.03367724 0.15113624 0.22613278">
+      <joint name="ctrl_70_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_70_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_70_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_70_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_71" pos="-0.01805736 0.14429983 0.23296917">
+      <joint name="ctrl_71_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_71_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_71_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_71_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+    <body name="ctrl_72" pos="-0.00000006 0.14191365 0.23535533">
+      <joint name="ctrl_72_x" type="slide" axis="1 0 0" damping="1e-4"/>
+      <joint name="ctrl_72_y" type="slide" axis="0 1 0" damping="1e-4"/>
+      <joint name="ctrl_72_z" type="slide" axis="0 0 1" damping="1e-4"/>
+      <inertial pos="0 0 0" mass="1e-4" diaginertia="1e-5 1e-5 1e-5"/>
+      <geom name="ctrl_72_geom" type="sphere" size="0.001" rgba="0 1 1 1" group="1" contype="0" conaffinity="0"/>
+    </body>
+
+
+
+
+
+    </worldbody>
+
+
+    <equality>
+        <weld body1="ctrl_0" body2="c_0" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_1" body2="c_1" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_2" body2="c_2" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_3" body2="c_3" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_4" body2="c_4" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_5" body2="c_5" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_6" body2="c_6" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_7" body2="c_7" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_8" body2="c_8" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_9" body2="c_9" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_10" body2="c_10" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_11" body2="c_11" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_12" body2="c_12" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_13" body2="c_13" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_14" body2="c_14" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_15" body2="c_15" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_16" body2="c_16" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_17" body2="c_17" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_18" body2="c_18" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_19" body2="c_19" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_20" body2="c_20" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_21" body2="c_21" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_22" body2="c_22" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_23" body2="c_23" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_24" body2="c_24" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_25" body2="c_25" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_26" body2="c_26" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_27" body2="c_27" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_28" body2="c_28" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_29" body2="c_29" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_30" body2="c_30" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_31" body2="c_31" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_32" body2="c_32" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_33" body2="c_33" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_34" body2="c_34" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_35" body2="c_35" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_36" body2="c_36" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_37" body2="c_37" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_38" body2="c_38" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_39" body2="c_39" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_40" body2="c_40" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_41" body2="c_41" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_42" body2="c_42" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_43" body2="c_43" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_44" body2="c_44" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_45" body2="c_45" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_46" body2="c_46" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_47" body2="c_47" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_48" body2="c_48" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_49" body2="c_49" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_50" body2="c_50" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_51" body2="c_51" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_52" body2="c_52" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_53" body2="c_53" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_54" body2="c_54" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_55" body2="c_55" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_56" body2="c_56" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_57" body2="c_57" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_58" body2="c_58" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_59" body2="c_59" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_60" body2="c_60" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_61" body2="c_61" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_62" body2="c_62" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_63" body2="c_63" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_64" body2="c_64" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_65" body2="c_65" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_66" body2="c_66" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_67" body2="c_67" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_68" body2="c_68" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_69" body2="c_69" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_70" body2="c_70" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_71" body2="c_71" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="ctrl_72" body2="c_72" solref="1e-7 1" solimp="1 1 0.001"/>
+    </equality>
+
+
+
+
+    <equality>
+        <!-- <weld name="lock_1" body1="h2c3" body2="c_6" solref="1e-7 1" solimp="1 1 0.001" active="false"/> -->
+        <!-- <weld name="lock_2" body1="h2c0" body2="c_7" solref="1e-7 1" solimp="1 1 0.001" active="false"/> -->
+        <!-- <weld name="lock_3" body1="h2c0" body2="c_13" solref="1e-7 1" solimp="1 1 0.001" active="false"/> -->
+        <!-- <weld name="lock_3" body1="h2c0" body2="c_14" solref="1e-7 1" solimp="1 1 0.001" active="false"/> -->
+
+    </equality>
+
+    <equality>
+        <weld name="lock_0" body1="h2c3" body2="c_0" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_1" body1="h2c3" body2="c_1" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_2" body1="h2c3" body2="c_2" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_3" body1="h2c3" body2="c_3" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_4" body1="h2c3" body2="c_4" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_5" body1="h2c3" body2="c_5" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_6" body1="h2c3" body2="c_6" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_7" body1="h2c3" body2="ctrl_7" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_8" body1="h2c3" body2="ctrl_8" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_9" body1="h2c3" body2="ctrl_9" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_10" body1="h2c3" body2="ctrl_10" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_11" body1="h2c3" body2="ctrl_11" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_12" body1="h2c3" body2="ctrl_12" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_13" body1="h2c3" body2="ctrl_13" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_14" body1="h2c3" body2="ctrl_14" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_15" body1="h2c3" body2="ctrl_15" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_16" body1="h2c3" body2="ctrl_16" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_17" body1="h2c3" body2="ctrl_17" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_18" body1="h2c3" body2="ctrl_18" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_19" body1="h2c3" body2="ctrl_19" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_20" body1="h2c3" body2="ctrl_20" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_21" body1="h2c3" body2="ctrl_21" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_22" body1="h2c3" body2="ctrl_22" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_23" body1="h2c3" body2="ctrl_23" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_24" body1="h2c3" body2="ctrl_24" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_25" body1="h2c3" body2="ctrl_25" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_26" body1="h2c3" body2="ctrl_26" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_27" body1="h2c3" body2="ctrl_27" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_28" body1="h2c3" body2="ctrl_28" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_29" body1="h2c3" body2="ctrl_29" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_30" body1="h2c3" body2="ctrl_30" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_31" body1="h2c3" body2="ctrl_31" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_32" body1="h2c3" body2="ctrl_32" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_33" body1="h2c3" body2="ctrl_33" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_34" body1="h2c3" body2="ctrl_34" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_35" body1="h2c3" body2="ctrl_35" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_36" body1="h2c3" body2="ctrl_36" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_37" body1="h2c3" body2="ctrl_37" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_38" body1="h2c3" body2="ctrl_38" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_39" body1="h2c3" body2="ctrl_39" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_40" body1="h2c3" body2="ctrl_40" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_41" body1="h2c3" body2="ctrl_41" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_42" body1="h2c3" body2="ctrl_42" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_43" body1="h2c3" body2="ctrl_43" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_44" body1="h2c3" body2="ctrl_44" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_45" body1="h2c3" body2="ctrl_45" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_46" body1="h2c3" body2="ctrl_46" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_47" body1="h2c3" body2="ctrl_47" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_48" body1="h2c3" body2="ctrl_48" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_49" body1="h2c3" body2="ctrl_49" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_50" body1="h2c3" body2="ctrl_50" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_51" body1="h2c3" body2="ctrl_51" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_52" body1="h2c3" body2="ctrl_52" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_53" body1="h2c3" body2="ctrl_53" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_54" body1="h2c3" body2="ctrl_54" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_55" body1="h2c3" body2="ctrl_55" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_56" body1="h2c3" body2="ctrl_56" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_57" body1="h2c3" body2="ctrl_57" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_58" body1="h2c3" body2="ctrl_58" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_59" body1="h2c3" body2="ctrl_59" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_60" body1="h2c3" body2="ctrl_60" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_61" body1="h2c3" body2="ctrl_61" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_62" body1="h2c3" body2="ctrl_62" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_63" body1="h2c3" body2="ctrl_63" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_64" body1="h2c3" body2="ctrl_64" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_65" body1="h2c3" body2="ctrl_65" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_66" body1="h2c3" body2="ctrl_66" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_67" body1="h2c3" body2="ctrl_67" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_68" body1="h2c3" body2="ctrl_68" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_69" body1="h2c3" body2="ctrl_69" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_70" body1="h2c3" body2="ctrl_70" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_71" body1="h2c3" body2="ctrl_71" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+        <weld name="lock_72" body1="h2c3" body2="ctrl_72" solref="1e-7 1" solimp="1 1 0.001" active="false"/>
+    </equality>
+
+
+
+
+    <equality>
+        <weld body1="h2c3" body2="c_70" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c3" body2="c_71" solref="1e-7 1" solimp="1 1 0.001"/>
+
+        <weld body1="h2c3" body2="c_72" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c3" body2="c_54" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c2" body2="c_36" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c1" body2="c_18" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c0" body2="c_0" solref="1e-7 1" solimp="1 1 0.001"/>
+    </equality>
+
+
+    <actuator>
+        <velocity name="scroll_stick_joint" joint="scroll_stick_joint" ctrlrange="0 100"/>
+    </actuator>
+
+
+</mujoco>
+
+
+

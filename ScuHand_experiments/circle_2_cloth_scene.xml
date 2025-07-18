@@ -1,0 +1,89 @@
+<mujoco model="spoon_cloth_scene">
+    <compiler angle="radian" coordinate="local"/>
+    <option timestep="0.002"/>
+
+    <asset>
+        <material name="cloth_mat" rgba="1 0 0 0.3"/>
+        <material name="table_mat" rgba="0.64 0.4 0.2 1"/>
+    </asset>
+
+    <extension>
+        <plugin plugin="mujoco.elasticity.cable"/>
+    </extension>
+
+    <worldbody>
+
+        <composite type="cable" curve="s" count="41 1 1" size="1" offset="-.3 0 .6" initial="none">
+            <plugin plugin="mujoco.elasticity.cable">
+                <!--Units are in Pa (SI)-->
+                <config key="twist" value="1e7"/>
+                <config key="bend" value="4e6"/>
+                <config key="vmax" value="0.05"/>
+            </plugin>
+            <joint kind="main" damping=".015"/>
+            <geom type="capsule" size=".005" rgba=".8 .2 .1 1" condim="1"/>
+        </composite>
+
+
+
+        <body name="spoon_base" pos="0.0 0.0 0.108">
+            <joint name="base_free" type="free"/>
+            <geom name="spoon_handle" pos="0.045 0.02 0.0" type="cylinder"
+                size="0.0035 0.05" mass="0.01"
+                quat="0 0.707 0 0.707" rgba="0.4 0.4 0.4 1"/>
+
+            <body name="handle0" pos="-0.005 0.02 0.0">
+                <geom name="handle0" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle1" pos="0.005 0.02 0.0">
+                <geom name="handle1" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle2" pos="0.015 0.02 0.0">
+                <geom name="handle2" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle3" pos="0.025 0.02 0.0">
+                <geom name="handle3" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle4" pos="0.035 0.02 0.0">
+                <geom name="handle4" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+            <body name="handle5" pos="0.045 0.02 0.0">
+                <geom name="handle5" type="sphere" size="0.004" mass="0.001" rgba="1 0.8 0 1"/>
+            </body>
+        </body>
+
+
+
+        <body name="table" pos="0 0 0.05"><geom type="box" size="0.2 0.2 0.02" pos="0 0 0.02" material="table_mat"/></body>
+
+        <!-- <body name="test_ball" pos="0.0 0.0 0.3">
+            <joint type="free"/>
+            <geom type="sphere" size="0.007" mass="0.0001" rgba="0 1 0 1"/>
+        </body> -->
+
+    </worldbody>
+
+
+    <actuator>
+        <!-- Position actuators for x, y, z -->
+        <general joint="base_free" gainprm="200 0 0" gear="1 0 0 0 0 0"/>  <!-- x -->
+        <general joint="base_free" gainprm="200 0 0" gear="0 1 0 0 0 0"/>  <!-- y -->
+        <general joint="base_free" gainprm="200 0 0" gear="0 0 1 0 0 0"/>  <!-- z -->
+
+        <!-- Orientation actuators (quaternion parts q1, q2, q3) -->
+        <general joint="base_free" gainprm="100 0 0" gear="0 0 0 1 0 0"/>  <!-- q1 -->
+        <general joint="base_free" gainprm="100 0 0" gear="0 0 0 0 1 0"/>  <!-- q2 -->
+        <general joint="base_free" gainprm="100 0 0" gear="0 0 0 0 0 1"/>  <!-- q3 -->
+    </actuator>
+
+
+
+
+
+
+</mujoco>
+
+
+    
+    
+

@@ -1,0 +1,277 @@
+<mujoco model="auxiliary_objects">
+
+    <asset>
+        <material name="table_mat" rgba="0.64 0.4 0.2 1"/>
+    </asset>
+
+    <!-- <include file="models/Threshold_Porcelain_Serving_Bowl_Coupe_White/asset.xml"/>
+    <include file="models/Now_Designs_Bowl_Akita_Black/asset.xml"/> -->
+    <!-- <include file="models/Top_Paw_Dog_Bowl_Blue_Paw_Bone_Ceramic_25_fl_oz_total/asset.xml"/> -->
+    <include file="models/Threshold_Bead_Cereal_Bowl_White/asset.xml"/>
+
+
+    <worldbody>
+
+        <!-- <body name="bowl3" pos="0 0.15 0.095">
+            <joint type="free"/>
+            <include file="models/Threshold_Bead_Cereal_Bowl_White/body.xml"/>
+        </body> -->
+
+        <body name="table" pos="0 0.2 0.05">
+            <geom type="box" size="0.2 0.2 0.02" pos="0 0 0.02" material="table_mat" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <!-- <body name="ball_0" pos="-0.030 -0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_1" pos="-0.030 -0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body> -->
+
+        <!-- <body name="ball_2" pos="-0.030 0.000 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_3" pos="-0.030 0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_4" pos="-0.030 0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_5" pos="-0.015 -0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_6" pos="-0.015 -0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_7" pos="-0.015 0.000 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_8" pos="-0.015 0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_9" pos="-0.015 0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_10" pos="0.000 -0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_11" pos="0.000 -0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_12" pos="0.000 0.000 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_13" pos="0.000 0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_14" pos="0.000 0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_15" pos="0.015 -0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_16" pos="0.015 -0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_17" pos="0.015 0.000 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_18" pos="0.015 0.015 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_19" pos="0.015 0.030 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_20" pos="-0.037 -0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_21" pos="-0.037 -0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_22" pos="-0.037 -0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_23" pos="-0.037 0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_24" pos="-0.037 0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_25" pos="-0.037 0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_26" pos="-0.022 -0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_27" pos="-0.022 -0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_28" pos="-0.022 -0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_29" pos="-0.022 0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_30" pos="-0.022 0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_31" pos="-0.022 0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_32" pos="-0.007 -0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_33" pos="-0.007 -0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_34" pos="-0.007 -0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_35" pos="-0.007 0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_36" pos="-0.007 0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_37" pos="-0.007 0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_38" pos="0.007 -0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_39" pos="0.007 -0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_40" pos="0.007 -0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_41" pos="0.007 0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_42" pos="0.007 0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_43" pos="0.007 0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_44" pos="0.022 -0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_45" pos="0.022 -0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_46" pos="0.022 -0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_47" pos="0.022 0.007 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_48" pos="0.022 0.022 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body>
+
+        <body name="ball_49" pos="0.022 0.037 0.250">
+            <joint type="free"/>
+            <geom type="sphere" size="0.003" mass="0.0001" rgba="1 0 0 1" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+        </body> -->
+
+
+    </worldbody>
+
+</mujoco>

@@ -1,0 +1,106 @@
+<mujoco model="Ctrl_circle_cloth">
+
+    <include file="scene.xml"/>
+    <include file="auxiliary_objects.xml"/>
+
+    <asset>
+        <mesh name="scu_hand" file="SCU-Hnad_UR_no_sheet.STL" scale="0.001 0.001 0.001"/>
+        <mesh name="scroll_stick" file="hexagonal_prism.obj" scale="0.0003 0.0003 0.003"/>
+
+    </asset>
+
+    <option timestep="0.001"/>
+
+    <!-- <option timestep="0.002" iterations="100" integrator="implicitfast"/> -->
+
+    <worldbody>
+
+        <flexcomp type="mesh" file="clipped_concentric_circle_2.obj" pos="-0.0087 0.177269  0.2" quat="0.653281 -0.270598 -0.270598 -0.653282" dim="2"
+                    origin="0 0 0" radius="0.0001" rgba="0 0.7 0 0.3" mass="0.001" name="c">
+            <contact condim="3" solimp="0.99 0.99 0.01" solref="0.002 1"/>
+            <edge equality="true" solref="1e-5 1" solimp="1 1 0 0 1" damping="0.0"/>
+            <elasticity poisson="0.49" thickness="0.0002" young="5e8" damping="0.00" elastic2d="bend"/>
+        </flexcomp>
+
+        <!-- <body name="scu_hand_rotate" pos="0 0.12  0.25" quat="0.92387953 0.38268343 0. 0.">
+            <joint name="scu_hand_rotate" type="hinge"/>
+            <geom name="scu_hand_rotate" type="cylinder" size="0.003 0.02" rgba="1 1 1 1"/>
+        </body> -->
+
+        <body name="scu_hand" pos="0.0 0.0 0.3" quat="0 -1 0 0">
+            <geom name="scu_hand_geom" quat="0 0 0 1" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" mesh="scu_hand"/>
+            <body name="scroll_stick" pos="-0.0003 -0.105  0.035" quat="0.92387953 0.38268343 0. 0.">
+                <joint name="scroll_stick_joint" type="hinge" axis="0 0 1"/>
+                <geom name="scroll_stick_geom" type="mesh" rgba="0.6 0.6 0.6 1" mass="150" mesh="scroll_stick"/>
+            </body>
+            <body name="h2c0" pos="-0.0087 -0.139508  0.064412"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c1" pos="-0.0087 -0.144439  0.07269"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c2" pos="-0.0087 -0.152029 0.079453"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+            <body name="h2c3" pos="-0.0087 -0.159381 0.08427"> 
+                <geom type="sphere" size="0.001" rgba="1 0 0 1"/>
+            </body>
+        </body>
+
+
+        <body name="ctrl_17" pos="-0.00861279  0.14191371  0.23535528">
+            <joint name="ctrl_17_joint" type="free"/>
+            <geom name="ctrl_17_geom" type="sphere" size="0.005" mass="0.0001" rgba="0 1 1 1"/>
+        </body>
+
+    </worldbody>
+
+
+    <actuator>
+        <velocity name="scroll_stick_joint" joint="scroll_stick_joint" ctrlrange="0 100"/>
+    </actuator>
+
+
+    <equality>
+        <weld body1="h2c3" body2="c_0" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c2" body2="c_16" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c1" body2="c_32" solref="1e-7 1" solimp="1 1 0.001"/>
+
+        <weld body1="ctrl_17" body2="c_17" solref="1e-7 1" solimp="1 1 0.001"/>
+
+
+        <weld body1="h2c0" body2="c_30" solref="1e-7 1" solimp="1 1 0.001"/>
+
+        <!-- <weld body1="h2c0" body2="c_0" solref="1e-7 1" solimp="1 1 0.001"/> -->
+
+        <!-- <weld body1="h2c0" body2="c_29" solref="1e-7 1" solimp="1 1 0.001"/> -->
+        <!-- <weld body1="h2c0" body2="c_26" solref="1e-7 1" solimp="1 1 0.001"/> -->
+
+        <!-- <weld body1="h2c2" body2="c_1" solref="1e-7 1" solimp="1 1 0.001"/>
+        <weld body1="h2c1" body2="c_17" solref="1e-7 1" solimp="1 1 0.001"/> -->
+
+    </equality>
+
+
+    <actuator>
+        <position name="17_x_pos" joint="ctrl_17_joint" kp="0.1"/>
+        <position name="17_y_pos" joint="ctrl_17_joint" kp="0.1"/>
+        <position name="17_z_pos" joint="ctrl_17_joint" kp="0.1"/>
+    </actuator>
+
+
+
+    <!-- <actuator>
+        <general joint="right" gainprm="200 0 0" gear="1 0 0 0 0 0"/>  
+        <general joint="right" gainprm="200 0 0" gear="0 1 0 0 0 0"/>  
+        <general joint="right" gainprm="200 0 0" gear="0 0 1 0 0 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 1 0 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 0 1 0"/>  
+        <general joint="right" gainprm="100 0 0" gear="0 0 0 0 0 1"/>  
+    </actuator> -->
+
+
+</mujoco>
+
+
+
