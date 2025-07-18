@@ -10,7 +10,7 @@ This branch implements Diffusion Policies with RL for contact‑rich robotic man
 Due to MuJoCo’s current `flexcomp` limitations, you must use an **absolute path** to load the mesh. Open:
 
 ```xml
-models/assets/grippers/scu_hand.xml
+robosuite/models/assets/grippers/scu_hand.xml
 ````
 
 and update the `<flexcomp>` tag:
