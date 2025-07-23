@@ -574,7 +574,7 @@ class OSXGrind(ManipulationEnv):
 
         # Reward for smooth actions - penalize squared differences between consecutive actions
         if self.current_action is not None and hasattr(self, 'previous_action') and self.action_change_type == "immediate":
-            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sum((self.current_action - self.previous_action)**2)
+            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sqrt(np.sum((self.current_action - self.previous_action)**2))
         else:
             action_smoothness_penalty = 0.0
 
