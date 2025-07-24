@@ -1,14 +1,13 @@
-import math
-
 import numpy as np
 from scipy.spatial.transform import Rotation
 
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
+from robosuite.utils.ik_solver import MuJoCoIKSolver
 
 # Supported impedance modes
-IMPEDANCE_MODES = {"fixed", "variable", "variable_kp"}
+IMPEDANCE_MODES = {"fixed", "variable", "variable_kp", "variable_full_kp"}
 
 # TODO: Maybe better naming scheme to differentiate between input / output min / max and pos/ori limits, etc.
 
@@ -199,6 +198,11 @@ class OperationalSpaceController(Controller):
             self.control_dim += 12
         elif self.impedance_mode == "variable_kp":
             self.control_dim += 6
+        elif self.impedance_mode == "variable_full_kp":
+            # Assumes cholesky vector so 6 for position and 6 for orientation
+            self.control_dim += 12
+            self.kp_min = self.nums2array(kp_limits[0], 12)
+            self.kp_max = self.nums2array(kp_limits[1], 12)
 
         # limits
         self.position_limits = np.array(position_limits) if position_limits is not None else position_limits
@@ -226,6 +230,22 @@ class OperationalSpaceController(Controller):
         self.origin_pos = None
         self.origin_ori = None
 
+        self.ik_solver = MuJoCoIKSolver(
+            self.sim.model.get_xml(),
+            [],
+            ref_name,
+            position_threshold=0.001,
+            rotation_threshold=0.01,
+            time_limit=10,
+            joint_indexes=self.qpos_index,
+            base_body_name=f"{self.naming_prefix}base" if input_ref_frame == "base" else None
+        )
+
+    def update(self):
+        super().update()
+
+        self.wrench_in_eef_frame_buf.push(self.get_wrench())
+
     def set_goal(self, action):
         """
         Sets goal based on input @action. If self.impedance_mode is not "fixed", then the input will be parsed into the
@@ -237,6 +257,7 @@ class OperationalSpaceController(Controller):
             :Mode `'fixed'`: [joint pos command]
             :Mode `'variable'`: [damping_ratio values, kp values, joint pos command]
             :Mode `'variable_kp'`: [kp values, joint pos command]
+            :Mode `'variable_full_kp'`: [cholesky vector of kp values, joint pos command]
 
         Args:
             action (Iterable): Desired relative joint position goal state
@@ -253,6 +274,23 @@ class OperationalSpaceController(Controller):
             kp, goal_update = action[:6], action[6:]
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
             self.kd = 2 * np.sqrt(self.kp)  # critically damped
+        elif self.impedance_mode == "variable_full_kp":
+            cholesky_kp, delta = action[:12], action[12:]
+            stiffness_pos_matrix = T.cholesky_vector_to_spd(cholesky_kp[:6])
+            stiffness_ori_matrix = T.cholesky_vector_to_spd(cholesky_kp[6:])
+            kp = np.concatenate([stiffness_pos_matrix.flatten(), stiffness_ori_matrix.flatten()])
+
+            self.kp = np.zeros_like(kp)
+
+            # assume positive diagonal stiffness
+            diag_indices = [0, 4, 8, 9, 13, 17]
+            self.kp[diag_indices] = np.clip(kp[diag_indices], self.kp_min[0], self.kp_max[0])
+            # other values have no min value, it can even be negative up to the -kp_max value
+            other_indices = np.ones(len(kp), bool)
+            other_indices[diag_indices] = False
+            self.kp[other_indices] = np.sign(kp[other_indices]) * np.clip(np.abs(kp[other_indices]), 0, self.kp_max[0])
+            # Compute damping (preserve sign)
+            self.kd = 2 * np.sqrt(self.kp[diag_indices])  # critically damped
         else:  # This is case "fixed"
             goal_update = action
 
@@ -310,7 +348,7 @@ class OperationalSpaceController(Controller):
     def compute_goal_pos(self, delta, goal_update_mode=None):
         """
         Compute new goal position, given a delta to update. Can either update the new goal based on
-        current achieved position or current deisred goal. Updating based on current deisred goal can be useful
+        current achieved position or current desired goal. Updating based on current desired goal can be useful
         if we want the robot to adhere with a sequence of target poses as closely as possible,
         without lagging or overshooting.
 
@@ -457,16 +495,34 @@ class OperationalSpaceController(Controller):
         base_pos_vel = np.array(self.sim.data.get_site_xvelp(f"{self.naming_prefix}{self.part_name}_center"))
         vel_pos_error = -(self.ref_pos_vel - base_pos_vel)
 
+        if self.impedance_mode != "variable_full_kp":
+            position_kp = np.diag(self.kp[0:3])
+            orientation_kp = np.diag(self.kp[3:6])
+        else:
+            position_kp = np.array(self.kp[0:9]).reshape((3, 3))
+            orientation_kp = np.array(self.kp[9:18]).reshape((3, 3))
+
+        # Scale position gains proportionally up to 10x as error gets smaller
+        error_norm = np.linalg.norm(position_error)
+        if error_norm < 1:
+            scale = 10 * (1 - error_norm) + 1  # Linear scaling from 1x to 10x
+            position_kp *= scale
         # F_r = kp * pos_err + kd * vel_err
-        desired_force = np.multiply(np.array(position_error), np.array(self.kp[0:3])) + np.multiply(
+        desired_force = np.dot(position_error, position_kp) + np.multiply(
             vel_pos_error, self.kd[0:3]
         )
 
         base_ori_vel = np.array(self.sim.data.get_site_xvelr(f"{self.naming_prefix}{self.part_name}_center"))
         vel_ori_error = -(self.ref_ori_vel - base_ori_vel)
 
+        # Scale position gains proportionally up to 10x as error gets smaller
+
+        ori_error_norm = np.linalg.norm(ori_error)
+        if ori_error_norm < 1:
+            scale = 10 * (1 - ori_error_norm) + 1  # Linear scaling from 1x to 10x
+            orientation_kp *= scale
         # Tau_r = kp * ori_err + kd * vel_err
-        desired_torque = np.multiply(np.array(ori_error), np.array(self.kp[3:6])) + np.multiply(
+        desired_torque = np.dot(ori_error, orientation_kp) + np.multiply(
             vel_ori_error, self.kd[3:6]
         )
 
@@ -569,6 +625,9 @@ class OperationalSpaceController(Controller):
         elif self.impedance_mode == "variable_kp":
             low = np.concatenate([self.kp_min, self.input_min])
             high = np.concatenate([self.kp_max, self.input_max])
+        elif self.impedance_mode == "variable_full_kp":
+            low = np.concatenate([self.kp_min, self.input_min])
+            high = np.concatenate([self.kp_max, self.input_max])
         else:  # This is case "fixed"
             low, high = self.input_min, self.input_max
         return low, high
@@ -583,6 +642,34 @@ class OperationalSpaceController(Controller):
         abs_action = np.concatenate([abs_pos, abs_rot])
         return abs_action
 
+    def ik_action(self, delta_ac, goal_update_mode):
+        """
+        Convert action to joint positions
+        """
+        # Sanity check: if the current joint positions are the same as the desired end-effector pose, return the current joint positions
+        fk_pos, fk_ori = self.ik_solver.forward_kinematics(self.joint_pos, frame='world')
+        if np.allclose(fk_pos, self.ref_pos, atol=1e-4) and np.allclose(fk_ori, self.ref_ori_mat, atol=1e-4):
+            return self.joint_pos
+
+        abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
+        abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
+        ik_result = self.ik_solver.solve_ik(abs_pos, abs_ori, initial_guess=self.joint_pos, frame=self.input_ref_frame)
+        if not ik_result.success:
+            raise ValueError(f"Inverse kinematics failed")
+        return ik_result.joint_angles
+
     @property
     def name(self):
         return "OSC_" + self.name_suffix
+
+    @property
+    def eef_wrench(self):
+        return self.wrench_in_eef_frame_buf.average
+
+    @property
+    def base_wrench(self):
+        return self.wrench_in_base_frame_buf.average
+
+    @property
+    def world_wrench(self):
+        return self.wrench_in_world_frame_buf.average
