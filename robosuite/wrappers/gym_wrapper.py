@@ -58,8 +58,6 @@ class GymWrapper(Wrapper, gym.Env):
         # Get reward range
         self.reward_range = (0, self.env.reward_scale)
 
-        self.render_mode = self.metadata['render_modes'][0]
-
         if keys is None:
             keys = []
             # Add object obs if requested

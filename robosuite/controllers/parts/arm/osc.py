@@ -140,16 +140,10 @@ class OperationalSpaceController(Controller):
         uncouple_pos_ori=True,
         lite_physics=True,
         default_orientation=None,
+        gripper_body_name=None,
+        ft_buffer_size=25,
         ** kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
-        ft_buffer_size = 25
-        self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
-        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.gripper_body_name = "right_gripper"
-        if self.gripper_body_name:
-            self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{self.gripper_body_name}")
-
         self.default_orientation = default_orientation
 
         super().__init__(
@@ -160,6 +154,8 @@ class OperationalSpaceController(Controller):
             lite_physics=lite_physics,
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
+            gripper_body_name=gripper_body_name,
+            ft_buffer_size=ft_buffer_size,
         )
         # Determine whether this is pos ori or just pos
         self.use_ori = control_ori
@@ -606,60 +602,6 @@ class OperationalSpaceController(Controller):
     def name(self):
         return "OSC_" + self.name_suffix
 
-    def get_wrench(self):
-        return np.concatenate([
-            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
-            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
-        ])
-
-    def get_sensor_measurement(self, sensor_name):
-        """
-        Grabs relevant sensor data from the sim object
-
-        Args:
-            sensor_name (str): name of the sensor
-
-        Returns:
-            np.array: sensor values
-        """
-        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
-        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
-
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
-
-    def get_force_torque(self):
-        wrench_force = np.concatenate((self.robots[0].ee_force['right'], self.robots[0].ee_torque['right']))
-        # peg_force = self.robots[0].get_sensor_measurement(self.robots[0].gripper['right'].important_sensors["force_peg"])
-
-        if self.gripper_inertial_properties is not None:
-            # offset payload (weight of the peg and gripper)
-            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
-                                                 self.gripper_inertial_properties['mass'],
-                                                 self.gripper_inertial_properties['local_com'],
-                                                 self.gripper_inertial_properties['world_rot_mat'],
-                                                 self.sim.model._model.opt.gravity)
-        return wrench_force
-
-    def transform_wrench_to_base_frame(self):
-        # Compute force/torque
-        # get sensor f/t measurements from gripper site, transform to world frame
-        gripper_in_robot_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")
-        wFtS = T.force_frame_transform(gripper_in_robot_base)
-
-        wrench_force = self.get_wrench()
-
-        if self.gripper_body_name:
-            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
-                                                 self.gripper_inertial_properties['mass'],
-                                                 self.gripper_inertial_properties['local_com'],
-                                                 self.gripper_inertial_properties['world_rot_mat'],
-                                                 self.sim.model._model.opt.gravity)
-
-        current_wrench = np.dot(wFtS, wrench_force)  # compute force/torque reading in base_frame
-
-        self.wrench_in_base_frame_buf.push(current_wrench)
-        self.wrench_in_eef_frame_buf.push(wrench_force)
-
     def pose_in_base_from_name(self, name):
         """
         A helper function that takes in a named data field and returns the pose
@@ -697,7 +639,3 @@ class OperationalSpaceController(Controller):
     @property
     def current_wrench(self):
         return self.wrench_in_base_frame_buf.average
-
-    @property
-    def eef_wrench(self):
-        return self.wrench_in_eef_frame_buf.average

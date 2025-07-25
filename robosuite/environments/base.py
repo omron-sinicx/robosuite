@@ -286,9 +286,6 @@ class MujocoEnv(metaclass=EnvMeta):
         if self.hard_reset and not self.deterministic_reset:
             self._load_model()
             self._initialize_sim()
-            if self.renderer == "mujoco":
-                # Reuse renderer
-                self.viewer.reset(self.sim)
         # Else, we only reset the sim internally
         else:
             self.sim.reset()

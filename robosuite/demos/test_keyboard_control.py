@@ -190,7 +190,8 @@ def main(args):
             interp=0.2,
         ),
         # force_termination_threshold=None,
-        renderer='mujoco',
+        render_camera=None,
+        renderer='mjviewer',
         renderer_config={'cam_config': {"lookat": [0.3, 0.5, 0.2],
                                         "distance": 0.2, "azimuth": 180, "elevation": -0, }}
     )
@@ -199,7 +200,7 @@ def main(args):
 
     env.set_curriculum(args.curriculum)
     env.reset()
-    env.viewer.set_camera(camera_id=0)
+    # env.viewer.set_camera(camera_id=0)
     # env.sim._render_context_offscreen.vopt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = False
 
     # initialize device
