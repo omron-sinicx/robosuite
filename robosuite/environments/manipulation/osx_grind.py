@@ -588,8 +588,8 @@ class OSXGrind(ManipulationEnv):
 
         speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
-        reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty + speed_reward
-        # print(f"{force_reward=:0.02f} {traj_reward=:0.02f} {action_smoothness_penalty=:0.02f} {self.step_penalty=:0.02f} {speed_reward=:0.02f}")
+        reward = force_reward + traj_reward + action_smoothness_penalty #+ self.step_penalty + speed_reward
+        #print(f"{self.tracking_error=:0.04f} {self.tracking_force_error=:0.04f} {force_reward=:0.04f} {traj_reward=:0.04f} {action_smoothness_penalty=:0.04f}")
 
         if self.clip_reward:
             reward = np.clip(reward, -2.0, 1.0)
@@ -603,7 +603,7 @@ class OSXGrind(ManipulationEnv):
         self.reward_dict["traj_total_reward"] += traj_reward
         self.reward_dict["speed_total_reward"] += speed_reward
         self.reward_dict["action_smoothness_total_reward"] += action_smoothness_penalty
-        # print(f"{force_reward=} {traj_reward=} {self.step_penalty=}")
+        #print(f"{force_reward=} {traj_reward=} {self.step_penalty=}")
 
         return reward
 
@@ -615,7 +615,7 @@ class OSXGrind(ManipulationEnv):
         normalized_relative_distance = relative_distance / self.max_step_size
 
         # only consider the error for the position controlled directions
-        self.tracking_error = np.linalg.norm(normalized_relative_distance * self.position_control_dims)
+        self.tracking_error = np.linalg.norm(relative_distance*self.position_control_dims) #np.linalg.norm(normalized_relative_distance * self.position_control_dims)
         return normalized_relative_distance
 
     def _compute_relative_wrenches(self):
@@ -625,7 +625,8 @@ class OSXGrind(ManipulationEnv):
         normalized_relative_wrench = relative_wrench / self.force_torque_normalization
 
         # only consider the error for the force controlled directions
-        tracking_force_error = normalized_relative_wrench * self.force_control_dims
+        #tracking_force_error = normalized_relative_wrench * self.force_control_dims
+        tracking_force_error = relative_wrench*self.force_control_dims
         self.tracking_force_error = np.linalg.norm(tracking_force_error)
 
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
