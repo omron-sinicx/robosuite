@@ -616,7 +616,7 @@ class OSXGrind(ManipulationEnv):
 
         # only consider the error for the position controlled directions
         self.tracking_error = np.linalg.norm(relative_distance*self.position_control_dims) #np.linalg.norm(normalized_relative_distance * self.position_control_dims)
-        return normalized_relative_distance
+        return relative_distance#normalized_relative_distance
 
     def _compute_relative_wrenches(self):
         # in base frame
@@ -631,11 +631,14 @@ class OSXGrind(ManipulationEnv):
 
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
         if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
-            force_controlled_indices = np.where(self.force_control_dims == 1)[0]
-            force_controlled_values = normalized_relative_wrench[force_controlled_indices]
-            return force_controlled_values
+            #force_controlled_indices = np.where(self.force_control_dims == 1)[0]
+            #force_controlled_values = normalized_relative_wrench[force_controlled_indices]
+            #return force_controlled_values
+            #print(f"!!!!!!!!!!!!! ==================== tracking_force_error in Env.: {tracking_force_error}")
+            return tracking_force_error #return force error in the force controlled directions
         elif self.task_config["relative_wrench_mode"] == "all":
-            return normalized_relative_wrench
+            #return normalized_relative_wrench
+            return relative_wrench
         else:
             raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
 
