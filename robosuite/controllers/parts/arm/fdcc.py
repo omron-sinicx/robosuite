@@ -2,10 +2,8 @@ from copy import copy
 import numpy as np
 
 from robosuite.utils.binding_utils import MjSim
-from robosuite.utils.buffers import RingBuffer
 
 from robosuite.utils.ik_solver import MuJoCoIKSolver
-from robosuite.utils.sim_utils import compensate_ft_reading
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.controller import Controller
 from robosuite.controllers.parts.generic.joint_pos import JointPositionController
