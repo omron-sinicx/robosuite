@@ -13,9 +13,7 @@ from robosuite.utils.mjcf_utils import (
     add_prefix,
     array_to_string,
     find_elements,
-    get_elements,
     new_joint,
-    scale_mjcf_model,
     sort_elements,
     string_to_array,
 )
@@ -55,7 +53,6 @@ class MujocoObject(MujocoModel):
 
     def __init__(self, obj_type="all", duplicate_collision_geoms=True):
         super().__init__()
-        self.extension = ET.Element("extension")
         self.asset = ET.Element("asset")
         assert obj_type in GEOM_GROUPS, "object type must be one in {}, got: {} instead.".format(GEOM_GROUPS, obj_type)
         self.obj_type = obj_type
@@ -160,6 +157,91 @@ class MujocoObject(MujocoModel):
 
         # Add prefix to all elements
         add_prefix(root=self.get_obj(), prefix=self.naming_prefix, exclude=self.exclude_from_prefixing)
+
+    def remove(self, element):
+        """
+        Remove an element and all its children from the model, updating internal lists.
+
+        Args:
+            element (ET.Element): XML element to remove from the model
+        """
+        if element is None:
+            raise ValueError("Cannot remove None element")
+        if not isinstance(element, ET.Element):
+            raise TypeError("Element must be an XML ElementTree.Element")
+
+        # Map tags to their corresponding internal list names and attributes
+        tag_mapping = {
+            "body": ["bodies", "_bodies"],
+            "joint": ["joints", "_joints"],
+            "actuator": ["actuators", "_actuators"],
+            "site": ["sites", "_sites"],
+            "sensor": ["sensors", "_sensors"],
+            "geom": None  # Special handling for geoms based on group
+        }
+
+        # Initialize sets to track names to remove
+        names_to_remove = {
+            "bodies": set(),
+            "joints": set(),
+            "actuators": set(),
+            "sites": set(),
+            "sensors": set(),
+            "contact_geoms": set(),
+            "visual_geoms": set()
+        }
+
+        # Gather all elements to remove
+        for el in element.iter():
+            name = el.get("name")
+            if name is None:
+                continue
+
+            if el.tag in tag_mapping and tag_mapping[el.tag]:
+                names_to_remove[tag_mapping[el.tag][0]].add(name)
+            elif el.tag == "geom":
+                # Sort geoms based on group attribute
+                target = "visual_geoms" if el.get("group") == "1" else "contact_geoms"
+                names_to_remove[target].add(name)
+
+        # Update internal lists and instance attributes
+        updates = {
+            "bodies": ("_bodies", "_elements['bodies']"),
+            "joints": ("_joints", "_elements['joints']"),
+            "actuators": ("_actuators", "_elements['actuators']"),
+            "sites": ("_sites", None),
+            "sensors": ("_sensors", None),
+            "contact_geoms": ("_contact_geoms", None),
+            "visual_geoms": ("_visual_geoms", None)
+        }
+
+        for list_name, (attr_name, elements_key) in updates.items():
+            if not names_to_remove[list_name]:
+                continue
+
+            # Update instance attribute lists
+            if hasattr(self, attr_name):
+                current = getattr(self, attr_name)
+                if isinstance(current, list):
+                    names_without_prefix = [x[len(self.naming_prefix):] if x.startswith(self.naming_prefix) else x
+                                            for x in names_to_remove[list_name] if x.startswith(self.naming_prefix)]
+                    setattr(self, attr_name, [x for x in current if x not in names_without_prefix])
+
+            # Update elements dictionary if applicable
+            if elements_key and elements_key.startswith("_elements"):
+                key = elements_key.split("'")[1]
+                if key in self._elements:
+                    self._elements[key] = [
+                        e for e in self._elements[key]
+                        if e.get("name") not in names_to_remove[list_name]
+                    ]
+
+        # Find parent and remove element from XML tree
+        for parent in self.root.iter():
+            for child in list(parent):
+                if child is element:
+                    parent.remove(element)
+                    return
 
     @property
     def name(self):
@@ -373,7 +455,7 @@ class MujocoXMLObject(MujocoObject, MujocoXML):
         # Rename this top level object body (will have self.naming_prefix added later)
         obj.attrib["name"] = "main"
         # Get all geom_pairs in this tree
-        geom_pairs = get_elements(obj, "geom")
+        geom_pairs = self._get_geoms(obj)
 
         # Define a temp function so we don't duplicate so much code
         obj_type = self.obj_type
@@ -443,6 +525,46 @@ class MujocoXMLObject(MujocoObject, MujocoXML):
         vis_element.set("name", vis_element.get("name") + "_visual")
         return vis_element
 
+    def _get_geoms(self, root, _parent=None):
+        """
+        Helper function to recursively search through element tree starting at @root and returns
+        a list of (parent, child) tuples where the child is a geom element
+
+        Args:
+            root (ET.Element): Root of xml element tree to start recursively searching through
+            _parent (ET.Element): Parent of the root element tree. Should not be used externally; only set
+                during the recursive call
+
+        Returns:
+            list: array of (parent, child) tuples where the child element is a geom type
+        """
+        return self._get_elements(root, "geom", _parent)
+
+    def _get_elements(self, root, type, _parent=None):
+        """
+        Helper function to recursively search through element tree starting at @root and returns
+        a list of (parent, child) tuples where the child is a specific type of element
+
+        Args:
+            root (ET.Element): Root of xml element tree to start recursively searching through
+            _parent (ET.Element): Parent of the root element tree. Should not be used externally; only set
+                during the recursive call
+
+        Returns:
+            list: array of (parent, child) tuples where the child element is of type
+        """
+        # Initialize return array
+        elem_pairs = []
+        # If the parent exists and this is a desired element, we add this current (parent, element) combo to the output
+        if _parent is not None and root.tag == type:
+            elem_pairs.append((_parent, root))
+        # Loop through all children elements recursively and add to pairs
+        for child in root:
+            elem_pairs += self._get_elements(child, type, _parent=root)
+
+        # Return all found pairs
+        return elem_pairs
+
     def set_pos(self, pos):
         """
         Set position of object position is defined as center of bounding box
@@ -480,15 +602,91 @@ class MujocoXMLObject(MujocoObject, MujocoXML):
 
         self._scale = scale
 
-        # Use the centralized scaling utility function
-        scale_mjcf_model(
-            obj=obj,
-            asset_root=self.asset,
-            worldbody=self.worldbody,
-            scale=scale,
-            get_elements_func=get_elements,
-            scale_slide_joints=False,  # MujocoXMLObject doesn't handle slide joints
-        )
+        # scale geoms
+        geom_pairs = self._get_geoms(obj)
+        for _, (_, element) in enumerate(geom_pairs):
+            g_pos = element.get("pos")
+            g_size = element.get("size")
+            if g_pos is not None:
+                g_pos = array_to_string(string_to_array(g_pos) * self._scale)
+                element.set("pos", g_pos)
+            if g_size is not None:
+                g_size_np = string_to_array(g_size)
+                # handle cases where size is not 3 dimensional
+                if len(g_size_np) == 3:
+                    g_size_np = g_size_np * self._scale
+                elif len(g_size_np) == 2:
+                    scale = np.array(self._scale).reshape(-1)
+                    if len(scale) == 1:
+                        g_size_np[1] *= scale
+                    elif len(scale) == 3:
+                        # g_size_np[0] *= np.mean(scale[:2])
+                        g_size_np[0] *= np.mean(scale[:2])  # width
+                        g_size_np[1] *= scale[2]  # height
+                    else:
+                        raise ValueError
+                else:
+                    raise ValueError
+                g_size = array_to_string(g_size_np)
+                element.set("size", g_size)
+
+        # scale meshes
+        meshes = self.asset.findall("mesh")
+        for elem in meshes:
+            m_scale = elem.get("scale")
+            if m_scale is not None:
+                m_scale = string_to_array(m_scale)
+            else:
+                m_scale = np.ones(3)
+
+            m_scale *= self._scale
+            elem.set("scale", array_to_string(m_scale))
+
+        # scale bodies
+        body_pairs = self._get_elements(obj, "body")
+        for (_, elem) in body_pairs:
+            b_pos = elem.get("pos")
+            if b_pos is not None:
+                b_pos = string_to_array(b_pos) * self._scale
+                elem.set("pos", array_to_string(b_pos))
+
+        # scale joints
+        joint_pairs = self._get_elements(obj, "joint")
+        for (_, elem) in joint_pairs:
+            j_pos = elem.get("pos")
+            if j_pos is not None:
+                j_pos = string_to_array(j_pos) * self._scale
+                elem.set("pos", array_to_string(j_pos))
+
+        # scale sites
+        site_pairs = self._get_elements(self.worldbody, "site")
+        for (_, elem) in site_pairs:
+            s_pos = elem.get("pos")
+            if s_pos is not None:
+                s_pos = string_to_array(s_pos) * self._scale
+                elem.set("pos", array_to_string(s_pos))
+
+            s_size = elem.get("size")
+            if s_size is not None:
+                s_size_np = string_to_array(s_size)
+                # handle cases where size is not 3 dimensional
+                if len(s_size_np) == 3:
+                    s_size_np = s_size_np * self._scale
+                elif len(s_size_np) == 2:
+                    scale = np.array(self._scale).reshape(-1)
+                    if len(scale) == 1:
+                        s_size_np *= scale
+                    elif len(scale) == 3:
+                        s_size_np[0] *= np.mean(scale[:2])  # width
+                        s_size_np[1] *= scale[2]  # height
+                    else:
+                        raise ValueError
+                elif len(s_size_np) == 1:
+                    s_size_np *= np.mean(self._scale)
+                else:
+                    raise ValueError
+                s_size = array_to_string(s_size_np)
+                elem.set("size", s_size)
 
     @property
     def bottom_offset(self):

@@ -89,7 +89,10 @@ class RingBuffer(Buffer):
         Returns:
             float or np.array: Averaged value of all elements in buffer
         """
-        return np.mean(self.buf[: self._size], axis=0)
+        if self._size > 0:
+            return np.mean(self.buf[: self._size], axis=0)
+        else:
+            return np.zeros(self.dim)
 
 
 class DeltaBuffer(Buffer):

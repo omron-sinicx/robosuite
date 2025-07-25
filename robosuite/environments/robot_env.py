@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from copy import deepcopy
+from functools import partial
 from typing import List
 
 import numpy as np
@@ -10,6 +11,7 @@ from robosuite.robots import ROBOT_CLASS_MAPPING
 from robosuite.robots.robot import Robot
 from robosuite.utils.mjcf_utils import IMAGE_CONVENTION_MAPPING
 from robosuite.utils.observables import Observable, sensor
+from robosuite.utils import camera_utils as CU
 
 
 class RobotEnv(MujocoEnv):
@@ -377,7 +379,49 @@ class RobotEnv(MujocoEnv):
 
         return observables
 
-    def _create_camera_sensors(self, cam_name, cam_w, cam_h, cam_d, cam_segs, modality="image"):
+    def _camera_rgb(self, obs_cache, cam_name, cam_w, cam_h, cam_d, depth_sensor_name, convention):
+        img = self.sim.render(
+            camera_name=cam_name,
+            width=cam_w,
+            height=cam_h,
+            depth=cam_d,
+        )
+        if cam_d:
+            rgb, depth = img
+            obs_cache[depth_sensor_name] = np.expand_dims(depth[::convention], axis=-1)
+            return rgb[::convention]
+        else:
+            return img[::convention]
+
+    def _camera_depth(self, obs_cache, cam_w, cam_h, depth_sensor_name, mode='norm'):
+        if depth_sensor_name not in obs_cache:
+            return np.zeros((cam_h, cam_w, 1))
+        # NOTE: the original range is in [0, 1] with a unknown scale
+        dep = obs_cache[depth_sensor_name]
+        if mode == 'norm':
+            dep = (dep - dep.min()) / (dep.max() - dep.min() + 1e-6)
+        elif mode == 'abs_m':
+            dep = CU.get_real_depth_map(self.sim, dep)
+        elif mode == 'abs_mm':
+            dep = CU.get_real_depth_map(self.sim, dep) * 1000
+        # elif mode == 'log_abs_m':
+        #     dep = CU.get_real_depth_map(self.sim, dep)
+        #     dep = np.log(dep + 1)
+        #     dep = (dep - dep.min()) / (dep.max() - dep.min() + 1e-6)
+        # elif mode == 'log_abs_mm':
+        #     dep = CU.get_real_depth_map(self.sim, dep) * 1000
+        #     dep = np.log(dep + 1)
+        #     dep = (dep - dep.min()) / (dep.max() - dep.min() + 1e-6)
+        # elif mode == 'tanh_m':
+        #     dep = CU.get_real_depth_map(self.sim, dep)
+        #     dep = np.tanh(dep)
+        #     dep = (dep - dep.min()) / (dep.max() - dep.min() + 1e-6)
+        else:
+            raise ValueError(
+                f"Unknown depth mode: {mode}")
+        return dep
+
+    def _create_camera_sensors(self, cam_name, cam_w, cam_h, cam_d, cam_segs, modality="image", depth_mode='norm'):
         """
         Helper function to create sensors for a given camera. This is abstracted in a separate function call so that we
         don't have local function naming collisions during the _setup_observables() call.
@@ -393,6 +437,7 @@ class RobotEnv(MujocoEnv):
                 `'element'`: segmentation at the per-geom level
 
             modality (str): Modality to assign to all sensors
+            depth_mode (str): Mode to use for depth sensor
         Returns:
             2-tuple:
                 sensors (list): Array of sensors for the given camera
@@ -404,43 +449,33 @@ class RobotEnv(MujocoEnv):
         # Create sensor information
         sensors = []
         names = []
+        modalities = []
 
         # Add camera observables to the dict
         rgb_sensor_name = f"{cam_name}_image"
         depth_sensor_name = f"{cam_name}_depth"
         segmentation_sensor_name = f"{cam_name}_segmentation"
 
-        @sensor(modality=modality)
-        def camera_rgb(obs_cache):
-            img = self.sim.render(
-                camera_name=cam_name,
-                width=cam_w,
-                height=cam_h,
-                depth=cam_d,
-            )
-            if cam_d:
-                rgb, depth = img
-                obs_cache[depth_sensor_name] = np.expand_dims(depth[::convention], axis=-1)
-                return rgb[::convention]
-            else:
-                return img[::convention]
+        camera_rgb = partial(self._camera_rgb, cam_name=cam_name, cam_w=cam_w, cam_h=cam_h,
+                             cam_d=cam_d, depth_sensor_name=depth_sensor_name, convention=convention)
 
         sensors.append(camera_rgb)
         names.append(rgb_sensor_name)
+        modalities.append(modality)
 
         if cam_d:
-
-            @sensor(modality=modality)
-            def camera_depth(obs_cache):
-                return obs_cache[depth_sensor_name] if depth_sensor_name in obs_cache else np.zeros((cam_h, cam_w, 1))
+            camera_depth = partial(self._camera_depth,
+                                   cam_w=cam_w, cam_h=cam_h, depth_sensor_name=depth_sensor_name,
+                                   mode=depth_mode)
 
             sensors.append(camera_depth)
             names.append(depth_sensor_name)
+            modalities.append(modality)
 
         if cam_segs is not None:
             # Define mapping we'll use for segmentation
             for cam_s in cam_segs:
-                seg_sensor, seg_sensor_name = self._create_segementation_sensor(
+                seg_sensor, seg_sensor_name, seg_sensor_modality = self._create_segementation_sensor(
                     cam_name=cam_name,
                     cam_w=cam_w,
                     cam_h=cam_h,
@@ -451,8 +486,28 @@ class RobotEnv(MujocoEnv):
 
                 sensors.append(seg_sensor)
                 names.append(seg_sensor_name)
+                modalities.append(seg_sensor_modality)
 
-        return sensors, names
+        return sensors, names, modalities
+
+    def _camera_segmentation(self, obs_cache, cam_name, cam_w, cam_h, convention, mapping):
+        seg = self.sim.render(
+            camera_name=cam_name,
+            width=cam_w,
+            height=cam_h,
+            depth=False,
+            segmentation=True,
+        )
+        seg = np.expand_dims(seg[::convention, :, 1], axis=-1)
+        # Map raw IDs to grouped IDs if we're using instance or class-level segmentation
+        if mapping is not None:
+            seg = (
+                np.fromiter(map(lambda x: mapping.get(x, -1), seg.flatten()), dtype=np.int32).reshape(
+                    cam_h, cam_w, 1
+                )
+                + 1
+            )
+        return seg
 
     def _create_segementation_sensor(self, cam_name, cam_w, cam_h, cam_s, seg_name_root, modality="image"):
         """
@@ -482,36 +537,37 @@ class RobotEnv(MujocoEnv):
         if cam_s == "instance":
             name2id = {inst: i for i, inst in enumerate(list(self.model.instances_to_ids.keys()))}
             mapping = {idn: name2id[inst] for idn, inst in self.model.geom_ids_to_instances.items()}
+            # shift by 1, since 0 is for background
+            self._seg_name2id = {k: v + 1 for k, v in name2id.items()}
         elif cam_s == "class":
             name2id = {cls: i for i, cls in enumerate(list(self.model.classes_to_ids.keys()))}
             mapping = {idn: name2id[cls] for idn, cls in self.model.geom_ids_to_classes.items()}
+            # shift by 1, since 0 is for background
+            self._seg_name2id = {k: v + 1 for k, v in name2id.items()}
         else:  # element
             # No additional mapping needed
             mapping = None
 
-        @sensor(modality=modality)
-        def camera_segmentation(obs_cache):
-            seg = self.sim.render(
-                camera_name=cam_name,
-                width=cam_w,
-                height=cam_h,
-                depth=False,
-                segmentation=True,
-            )
-            seg = np.expand_dims(seg[::convention, :, 1], axis=-1)
-            # Map raw IDs to grouped IDs if we're using instance or class-level segmentation
-            if mapping is not None:
-                seg = (
-                    np.fromiter(map(lambda x: mapping.get(x, -1), seg.flatten()), dtype=np.int32).reshape(
-                        cam_h, cam_w, 1
-                    )
-                    + 1
-                )
-            return seg
+        camera_segmentation = partial(self._camera_segmentation, cam_name=cam_name,
+                                      cam_w=cam_w, cam_h=cam_h, convention=convention, mapping=mapping)
 
         name = f"{seg_name_root}_{cam_s}"
 
-        return camera_segmentation, name
+        return camera_segmentation, name, modality
+
+    @property
+    def seg_name2id(self):
+        """
+        Returns the mapping from name to segmentation ID for the current environment.
+        This is useful for interpreting segmentation masks.
+
+        Returns:
+            dict: Mapping from segmentation name to ID, or None if no segmentation is used
+        """
+        if hasattr(self, "_seg_name2id"):
+            return self._seg_name2id
+        else:
+            return None
 
     def _reset_internal(self):
         """

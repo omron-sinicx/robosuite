@@ -17,8 +17,17 @@ from .xml_objects import (
     CanVisualObject,
     PlateWithHoleObject,
     DoorObject,
+    RoundHoleObject,
+    SquareHoleObject,
+    GuriguriRoundHoleObject,
+    GuriguriLargeSquareHoleObject,
+    GuriguriLargeRoundHoleObject,
+    GuriguriLargeRectangleHoleObject,
+    GuriguriLargeTriangleHoleObject,
+    AlanCharHoleObjectBase,
     MortarObject,
     MortarVisualObject,
+    MortarSDFObject,
 )
 from .primitive import *
 from .composite import *

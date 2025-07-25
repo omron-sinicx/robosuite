@@ -68,7 +68,7 @@ class Wrapper:
         Args:
             **kwargs (dict): Any args to pass to environment render function
         """
-        return self.env.render()
+        return self.env.render(**kwargs)
 
     def observation_spec(self):
         """
@@ -119,9 +119,10 @@ class Wrapper:
     def __getattr__(self, attr):
         # using getattr ensures that both __getattribute__ and __getattr__ (fallback) get called
         # (see https://stackoverflow.com/questions/3278077/difference-between-getattr-vs-getattribute)
+        if attr == 'env':  # Prevent recursion when accessing self.env
+            raise AttributeError
         orig_attr = getattr(self.env, attr)
         if callable(orig_attr):
-
             def hooked(*args, **kwargs):
                 result = orig_attr(*args, **kwargs)
                 # prevent wrapped_class from becoming unwrapped

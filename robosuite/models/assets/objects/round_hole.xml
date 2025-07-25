@@ -1,0 +1,76 @@
+<mujoco model="hole">
+  <compiler angle="radian"/>
+  <default>
+    <default class="visual">
+      <geom group="0" type="mesh" contype="0" conaffinity="0"/>
+    </default>
+    <default class="collision">
+      <geom group="0" type="mesh" solimp="0.9 0.95 0.001 0.5 2" solref=".004 1" condim="6"/>
+    </default>
+  </default>
+  <asset>
+    <texture file="../textures/red-wood.png" type="cube" name="red-wood" />
+    <material name="plate_mat" texture="red-wood" texrepeat="3 3" specular="0.4" shininess="0.1" />
+    <mesh file="round-hole/round_hole_0.obj" name="round_hole_0"/>
+    <mesh file="round-hole/round_hole_1.obj" name="round_hole_1"/>
+    <mesh file="round-hole/round_hole_2.obj" name="round_hole_2"/>
+    <mesh file="round-hole/round_hole_3.obj" name="round_hole_3"/>
+    <mesh file="round-hole/round_hole_4.obj" name="round_hole_4"/>
+    <mesh file="round-hole/round_hole_5.obj" name="round_hole_5"/>
+    <mesh file="round-hole/round_hole_6.obj" name="round_hole_6"/>
+    <mesh file="round-hole/round_hole_7.obj" name="round_hole_7"/>
+    <mesh file="round-hole/round_hole_8.obj" name="round_hole_8"/>
+    <mesh file="round-hole/round_hole_9.obj" name="round_hole_9"/>
+    <mesh file="round-hole/round_hole_10.obj" name="round_hole_10"/>
+    <mesh file="round-hole/round_hole_11.obj" name="round_hole_11"/>
+    <mesh file="round-hole/round_hole_12.obj" name="round_hole_12"/>
+    <mesh file="round-hole/round_hole_13.obj" name="round_hole_13"/>
+    <mesh file="round-hole/round_hole_14.obj" name="round_hole_14"/>
+    <mesh file="round-hole/round_hole_15.obj" name="round_hole_15"/>
+    <mesh file="round-hole/round_hole_16.obj" name="round_hole_16"/>
+    <mesh file="round-hole/round_hole_17.obj" name="round_hole_17"/>
+    <mesh file="round-hole/round_hole_18.obj" name="round_hole_18"/>
+    <mesh file="round-hole/round_hole_19.obj" name="round_hole_19"/>
+    <mesh file="round-hole/round_hole_20.obj" name="round_hole_20"/>
+    <mesh file="round-hole/round_hole_21.obj" name="round_hole_21"/>
+    <mesh file="round-hole/round_hole_22.obj" name="round_hole_22"/>
+    <mesh file="round-hole/round_hole_23.obj" name="round_hole_23"/>
+  </asset>
+
+  <!-- Always initialize the free camera to point at the origin. -->
+  <worldbody>
+    <body>
+      <body name="object">
+        <site rgba="0 0 0 0" size="0.005" pos="0 0 0.0" name="center"/>
+        <site pos="0 0 0" size="0.005 .1" quat="0.707105  0 0.707108 0 " rgba="1 0 0 0" type="cylinder" group="1"/>
+        <site pos="0 0 0" size="0.005 .1" quat="0.707105 0.707108 0 0" rgba="0 1 0 0" type="cylinder" group="1"/>
+        <site pos="0 0 0" size="0.005 .1" quat="1 0 0 0" rgba="0 0 1 0" type="cylinder" group="1"/>
+        <geom mesh="round_hole_0" class="collision"/>
+        <geom mesh="round_hole_1" class="collision"/>
+        <geom mesh="round_hole_2" class="collision"/>
+        <geom mesh="round_hole_3" class="collision"/>
+        <geom mesh="round_hole_4" class="collision"/>
+        <geom mesh="round_hole_5" class="collision"/>
+        <geom mesh="round_hole_6" class="collision"/>
+        <geom mesh="round_hole_7" class="collision"/>
+        <geom mesh="round_hole_8" class="collision"/>
+        <geom mesh="round_hole_9" class="collision"/>
+        <geom mesh="round_hole_10" class="collision"/>
+        <geom mesh="round_hole_11" class="collision"/>
+        <geom mesh="round_hole_12" class="collision"/>
+        <geom mesh="round_hole_13" class="collision"/>
+        <geom mesh="round_hole_14" class="collision"/>
+        <geom mesh="round_hole_15" class="collision"/>
+        <geom mesh="round_hole_16" class="collision"/>
+        <geom mesh="round_hole_17" class="collision"/>
+        <geom mesh="round_hole_18" class="collision"/>
+        <geom mesh="round_hole_19" class="collision"/>
+        <geom mesh="round_hole_20" class="collision"/>
+        <geom mesh="round_hole_21" class="collision"/>
+        <geom mesh="round_hole_22" class="collision"/>
+        <geom mesh="round_hole_23" class="collision"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>
+

@@ -1,3 +1,4 @@
+import gc
 import os
 import xml.etree.ElementTree as ET
 from collections import OrderedDict
@@ -256,6 +257,11 @@ class MujocoEnv(metaclass=EnvMeta):
         for processor in self._xml_processors:
             xml = processor(xml)
 
+        if hasattr(self, 'sim') and self.sim is not None:
+            # NOTE: Delete the _render_context_offscreen is necessary to prevent memory leaks
+            del self.sim._render_context_offscreen
+            gc.collect()
+
         # Create the simulation instance
         self.sim = MjSim.from_xml_string(xml)
 
@@ -274,10 +280,10 @@ class MujocoEnv(metaclass=EnvMeta):
         # TODO(yukez): investigate black screen of death
         # Use hard reset if requested
 
-        if self.hard_reset and not self.deterministic_reset:
-            if self.renderer == "mjviewer":
-                self._destroy_viewer()
+        if self.renderer == "mjviewer":
+            self._destroy_viewer()
 
+        if self.hard_reset and not self.deterministic_reset:
             self._load_model()
             self._initialize_sim()
             if self.renderer == "mujoco":

@@ -19,3 +19,6 @@ robosuite-models==1.0.0
 
 # required for gamepad
 inputs
+
+rospkg
+numpy-quaternion

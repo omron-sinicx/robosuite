@@ -17,6 +17,23 @@ import robosuite.utils.transform_utils as T
 from robosuite.wrappers import DomainRandomizationWrapper, VisualizationWrapper
 
 
+def get_camera_intrinsic_matrix_from_fovy(fovy, camera_height, camera_width):
+    """
+    Obtains camera intrinsic matrix.
+
+    Args:
+        sim (MjSim): simulator instance
+        camera_name (str): name of camera
+        camera_height (int): height of camera images in pixels
+        camera_width (int): width of camera images in pixels
+    Return:
+        K (np.array): 3x3 camera matrix
+    """
+    f = 0.5 * camera_height / np.tan(fovy * np.pi / 360)
+    K = np.array([[f, 0, camera_width / 2], [0, f, camera_height / 2], [0, 0, 1]])
+    return K
+
+
 def get_camera_intrinsic_matrix(sim, camera_name, camera_height, camera_width):
     """
     Obtains camera intrinsic matrix.

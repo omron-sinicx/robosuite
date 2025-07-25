@@ -1,0 +1,47 @@
+<mujoco model="hole">
+  <default>
+    <default class="collision">
+      <geom group="0" type="mesh" solimp="0.9 0.95 0.001 0.5 2" density="1000" solref=".004 1" condim="6"/>
+    </default>
+  </default>
+  <asset>
+    <texture file="../textures/red-wood.png" type="cube" name="red-wood" />
+    <material name="plate_mat" texture="red-wood" texrepeat="3 3" specular="0.4" shininess="0.1" />
+    <mesh file="meshes/guriguri-round-hole/Body3.stl" name="guriguri-round-hole_body3_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body4.stl" name="guriguri-round-hole_body4_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body5.stl" name="guriguri-round-hole_body5_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body6.stl" name="guriguri-round-hole_body6_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body7.stl" name="guriguri-round-hole_body7_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body8.stl" name="guriguri-round-hole_body8_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body9.stl" name="guriguri-round-hole_body9_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body10.stl" name="guriguri-round-hole_body10_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body11.stl" name="guriguri-round-hole_body11_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body12.stl" name="guriguri-round-hole_body12_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body13.stl" name="guriguri-round-hole_body13_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body14.stl" name="guriguri-round-hole_body14_mesh"/>
+    <mesh file="meshes/guriguri-round-hole/Body15.stl" name="guriguri-round-hole_body15_mesh"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object">
+        <geom mesh="guriguri-round-hole_body15_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body3_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body4_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body5_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body6_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body7_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body8_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body9_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body10_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body11_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body12_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body13_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body14_mesh" class="collision" group="0" solref=".004 1"/>
+        <geom mesh="guriguri-round-hole_body15_mesh" class="collision" group="0" solref=".004 1"/>
+      </body>
+      <site rgba="0 0 0 0" size="0.005" pos="0 0 -0.085" name="bottom_site"/>
+      <site rgba="0 0 0 0" size="0.005" pos="0 0 0.0" name="top_site"/>
+      <site rgba="0 0 0 0" size="0.005" pos="0.062 0.062 0" name="horizontal_radius_site"/>
+    </body>
+  </worldbody>
+</mujoco>

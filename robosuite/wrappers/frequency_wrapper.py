@@ -1,5 +1,4 @@
 import numpy as np
-from robosuite.environments.manipulation.osx_grind import OSXGrind, DEFAULT_GRIND_CONFIG
 
 
 class FrequencyWrapper:
@@ -108,9 +107,11 @@ class FrequencyWrapper:
 
 
 # For backward compatibility
-def OSXGrindFrequencyWrapper(env_config=None, action_control_freq=20, trajectory_target_freq=500): return FrequencyWrapper(
-    env_class=OSXGrind,
-    env_config=env_config,
-    action_control_freq=action_control_freq,
-    trajectory_target_freq=trajectory_target_freq
-)
+def OSXGrindFrequencyWrapper(env_config=None, action_control_freq=20, trajectory_target_freq=500):
+    from robosuite.environments.manipulation.osx_grind import OSXGrind
+    return FrequencyWrapper(
+        env_class=OSXGrind,
+        env_config=env_config,
+        action_control_freq=action_control_freq,
+        trajectory_target_freq=trajectory_target_freq
+    )

@@ -40,7 +40,6 @@ class MujocoXML(object):
         self.tendon = self.create_default_element("tendon")
         self.equality = self.create_default_element("equality")
         self.contact = self.create_default_element("contact")
-        self.extension = self.create_default_element("extension")
 
         # Parse any default classes and replace them inline
         default = self.create_default_element("default")
@@ -51,6 +50,7 @@ class MujocoXML(object):
         self.root.remove(default)
 
         self.resolve_asset_dependency()
+        self.resolve_asset_include_tags()
 
     def resolve_asset_dependency(self):
         """
@@ -62,6 +62,23 @@ class MujocoXML(object):
             abs_path = os.path.abspath(self.folder)
             abs_path = os.path.join(abs_path, file)
             node.set("file", abs_path)
+
+    def resolve_asset_include_tags(self):
+        """
+        Expand <include/> in <asset/>
+        TODO: recursively expand all includes in the xml
+        """
+
+        include_nodes = []
+        for node in self.asset.findall("./include"):
+            file = node.get("file")
+            include_xml = MujocoXML(file)
+            self.merge_assets(include_xml)
+            include_nodes.append(node)
+
+        # remove include tags
+        for node in include_nodes:
+            self.asset.remove(node)
 
     def create_default_element(self, name):
         """
@@ -172,21 +189,6 @@ class MujocoXML(object):
                 parsed_xml = xml.dom.minidom.parseString(xml_str)
                 xml_str = parsed_xml.toprettyxml(newl="")
             f.write(xml_str)
-
-    def merge_extensions(self, other):
-        """
-        Merges @other's extensions in a custom logic.
-
-        Args:
-            other (MujocoXML or MujocoObject): other xml file whose extensions will be merged into this one
-        """
-        if other.extension:
-            for extension in other.extension:
-                if (
-                    find_elements(root=self.extension, tags=extension.tag, attribs={"name": extension.get("name")}, return_first=True)
-                    is None
-                ):
-                    self.extension.append(extension)
 
     def merge_assets(self, other):
         """
@@ -300,6 +302,7 @@ class MujocoModel(object):
         if type(names) is str:
             return self.naming_prefix + names if not self.exclude_from_prefixing(names) else names
         elif type(names) is list:
+            names = [item for item in names if item is not None]
             return [self.naming_prefix + name if not self.exclude_from_prefixing(name) else name for name in names]
         elif type(names) is dict:
             names = names.copy()
@@ -541,6 +544,14 @@ class MujocoXMLModel(MujocoXML, MujocoModel):
 
         # Parse element tree to get all relevant bodies, joints, actuators, and geom groups
         self._elements = sort_elements(root=self.root, element_filter=_add_default_name_filter)
+
+        # handle soft UR5e (gripper out of the body)
+        if 'SoftUR5e' in self.name:
+            self._elements["root_body"].pop()
+            self._elements["joints"] = self._elements["joints"][:6]
+            self._elements["actuators"] = self._elements["actuators"][:6]
+            self._elements["bodies"] = self._elements["bodies"][:-6]
+
         assert (
             len(self._elements["root_body"]) == 1
         ), "Invalid number of root bodies found for robot model. Expected 1," "got {}".format(
@@ -575,6 +586,86 @@ class MujocoXMLModel(MujocoXML, MujocoModel):
             if used:
                 self.asset.append(tex_element)
                 self.asset.append(mat_element)
+
+    def remove(self, element):
+        """
+        Remove an element and all its children from the model, updating internal lists.
+
+        Args:
+            element (ET.Element): XML element to remove from the model
+        """
+        # Map tags to their corresponding internal list names and attributes
+        tag_mapping = {
+            "body": ["bodies", "_bodies"],
+            "joint": ["joints", "_joints"],
+            "actuator": ["actuators", "_actuators"],
+            "site": ["sites", "_sites"],
+            "sensor": ["sensors", "_sensors"],
+            "geom": None  # Special handling for geoms based on group
+        }
+
+        # Initialize sets to track names to remove
+        names_to_remove = {
+            "bodies": set(),
+            "joints": set(),
+            "actuators": set(),
+            "sites": set(),
+            "sensors": set(),
+            "contact_geoms": set(),
+            "visual_geoms": set()
+        }
+
+        # Gather all elements to remove
+        for el in element.iter():
+            name = el.get("name")
+            if name is None:
+                continue
+
+            if el.tag in tag_mapping and tag_mapping[el.tag]:
+                names_to_remove[tag_mapping[el.tag][0]].add(name)
+            elif el.tag == "geom":
+                # Sort geoms based on group attribute
+                target = "visual_geoms" if el.get("group") == "1" else "contact_geoms"
+                names_to_remove[target].add(name)
+
+        # Update internal lists and instance attributes
+        updates = {
+            "bodies": ("_bodies", "_elements['bodies']"),
+            "joints": ("_joints", "_elements['joints']"),
+            "actuators": ("_actuators", "_elements['actuators']"),
+            "sites": ("_sites", None),
+            "sensors": ("_sensors", None),
+            "contact_geoms": ("_contact_geoms", None),
+            "visual_geoms": ("_visual_geoms", None)
+        }
+
+        for list_name, (attr_name, elements_key) in updates.items():
+            if not names_to_remove[list_name]:
+                continue
+
+            # Update instance attribute lists
+            if hasattr(self, attr_name):
+                current = getattr(self, attr_name)
+                if isinstance(current, list):
+                    names_without_prefix = [x[len(self.naming_prefix):] if x.startswith(self.naming_prefix) else x
+                                            for x in names_to_remove[list_name] if x.startswith(self.naming_prefix)]
+                    setattr(self, attr_name, [x for x in current if x not in names_without_prefix])
+
+            # Update elements dictionary if applicable
+            if elements_key and elements_key.startswith("_elements"):
+                key = elements_key.split("'")[1]
+                if key in self._elements:
+                    self._elements[key] = [
+                        e for e in self._elements[key]
+                        if e.get("name") not in names_to_remove[list_name]
+                    ]
+
+        # Find parent and remove element from XML tree
+        for parent in self.root.iter():
+            for child in list(parent):
+                if child is element:
+                    parent.remove(element)
+                    return
 
     def exclude_from_prefixing(self, inp):
         """

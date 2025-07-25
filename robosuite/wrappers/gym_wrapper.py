@@ -4,6 +4,9 @@ This is useful when using these environments with code that assumes a gym-like
 interface.
 """
 
+import logging
+import collections
+import random
 import numpy as np
 
 try:
@@ -21,6 +24,9 @@ except ImportError:
         raise ImportError("Please ensure version of gym>=0.26.0 to use the GymWrapper.")
 
 from robosuite.wrappers import Wrapper
+
+
+log = logging.getLogger(__name__)
 
 
 class GymWrapper(Wrapper, gym.Env):
@@ -52,6 +58,8 @@ class GymWrapper(Wrapper, gym.Env):
         # Get reward range
         self.reward_range = (0, self.env.reward_scale)
 
+        self.render_mode = self.metadata['render_modes'][0]
+
         if keys is None:
             keys = []
             # Add object obs if requested
@@ -60,9 +68,20 @@ class GymWrapper(Wrapper, gym.Env):
             # Add image obs if requested
             if self.env.use_camera_obs:
                 keys += [f"{cam_name}_image" for cam_name in self.env.camera_names]
+                if self.env.camera_depths:
+                    keys += [f"{cam_name}_depth" for cam_name in self.env.camera_names]
+                if self.env.camera_segmentations:
+                    seg_types = self.env.camera_segmentations if isinstance(self.env.camera_segmentations, list) else [
+                        self.env.camera_segmentations]
+                    for seg_type in seg_types:
+                        keys.extend([f"{cam_name}_segmentation_{seg_type}" for cam_name in self.env.camera_names])
             # Iterate over all robots to add to state
+            # for idx in range(len(self.env.robots)):
+            #     keys += ["robot{}_proprio-state".format(idx)]
             for idx in range(len(self.env.robots)):
-                keys += ["robot{}_proprio-state".format(idx)]
+                keys += ["robot{}_non_priv_proprio-state".format(idx)]
+            for idx in range(len(self.env.robots)):
+                keys += ["robot{}_priv_proprio-state".format(idx)]
         self.keys = keys
 
         # Gym specific attributes
@@ -77,11 +96,10 @@ class GymWrapper(Wrapper, gym.Env):
         if self.flatten_obs:
             flat_ob = self._flatten_obs(obs)
             self.obs_dim = flat_ob.size
-            high = np.inf * np.ones(self.obs_dim)
+            high = np.inf * np.ones(self.obs_dim).astype(np.float32)
             low = -high
-            self.observation_space = spaces.Box(np.float32(low), np.float32(high))
+            self.observation_space = spaces.Box(low, high)
         else:
-
             def get_box_space(sample):
                 """Util fn to obtain the space of a single numpy sample data"""
                 if np.issubdtype(sample.dtype, np.integer):
@@ -93,11 +111,11 @@ class GymWrapper(Wrapper, gym.Env):
                 else:
                     raise ValueError()
                 return spaces.Box(low=low, high=high, shape=sample.shape, dtype=sample.dtype)
-
             self.observation_space = spaces.Dict({key: get_box_space(obs[key]) for key in self.keys})
+            self.observation_space.spaces = collections.OrderedDict(self.observation_space.spaces)
 
         low, high = self.env.action_spec
-        self.action_space = spaces.Box(np.float32(low), np.float32(high))
+        self.action_space = spaces.Box(low, high, dtype=np.float64)
 
     def _flatten_obs(self, obs_dict, verbose=False):
         """
@@ -136,6 +154,7 @@ class GymWrapper(Wrapper, gym.Env):
         if seed is not None:
             if isinstance(seed, int):
                 np.random.seed(seed)
+                random.seed(seed)
             else:
                 raise TypeError("Seed must be an integer type!")
         ob_dict = self.env.reset()
@@ -155,12 +174,21 @@ class GymWrapper(Wrapper, gym.Env):
                 - (np.array) observations from the environment
                 - (float) reward from the environment
                 - (bool) episode ending after reaching an env terminal state
-                - (bool) episode ending after an externally defined condition - removed
+                - (bool) episode ending after an externally defined condition
                 - (dict) misc information
         """
         ob_dict, reward, terminated, info = self.env.step(action)
+        if self.env.viewer:
+            self.env.render()
         obs = self._flatten_obs(ob_dict) if self.flatten_obs else self._filter_obs(ob_dict)
-        return obs, reward, terminated, False, info
+
+        terminated = bool(terminated)
+        truncated = False
+        if self.env.timestep >= self.env.horizon:
+            terminated = False
+            truncated = True
+
+        return obs, reward, terminated, truncated, info
 
     def compute_reward(self, achieved_goal, desired_goal, info):
         """

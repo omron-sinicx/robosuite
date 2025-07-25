@@ -1,39 +1,10 @@
-import xml.etree.ElementTree as ET
 from copy import deepcopy
-
-import mujoco
+from typing import Dict, List
 
 from robosuite.models.objects import MujocoObject
 from robosuite.models.robots import RobotModel
 from robosuite.models.world import MujocoWorldBase
-from robosuite.utils.mjcf_utils import get_ids
-
-
-def get_subtree_geom_ids_by_group(model: mujoco.MjModel, body_id: int, group: int) -> list[int]:
-    """Get all geoms belonging to a subtree starting at a given body, filtered by group.
-
-    Args:
-        model: MuJoCo model.
-        body_id: ID of body where subtree starts.
-        group: Group ID to filter geoms.
-
-    Returns:
-        A list containing all subtree geom ids in the specified group.
-
-    Adapted from https://github.com/kevinzakka/mink/blob/main/mink/utils.py
-    """
-
-    def gather_geoms(body_id: int) -> list[int]:
-        geoms: list[int] = []
-        geom_start = model.body_geomadr[body_id]
-        geom_end = geom_start + model.body_geomnum[body_id]
-        geoms.extend(geom_id for geom_id in range(geom_start, geom_end) if model.geom_group[geom_id] == group)
-        children = [i for i in range(model.nbody) if model.body_parentid[i] == body_id]
-        for child_id in children:
-            geoms.extend(gather_geoms(child_id))
-        return geoms
-
-    return gather_geoms(body_id)
+from robosuite.utils.mjcf_utils import get_ids, find_elements
 
 
 class Task(MujocoWorldBase):
@@ -51,6 +22,10 @@ class Task(MujocoWorldBase):
 
         mujoco_objects (None or MujocoObject or list of MujocoObject): a list of MJCF models of physical objects
 
+        mujoco_objects_at_body (dict): A dictionary mapping body names to MujocoObject instances
+            where they should be merged in the MJCF model. If `merge_body` is set to "default",
+            the objects will be merged at the root worldbody of this MJCF model. The same as mujoco_objects.
+            This is useful for merging objects at specific robot end-effector bodies.
     Raises:
         AssertionError: [Invalid input object type]
     """
@@ -60,6 +35,7 @@ class Task(MujocoWorldBase):
         mujoco_arena,
         mujoco_robots,
         mujoco_objects=None,
+        mujoco_objects_at_body: Dict[str, List[MujocoObject]] = None,
     ):
         super().__init__()
 
@@ -76,6 +52,15 @@ class Task(MujocoWorldBase):
         for mujoco_robot in self.mujoco_robots:
             self.merge_robot(mujoco_robot)
         self.merge_objects(self.mujoco_objects)
+
+        if mujoco_objects_at_body:
+            for merge_body, mujoco_objs in mujoco_objects_at_body.items():
+                assert all(isinstance(obj, MujocoObject) for obj in mujoco_objs), \
+                    "All objects in mujoco_objects_at_body must be MujocoObject"
+                assert isinstance(merge_body, str), "All merge bodies in mujoco_objects_at_body must be strings"
+                self.merge_objects_at_body(mujoco_objs, merge_body=merge_body)
+                # Add to the main list of objects
+                self.mujoco_objects.extend(mujoco_objs)
 
         self._instances_to_ids = None
         self._geom_ids_to_instances = None
@@ -115,9 +100,35 @@ class Task(MujocoWorldBase):
                 type(mujoco_obj)
             )
             # Merge this object
-            self.merge_extensions(mujoco_obj)
             self.merge_assets(mujoco_obj)
             self.worldbody.append(mujoco_obj.get_obj())
+
+    def merge_objects_at_body(self, mujoco_objects, merge_body="default"):
+        """
+        Adds object models to the MJCF model at a specific body.
+
+        Args:
+            mujoco_objects (list of MujocoObject): objects to merge into this MJCF model
+            merge_body (None or str): If set, will merge child bodies of @others. Default is "default", which
+                corresponds to the root worldbody for this XML. Otherwise, should be an existing body name
+                that exists in this XML. None results in no merging of @other's bodies in its worldbody.
+        """
+        for mujoco_obj in mujoco_objects:
+            # Make sure we actually got a MujocoObject
+            assert isinstance(mujoco_obj, MujocoObject), "Tried to merge non-MujocoObject! Got type: {}".format(
+                type(mujoco_obj)
+            )
+            if merge_body is not None:
+                root = (
+                    self.worldbody
+                    if merge_body == "default"
+                    else find_elements(
+                        root=self.worldbody, tags="body", attribs={"name": merge_body}, return_first=True
+                    )
+                )
+                assert root is not None, f"Merge body '{merge_body}' not found in the worldbody!"
+                root.append(mujoco_obj.get_obj())
+            self.merge_assets(mujoco_obj)
 
     def generate_id_mappings(self, sim):
         """
@@ -137,32 +148,15 @@ class Task(MujocoWorldBase):
         for robot in self.mujoco_robots:
             models += [robot] + robot.models
 
-        worldbody = self.mujoco_arena.root.find("worldbody")
-        exclude_bodies = ["table", "left_eef_target", "right_eef_target"]  # targets used for viz / mjgui
-        top_level_bodies = [
-            body.attrib.get("name")
-            for body in worldbody.findall("body")
-            if body.attrib.get("name") not in exclude_bodies
-        ]
-        models.extend(top_level_bodies)
-
         # Parse all mujoco models from robots and objects
         for model in models:
-            if isinstance(model, str):
-                body_name = model
-                visual_group_number = 1
-                body_id = sim.model.body_name2id(body_name)
-                inst, cls = body_name, body_name
-                geom_ids = get_subtree_geom_ids_by_group(sim.model, body_id, visual_group_number)
-                id_groups = [geom_ids, []]
-            else:
-                # Grab model class name and visual IDs
-                cls = str(type(model)).split("'")[1].split(".")[-1]
-                inst = model.name
-                id_groups = [
-                    get_ids(sim=sim, elements=model.visual_geoms + model.contact_geoms, element_type="geom"),
-                    get_ids(sim=sim, elements=model.sites, element_type="site"),
-                ]
+            # Grab model class name and visual IDs
+            cls = str(type(model)).split("'")[1].split(".")[-1]
+            inst = model.name
+            id_groups = [
+                get_ids(sim=sim, elements=model.visual_geoms + model.contact_geoms, element_type="geom"),
+                get_ids(sim=sim, elements=model.sites, element_type="site"),
+            ]
             group_types = ("geom", "site")
             ids_to_instances = (self._geom_ids_to_instances, self._site_ids_to_instances)
             ids_to_classes = (self._geom_ids_to_classes, self._site_ids_to_classes)

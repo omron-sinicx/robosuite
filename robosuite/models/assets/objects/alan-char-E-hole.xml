@@ -1,0 +1,80 @@
+<mujoco model="hole">
+  <default>
+    <default class="collision">
+      <geom
+        group="0"
+        type="mesh"
+        solimp="0.9 0.95 0.001 0.5 2"
+        density="100000"
+        solref=".004 1"
+        condim="6"
+        friction="1 0.005 0.001"
+      />
+    </default>
+  </default>
+  <asset>
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_0.stl" name="hole_mesh_0" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_1.stl" name="hole_mesh_1" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_2.stl" name="hole_mesh_2" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_3.stl" name="hole_mesh_3" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_4.stl" name="hole_mesh_4" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_5.stl" name="hole_mesh_5" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_6.stl" name="hole_mesh_6" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_7.stl" name="hole_mesh_7" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_8.stl" name="hole_mesh_8" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_9.stl" name="hole_mesh_9" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_10.stl" name="hole_mesh_10" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_11.stl" name="hole_mesh_11" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_12.stl" name="hole_mesh_12" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_13.stl" name="hole_mesh_13" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_14.stl" name="hole_mesh_14" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_15.stl" name="hole_mesh_15" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_16.stl" name="hole_mesh_16" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_17.stl" name="hole_mesh_17" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_18.stl" name="hole_mesh_18" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_19.stl" name="hole_mesh_19" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_20.stl" name="hole_mesh_20" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_21.stl" name="hole_mesh_21" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_22.stl" name="hole_mesh_22" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_23.stl" name="hole_mesh_23" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_24.stl" name="hole_mesh_24" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_25.stl" name="hole_mesh_25" />
+    <mesh refquat="0.7071 0 0 -0.7071" file="meshes/alan-char/E-hole/E-hole_part_26.stl" name="hole_mesh_26" />
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object" class="collision">
+        <geom mesh="hole_mesh_0" class="collision" />
+        <geom mesh="hole_mesh_1" class="collision" />
+        <geom mesh="hole_mesh_2" class="collision" />
+        <geom mesh="hole_mesh_3" class="collision" />
+        <geom mesh="hole_mesh_4" class="collision" />
+        <geom mesh="hole_mesh_5" class="collision" />
+        <geom mesh="hole_mesh_6" class="collision" />
+        <geom mesh="hole_mesh_7" class="collision" />
+        <geom mesh="hole_mesh_8" class="collision" />
+        <geom mesh="hole_mesh_9" class="collision" />
+        <geom mesh="hole_mesh_10" class="collision" />
+        <geom mesh="hole_mesh_11" class="collision" />
+        <geom mesh="hole_mesh_12" class="collision" />
+        <geom mesh="hole_mesh_13" class="collision" />
+        <geom mesh="hole_mesh_14" class="collision" />
+        <geom mesh="hole_mesh_15" class="collision" />
+        <geom mesh="hole_mesh_16" class="collision" />
+        <geom mesh="hole_mesh_17" class="collision" />
+        <geom mesh="hole_mesh_18" class="collision" />
+        <geom mesh="hole_mesh_19" class="collision" />
+        <geom mesh="hole_mesh_20" class="collision" />
+        <geom mesh="hole_mesh_21" class="collision" />
+        <geom mesh="hole_mesh_22" class="collision" />
+        <geom mesh="hole_mesh_23" class="collision" />
+        <geom mesh="hole_mesh_24" class="collision" />
+        <geom mesh="hole_mesh_25" class="collision" />
+        <geom mesh="hole_mesh_26" class="collision" />
+      </body>
+      <site rgba="0 0 0 0" size="0.005" pos="0 0 -0.14" name="bottom_site" />
+      <site rgba="0 0 0 0" size="0.005" pos="0 0 0" name="top_site" />
+      <site rgba="0 0 0 0" size="0.005" pos="0.06 0.06 0" name="horizontal_radius_site" />
+    </body>
+  </worldbody>
+</mujoco>

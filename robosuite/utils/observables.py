@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 
 
@@ -99,9 +100,13 @@ def create_gaussian_noise_corrupter(mean, std, low=-np.inf, high=np.inf):
     def corrupter(inp):
         inp = np.array(inp)
         noise = mean + std * np.random.randn(*inp.shape)
-        return np.clip(inp + noise, low, high)
+        return np.clip(inp + noise, low, high).astype(np.float32)
 
     return corrupter
+
+
+def _create_deterministic_delayer(delay):
+    return delay
 
 
 def create_deterministic_delayer(delay):
@@ -115,7 +120,11 @@ def create_deterministic_delayer(delay):
         function: delayer
     """
     assert delay >= 0, "Inputted delay must be non-negative!"
-    return lambda: delay
+    return partial(_create_deterministic_delayer, delay=delay)
+
+
+def _create_uniform_sampled_delayer(min_delay, max_delay):
+    return min_delay + (max_delay - min_delay) * np.random.random()
 
 
 def create_uniform_sampled_delayer(min_delay, max_delay):
@@ -130,7 +139,11 @@ def create_uniform_sampled_delayer(min_delay, max_delay):
         function: delayer
     """
     assert min(min_delay, max_delay) >= 0, "Inputted delay must be non-negative!"
-    return lambda: min_delay + (max_delay - min_delay) * np.random.random()
+    return partial(_create_uniform_sampled_delayer, min_delay=min_delay, max_delay=max_delay)
+
+
+def _create_gaussian_sampled_delayer(mean, std):
+    return max(0.0, int(np.round(mean + std * np.random.randn())))
 
 
 def create_gaussian_sampled_delayer(mean, std):
@@ -145,13 +158,14 @@ def create_gaussian_sampled_delayer(mean, std):
         function: delayer
     """
     assert mean >= 0, "Inputted mean delay must be non-negative!"
-    return lambda: max(0.0, int(np.round(mean + std * np.random.randn())))
-
+    return partial(_create_gaussian_sampled_delayer, mean=mean, std=std)
 
 # Common defaults to use
-NO_CORRUPTION = lambda inp: inp
-NO_FILTER = lambda inp: inp
-NO_DELAY = lambda: 0.0
+
+
+def NO_CORRUPTION(inp): return inp
+def NO_FILTER(inp): return inp
+def NO_DELAY(): return 0.0
 
 
 class Observable:
@@ -189,6 +203,7 @@ class Observable:
         sampling_rate=20,
         enabled=True,
         active=True,
+        modality=None,
     ):
         # Set all internal variables and methods
         self.name = name
@@ -201,6 +216,7 @@ class Observable:
         self._active = active
         self._is_number = False  # filled in during sensor check call
         self._data_shape = (1,)  # filled in during sensor check call
+        self.assigned_modality = modality
 
         # Make sure sensor is working
         self._check_sensor_validity()
@@ -400,4 +416,7 @@ class Observable:
         Returns:
             str: Modality name for this observable
         """
-        return self._sensor.__modality__
+        if self.assigned_modality is None:
+            return self._sensor.__modality__
+        else:
+            return self.assigned_modality

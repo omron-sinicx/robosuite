@@ -15,6 +15,7 @@ from robosuite.environments.manipulation.two_arm_transport import TwoArmTranspor
 from robosuite.environments.manipulation.two_arm_osx import TwoArmOSX
 from robosuite.environments.manipulation.two_arm_wiping import TwoArmWiping
 from robosuite.environments.manipulation.osx_grind import OSXGrind
+from robosuite.environments.manipulation.soft_peg_in_hole import SoftPegInHole
 
 from robosuite.environments import ALL_ENVIRONMENTS
 from robosuite.controllers import (

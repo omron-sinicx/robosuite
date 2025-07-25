@@ -1,0 +1,37 @@
+<?xml version="1.0" ?>
+<mujoco model="hole">
+  <default>
+    <default class="collision">
+      <geom group="0" type="mesh" solimp="0.9 0.95 0.001 0.5 2" density="100000" solref="0.004 1" condim="6" friction="1 0.005 0.001"/>
+    </default>
+  </default>
+  <asset>
+    <mesh name="hole_part_0" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_0.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_1" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_1.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_2" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_2.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_3" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_3.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_4" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_4.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_5" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_5.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_6" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_6.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_7" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_7.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+    <mesh name="hole_part_8" file="/root/osx-ur/dependencies/robosuite/robosuite/scripts/generate_polygon_mesh/output/meshes/hole/poly5_23/part_8.stl" refpos="0.0 0 0" refquat="0.7071 0 0 -0.7071" scale="0.01 0.01 0.01"/>
+  </asset>
+  <worldbody>
+    <body>
+      <body name="object" class="collision">
+        <geom mesh="hole_part_0" class="collision"/>
+        <geom mesh="hole_part_1" class="collision"/>
+        <geom mesh="hole_part_2" class="collision"/>
+        <geom mesh="hole_part_3" class="collision"/>
+        <geom mesh="hole_part_4" class="collision"/>
+        <geom mesh="hole_part_5" class="collision"/>
+        <geom mesh="hole_part_6" class="collision"/>
+        <geom mesh="hole_part_7" class="collision"/>
+        <geom mesh="hole_part_8" class="collision"/>
+      </body>
+      <site name="bottom_site" rgba="0 0 0 0" size="0.005" pos="0 0 -0.14"/>
+      <site name="top_site" rgba="0 0 0 0" size="0.005" pos="0 0 0"/>
+      <site name="horizontal_radius_site" rgba="0 0 0 0" size="0.005" pos="0.06 0.06 0"/>
+    </body>
+  </worldbody>
+</mujoco>

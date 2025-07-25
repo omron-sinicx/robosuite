@@ -303,6 +303,60 @@ class UniformRandomSampler(ObjectPositionSampler):
         return placed_objects
 
 
+class CurriculumUniformRandomSampler(UniformRandomSampler):
+    def __init__(
+        self,
+        name,
+        mujoco_objects=None,
+        x_range=(0, 0),
+        y_range=(0, 0),
+        rotation=None,
+        rotation_axis="z",
+        ensure_object_boundary_in_range=True,
+        ensure_valid_placement=True,
+        reference_pos=(0, 0, 0),
+        z_offset=0.0,
+    ):
+        self.curriculum_coef = 1.0
+        super().__init__(
+            name,
+            mujoco_objects=mujoco_objects,
+            x_range=x_range,
+            y_range=y_range,
+            rotation=rotation,
+            rotation_axis=rotation_axis,
+            ensure_object_boundary_in_range=ensure_object_boundary_in_range,
+            ensure_valid_placement=ensure_valid_placement,
+            reference_pos=reference_pos,
+            z_offset=z_offset,
+        )
+
+    def set_curriculum(self, x):
+        assert 0 <= x <= 1, "Curriculum must be between 0 and 1"
+        self.curriculum_coef = x
+
+    def get_curriculum_state(self):
+        return {'x_range': np.asarray(self.x_range) * self.curriculum_coef,
+                'y_range': np.asarray(self.y_range) * self.curriculum_coef}
+
+    def _sample_x(self, object_horizontal_radius):
+        minimum, maximum = np.asarray(self.x_range) * self.curriculum_coef
+        if self.ensure_object_boundary_in_range:
+            minimum += object_horizontal_radius
+            maximum -= object_horizontal_radius
+        return np.random.uniform(high=maximum, low=minimum)
+
+    def _sample_y(self, object_horizontal_radius):
+        minimum, maximum = np.asarray(self.y_range) * self.curriculum_coef
+        if self.ensure_object_boundary_in_range:
+            minimum += object_horizontal_radius
+            maximum -= object_horizontal_radius
+        return np.random.uniform(high=maximum, low=minimum)
+
+    # def _sample_quat(self):
+        # raise NotImplementedError("Have not support curriculum in rotation sampling")
+
+
 class SequentialCompositeSampler(ObjectPositionSampler):
     """
     Samples position for each object sequentially. Allows chaining
