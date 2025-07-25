@@ -36,22 +36,6 @@ DEFAULT_GRIND_CONFIG = {
     # settings for thresholds
     "force_torque_limits": [50.0, 50.0, 50.0, 10.0, 10.0, 10.0],  # maximum eef force/torque allowed (N | N/m)
 
-    # tracking settings
-    "tracking_trajectory_threshold": 0.005,
-    "tracking_force_threshold": 1.0,
-    "tracking_trajectory_method": 'per_error_threshold',
-
-    "reset_with_ik": True,
-    "init_qpos": [-0.24317403, -0.82343785,  1.99487586, -2.74223148, -1.57079607,  1.32762232],
-
-    # Trajectory settings
-    "randomize_reference_trajectory": False,
-    "num_waypoints": 1000,
-    "duration": 10,
-    "duration_range": [3.0, 30.0],
-    "target_force": 10.0,  # N
-    "target_force_range": [1.0, 15.0],
-
     # action settings
     "action_type": "stiffness_kp",  # "stiffness_kp" or "virtual_force" or "combined" or "none"
     "action_ndim": 4,  # 4D or 12D
@@ -65,17 +49,42 @@ DEFAULT_GRIND_CONFIG = {
 
     # Task settings
     # Mortar parameters
-    "mortar_height": 0.047,  # (m)
-    "mortar_max_radius": 0.04,  # (m)
-    "mortar_mode": "mesh",  # "SDA" or "mesh" Convex Decomposition Approximation
-    "spawn_mortar": True,
-    "mortar_diameter": 0.08,  # diameter of the mortar (m)
-    "mortar_inner_height": 0.012,  # height of the mortar inner surface (m)
-    "desired_height": 0.005,  # desired grinding height (m)
-    "max_inclination_angle": 0.5,  # fraction of mortar radius for inclination
-    "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
-    "initial_position": [0, 0, 0.8],  # initial position offset
-    "mortar_space_threshold_max": 0.1,  # maximum distance from the mortar the eef is allowed to diverge (m)
+    "mortar": {
+        "height": 0.047,  # (m)
+        "radius": 0.04,  # (m)
+        "mode": "mesh",  # "SDA" or "mesh" Convex Decomposition Approximation
+        "diameter": 0.08,  # diameter of the mortar (m)
+        "inner_height": 0.005,  # height of the mortar inner surface (m)
+        "spawn": True,
+        "space_threshold_max": 0.1,  # maximum distance from the mortar the eef is allowed to diverge (m)
+    },
+    "trajectory": {
+        # Tracking settings
+        "tracking_trajectory_threshold": 0.005,
+        "tracking_force_threshold": 1.0,
+        "tracking_trajectory_method": 'per_error_threshold',
+
+        "compute_joint_trajectory": False,
+
+        "reset_with_ik": True,
+        "init_qpos": [-0.24317403, -0.82343785,  1.99487586, -2.74223148, -1.57079607,  1.32762232],
+
+        "randomize_reference_trajectory": False,
+        "num_waypoints": 1000,
+
+        "duration": 10,
+        "duration_range": [3.0, 30.0],
+
+        # Target force settings
+        "target_force": 10.0,  # N
+        "target_force_range": [1.0, 15.0],
+
+        # Trajectory settings
+        "desired_height": 0.005,  # desired grinding height (m)
+        "max_inclination_angle": 0.5,  # fraction of mortar radius for inclination
+        "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
+        "initial_position": [0, 0, 0.8],  # initial position offset
+    },
 }
 
 
@@ -276,41 +285,40 @@ class OSXGrind(ManipulationEnv):
         self.early_termination_penalty = self.task_config["early_termination_penalty"]
         self.step_penalty = self.task_config["step_penalty"]
         # settings for table top and task space
-        self.mortar_height = self.task_config["mortar_height"]
-        self.mortar_radius = self.task_config["mortar_max_radius"]
-        self.mortar_space_threshold_max = self.task_config["mortar_space_threshold_max"]
-        self.mortar_mode = self.task_config["mortar_mode"]
-        self.spawn_mortar = self.task_config["spawn_mortar"]
+        self.trajectory_config = self.task_config["trajectory"]
+        self.mortar_config = self.task_config["mortar"]
 
-        self.reset_with_ik = self.task_config["reset_with_ik"]
+        self.reset_with_ik = self.trajectory_config["reset_with_ik"]
+        self.spawn_mortar = self.mortar_config["spawn"]
 
         # settings for table top
         self.table_full_size = self.task_config["table_full_size"]
         self.table_offset = np.array([0, 0, 0.8])
         self.table_friction = self.task_config["table_friction"]
-        self.task_box = np.array([self.mortar_radius, self.mortar_radius, self.mortar_height+self.table_offset[2]]) + self.mortar_space_threshold_max
+        self.task_box = np.array([self.mortar_config["radius"], self.mortar_config["radius"],
+                                  self.mortar_config["height"]+self.table_offset[2]]) + self.mortar_config["space_threshold_max"]
 
         # setting for the robot.
-        self.init_qpos = self.task_config["init_qpos"]
+        self.init_qpos = self.trajectory_config["init_qpos"]
 
         # references to follow
         self.current_waypoint_index = 0
-        self.target_force = self.task_config["target_force"]
-        self.target_force_range = self.task_config["target_force_range"]
+        self.target_force = self.trajectory_config["target_force"]
+        self.target_force_range = self.trajectory_config["target_force_range"]
 
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-        self.duration = self.task_config["duration"]
-        self.duration_range = self.task_config["duration_range"]
+        self.duration = self.trajectory_config["duration"]
+        self.duration_range = self.trajectory_config["duration_range"]
         freq = action_control_freq if action_control_freq is not None else control_freq
         self.num_waypoints = freq * self.duration
         self.seconds_per_waypoint = 1 / freq
         self.step_duration = max(1.0/500, self.seconds_per_waypoint)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
-        self.tracking_trajectory_method = self.task_config['tracking_trajectory_method']
-        self.tracking_trajectory_threshold = np.array(self.task_config['tracking_trajectory_threshold'])
-        self.tracking_force_threshold = np.array(self.task_config['tracking_force_threshold'])
+        self.tracking_trajectory_method = self.trajectory_config['tracking_trajectory_method']
+        self.tracking_trajectory_threshold = np.array(self.trajectory_config['tracking_trajectory_threshold'])
+        self.tracking_force_threshold = np.array(self.trajectory_config['tracking_force_threshold'])
         # Verify the proposed impedance mode is supported
         assert self.tracking_trajectory_method in TRACKING_METHODS, (
             "Error: unsupported tracking method"
@@ -323,7 +331,7 @@ class OSXGrind(ManipulationEnv):
 
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
-        self.randomize_reference_trajectory = self.task_config['randomize_reference_trajectory']
+        self.randomize_reference_trajectory = self.trajectory_config['randomize_reference_trajectory']
         if reference_trajectory is None:
             self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
         else:
@@ -574,7 +582,7 @@ class OSXGrind(ManipulationEnv):
 
         # Reward for smooth actions - penalize squared differences between consecutive actions
         if self.current_action is not None and hasattr(self, 'previous_action') and self.action_change_type == "immediate":
-            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sum((self.current_action - self.previous_action)**2)
+            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sqrt(np.sum((self.current_action - self.previous_action)**2))
         else:
             action_smoothness_penalty = 0.0
 
@@ -656,11 +664,11 @@ class OSXGrind(ManipulationEnv):
         mujoco_arena.set_origin([0, 0, 0])
 
         # initialize objects of interest
-        if self.mortar_mode == "mesh":
+        if self.mortar_config["mode"] == "mesh":
             self.mortar = MortarObject(
                 name="mortar",
             )
-        elif self.mortar_mode == "SDF":
+        elif self.mortar_config["mode"] == "SDF":
             self.mortar = MortarSDFObject(
                 name="mortar",
                 height=0.0,
@@ -668,8 +676,7 @@ class OSXGrind(ManipulationEnv):
                 thickness=0.005
             )
         else:
-            raise ValueError(f"Unsupported mortar_mode '{self.mortar_mode}'. Only 'mesh' and 'SDF' are supported.")
-
+            raise ValueError(f"Unsupported mode '{self.mortar_config['mode']}'. Only 'mesh' and 'SDF' are supported.")
         # add the "ref force arrow in rendering"
         self.cylinder_radius = 0.002
         self.cylinder_length = 0.005
@@ -836,6 +843,7 @@ class OSXGrind(ManipulationEnv):
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
             initial_pos = self.reference_trajectory[0][:3]
+            initial_pos[2] += 0.005
             result = self.ik.solve_ik(target_pos=initial_pos,
                                       target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
                                       initial_guess=self.init_qpos)
@@ -853,7 +861,8 @@ class OSXGrind(ManipulationEnv):
         self.sim.model.body_pos[self.force_cylinder_body_id] = self.reference_trajectory[self.current_waypoint_index][:3] + offset_cylinder_half_size
         self.sim.model.body_quat[self.force_cylinder_body_id] = T.convert_quat(self.reference_trajectory[self.current_waypoint_index][3:], "wxyz")
 
-        self.joint_reference_trajectory = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
+        if self.trajectory_config["compute_joint_trajectory"]:
+            self.joint_reference_trajectory = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
 
         self.last_step_time = self.sim.data._data.time
 
@@ -1048,12 +1057,12 @@ class OSXGrind(ManipulationEnv):
         return delay > delay_in_timesteps
 
     def _randomize_reference_trajectory(self, control_freq):
-        mortar_diameter = self.task_config["mortar_diameter"]
-        mortar_inner_height = self.task_config["mortar_inner_height"]
-        max_inclination_angle = self.task_config["max_inclination_angle"]
-        initial_orientation = self.task_config["initial_orientation"]
-        initial_position = self.task_config["initial_position"].copy()
-        initial_position[2] += mortar_inner_height  # Add inner height to z position
+        max_inclination_angle = self.trajectory_config["max_inclination_angle"]
+        initial_orientation = self.trajectory_config["initial_orientation"]
+
+        inner_height = self.mortar_config["inner_height"]
+        initial_position = self.trajectory_config["initial_position"].copy()
+        initial_position[2] += inner_height  # Add inner height to z position
 
         if self.randomize_reference_trajectory:
             # randomize the duration and the number of waypoints
@@ -1066,15 +1075,15 @@ class OSXGrind(ManipulationEnv):
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
 
         else:
-            desired_height = self.task_config["desired_height"]
-            self.target_force = self.task_config["target_force"]
+            desired_height = self.trajectory_config["desired_height"]
+            self.target_force = self.trajectory_config["target_force"]
         # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
         reference_trajectory = generate_mortar_trajectory(
-            mortar_diameter=mortar_diameter,
+            mortar_diameter=self.mortar_config["diameter"],
             desired_height=desired_height,
             n_steps=self.num_waypoints,
-            default_quat=initial_orientation,
+            default_quat=np.array(initial_orientation),
             max_angle=max_inclination_angle
         )
         reference_trajectory[:, :3] += initial_position

@@ -399,11 +399,3 @@ class JointPositionController(Controller):
     @property
     def name(self):
         return "JOINT_POSITION"
-
-    @property
-    def eef_wrench(self):
-        return self.wrench_in_eef_frame_buf.average
-
-    @property
-    def current_wrench(self):
-        return self.get_wrench()
