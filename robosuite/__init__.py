@@ -37,3 +37,6 @@ except:
     #     "If you want to use these robots, please install robosuite_models from "
     #     "source (https://github.com/ARISE-Initiative/robosuite_models) or through pip install."
     # )
+
+__version__ = "2.1.0"
+__logo__ = ""

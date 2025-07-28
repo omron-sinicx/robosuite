@@ -253,10 +253,16 @@ class ForwardDynamicsComplianceController(Controller):
             self.kdl_solver = IKSolver(robot='ur5e_powder_grinding_default', rospackage='osx_powder_grinding',
                                        base_link='base_link', ee_link='gripper_tip_link')
             self.kdl_solver.build_generic_model()
-            self.mjc_ik_solver = MuJoCoIKSolver(self.sim.model,
-                                                self.sim.data,
-                                                f"{self.ft_prefix}_grip_site",
-                                                joint_indexes=self.joint_index)
+            self.mjc_ik_solver = MuJoCoIKSolver(
+                                                self.sim.model.get_xml(),
+                                                [],
+                                                ref_name,
+                                                position_threshold=0.001,
+                                                rotation_threshold=0.01,
+                                                time_limit=0.1,
+                                                joint_indexes=self.qpos_index,
+                                                base_body_name=None
+                                            )
 
     def update(self):
         super().update()

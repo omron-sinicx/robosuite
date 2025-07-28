@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 
 import numpy as np
-import torch
 
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import TableArena
@@ -546,6 +545,7 @@ class SoftPegInHole(ManipulationEnv):
         return obs_cache['peg_pcd']
 
     def peg_bps_gt(self, obs_cache):
+        import torch
         # TODO: how to determine this dim automatically?
         bps_feature = np.zeros([self.bps_helper.bps.shape[1],], dtype=np.float32)
         if self.use_peg_bps:
@@ -788,8 +788,11 @@ class SoftPegInHole(ManipulationEnv):
             [1.36314954, -1.21917949, 1.32688743, -1.67850362, -1.57077604, -1.77846293]
         )
 
-        ik = MuJoCoIKSolver(self.sim.model, self.sim.data, "gripper0_right_gripper_eef_site",
-                            joint_indexes=self.robots[0].joint_indexes)
+        ik = MuJoCoIKSolver(self.sim.model.get_xml(), [], "gripper0_right_gripper_eef_site",
+                            joint_indexes=self.robots[0].joint_indexes,
+                            position_threshold=0.001,
+                            rotation_threshold=0.01,
+                            time_limit=0.1)
         result = ik.solve_ik(target_pos=init_wrist_pos,
                              target_rot=quat2mat(self.initial_quat),
                              initial_guess=init_qpos_guess)
