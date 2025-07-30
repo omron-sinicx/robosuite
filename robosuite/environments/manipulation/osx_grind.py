@@ -1083,7 +1083,7 @@ class OSXGrind(ManipulationEnv):
         """
         # Get the magnitude of the force (first 3 components of wrench)
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
-        return force_magnitude > 1000.0
+        return force_magnitude > 300.0
 
     def _check_waypoint_completion_delay(self):
         """
@@ -1106,8 +1106,8 @@ class OSXGrind(ManipulationEnv):
         initial_position = self.trajectory_config["initial_position"].copy()
 
         # Only add inner_height to Z-coordinate if randomization is enabled
-        if self.randomize_reference_trajectory:
-            initial_position[2] += inner_height  # Add inner height to z position
+        #if self.randomize_reference_trajectory:
+        initial_position[2] += inner_height  # Add inner height to z position
 
         if self.randomize_reference_trajectory:
             # randomize the duration and the number of waypoints
