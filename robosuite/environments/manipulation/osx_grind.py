@@ -588,11 +588,11 @@ class OSXGrind(ManipulationEnv):
 
         speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
-        reward = force_reward + traj_reward + action_smoothness_penalty #+ self.step_penalty + speed_reward
-        #print(f"{self.tracking_error=:0.04f} {self.tracking_force_error=:0.04f} {force_reward=:0.04f} {traj_reward=:0.04f} {action_smoothness_penalty=:0.04f}")
+        reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty #+ speed_reward
+        #print(f"{reward=:0.04f} {self.tracking_error=:0.04f} {self.tracking_force_error=:0.04f} {force_reward=:0.04f} {traj_reward=:0.04f} {action_smoothness_penalty=:0.04f} {self.step_penalty=:0.04f}")
 
         if self.clip_reward:
-            reward = np.clip(reward, -2.0, 1.0)
+            reward = np.clip(reward, -2.0, 2.0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
@@ -847,16 +847,37 @@ class OSXGrind(ManipulationEnv):
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
             initial_pos = self.reference_trajectory[0][:3]
-            initial_pos[2] += 0.005
+            #initial_pos[2] += 0.005
+            target_rot = T.quat2mat(self.reference_trajectory[0][3:])
+
             result = self.ik.solve_ik(target_pos=initial_pos,
-                                      target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
+                                      target_rot=target_rot,
                                       initial_guess=self.init_qpos)
 
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
-                self.robots[0].init_qpos = self.init_qpos
-                print("IK solution not found, using default init_q. Error msg: ", result.message)
+                # Debug: Print target pose when IK fails
+                print(f"IK failed - Target position: {initial_pos}")
+                print(f"IK failed - Target rotation (quat): {self.reference_trajectory[0][3:]}")
+                print(f"IK failed - Initial guess: {self.init_qpos}")
+                print(f"IK failed - Error message: {result.message}")
+
+                # Fallback: Try with a slightly different position
+                print("Trying IK with adjusted position...")
+                adjusted_pos = initial_pos.copy()
+                adjusted_pos[2] += np.random.uniform(low=-0.001, high=0.01)  # Move up and down by 1mm
+
+                result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
+                                                  target_rot=target_rot,
+                                                  initial_guess=self.init_qpos)
+
+                if result_adjusted.success:
+                    print("IK succeeded with adjusted position")
+                    self.robots[0].init_qpos = result_adjusted.joint_angles
+                else:
+                    print("IK still failed with adjusted position, using default init_qpos")
+                    self.robots[0].init_qpos = self.init_qpos
 
         super()._reset_internal()
 
@@ -1066,7 +1087,10 @@ class OSXGrind(ManipulationEnv):
 
         inner_height = self.mortar_config["inner_height"]
         initial_position = self.trajectory_config["initial_position"].copy()
-        initial_position[2] += inner_height  # Add inner height to z position
+
+        # Only add inner_height to Z-coordinate if randomization is enabled
+        if self.randomize_reference_trajectory:
+            initial_position[2] += inner_height  # Add inner height to z position
 
         if self.randomize_reference_trajectory:
             # randomize the duration and the number of waypoints
