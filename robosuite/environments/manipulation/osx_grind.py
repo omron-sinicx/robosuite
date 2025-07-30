@@ -588,11 +588,11 @@ class OSXGrind(ManipulationEnv):
 
         speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
-        reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty #+ speed_reward
+        reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty + speed_reward
         #print(f"{reward=:0.04f} {self.tracking_error=:0.04f} {self.tracking_force_error=:0.04f} {force_reward=:0.04f} {traj_reward=:0.04f} {action_smoothness_penalty=:0.04f} {self.step_penalty=:0.04f}")
 
         if self.clip_reward:
-            reward = np.clip(reward, -2.0, 2.0)
+            reward = np.clip(reward, -4.0, 4.0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
