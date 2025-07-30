@@ -866,7 +866,7 @@ class OSXGrind(ManipulationEnv):
                 # Fallback: Try with a slightly different position
                 print("Trying IK with adjusted position...")
                 adjusted_pos = initial_pos.copy()
-                adjusted_pos[2] += np.random.uniform(low=-0.001, high=0.01)  # Move up and down by 1mm
+                adjusted_pos[2] += np.random.uniform(low=-0.001, high=0.001)  # Move up and down by 1mm
 
                 result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
                                                   target_rot=target_rot,
@@ -1005,6 +1005,7 @@ class OSXGrind(ManipulationEnv):
 
             - Task space limit reached
             - Task completion (tracking completed)
+            - Force limit exceeded (100N)
 
         Returns:
             bool: True if episode is terminated
@@ -1025,6 +1026,11 @@ class OSXGrind(ManipulationEnv):
         if not self._check_task_space_limits():
             terminated = True
             reason = "TASK SPACE LIMIT REACHED"
+
+        # Prematurely terminate if force exceeds 100N
+        if self._check_force_limit():
+            terminated = True
+            reason = "FORCE LIMIT EXCEEDED"
 
         # Prematurely terminate if task is completed
         if self._check_success():
@@ -1067,6 +1073,17 @@ class OSXGrind(ManipulationEnv):
         """
         abs_ft = np.abs(self.eef_wrench)
         return not np.any(abs_ft > self.force_torque_limits)
+
+    def _check_force_limit(self):
+        """
+        Check if the force exceeds 100N threshold
+
+        Returns:
+            bool: True if force limit is exceeded
+        """
+        # Get the magnitude of the force (first 3 components of wrench)
+        force_magnitude = np.linalg.norm(self.eef_wrench[:3])
+        return force_magnitude > 1000.0
 
     def _check_waypoint_completion_delay(self):
         """
