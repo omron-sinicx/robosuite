@@ -19,3 +19,4 @@ robosuite-models==1.0.0
 
 # required for gamepad
 inputs
+numpy-quaternion
