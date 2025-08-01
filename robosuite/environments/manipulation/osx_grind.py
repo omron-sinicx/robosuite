@@ -589,10 +589,11 @@ class OSXGrind(ManipulationEnv):
         speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
         reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty + speed_reward
-        #print(f"{reward=:0.04f} {self.tracking_error=:0.04f} {self.tracking_force_error=:0.04f} {force_reward=:0.04f} {traj_reward=:0.04f} {action_smoothness_penalty=:0.04f} {self.step_penalty=:0.04f}")
 
         if self.clip_reward:
             reward = np.clip(reward, -4.0, 4.0)
+
+        #print(f"{self.clip_reward},{reward=:0.04f} {self.tracking_error=:0.04f} {self.tracking_force_error=:0.04f} {force_reward=:0.04f} {traj_reward=:0.04f} {action_smoothness_penalty=:0.04f} {self.step_penalty=:0.04f} {self.task_complete_reward=:0.04f} {self.early_termination_penalty=:0.04f} {speed_reward=:0.04f}")
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
@@ -866,7 +867,7 @@ class OSXGrind(ManipulationEnv):
                 # Fallback: Try with a slightly different position
                 print("Trying IK with adjusted position...")
                 adjusted_pos = initial_pos.copy()
-                adjusted_pos[2] += np.random.uniform(low=-0.001, high=0.001)  # Move up and down by 1mm
+                adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
 
                 result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
                                                   target_rot=target_rot,
