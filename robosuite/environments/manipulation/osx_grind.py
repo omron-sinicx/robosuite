@@ -9,7 +9,7 @@ from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.observables import Observable, sensor
 from robosuite.utils.placement_samplers import UniformRandomSampler
-from robosuite.utils.traj_utils import compute_max_step_size, generate_mortar_trajectory
+from robosuite.utils.traj_utils import compute_max_step_size, generate_mortar_trajectory, generate_mortar_trajectory_timed
 from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
 import robosuite.utils.transform_utils as T
 
@@ -70,7 +70,7 @@ DEFAULT_GRIND_CONFIG = {
         "init_qpos": [-0.24317403, -0.82343785,  1.99487586, -2.74223148, -1.57079607,  1.32762232],
 
         "randomize_reference_trajectory": False,
-        "num_waypoints": 1000,
+        "num_waypoints": None,
 
         "duration": 10,
         "duration_range": [3.0, 30.0],
@@ -308,10 +308,14 @@ class OSXGrind(ManipulationEnv):
 
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-        self.duration = self.trajectory_config["duration"]
+        self.duration = self.trajectory_config["duration"] # in seconds per revolution
         self.duration_range = self.trajectory_config["duration_range"]
         freq = action_control_freq if action_control_freq is not None else control_freq
-        self.num_waypoints = freq * self.duration
+        self.steps_per_revolution = freq * self.duration
+        if self.trajectory_config["num_waypoints"] is not None:
+            self.num_waypoints = self.trajectory_config["num_waypoints"]
+        else:
+            self.num_waypoints = self.steps_per_revolution
         self.seconds_per_waypoint = 1 / freq
         self.step_duration = max(1.0/500, self.seconds_per_waypoint)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
@@ -877,6 +881,10 @@ class OSXGrind(ManipulationEnv):
                 self.sim.model.body_pos[self.mortar_body_id] = obj_pos
                 self.sim.model.body_quat[self.mortar_body_id] = obj_quat
 
+    def set_trajectory(self, reference_trajectory):
+        self.reference_trajectory = reference_trajectory
+        self.num_waypoints = len(reference_trajectory)
+
     def _post_action(self, action):
         """
         In addition to super method, add additional info if requested
@@ -1065,9 +1073,8 @@ class OSXGrind(ManipulationEnv):
         initial_position[2] += inner_height  # Add inner height to z position
 
         if self.randomize_reference_trajectory:
-            # randomize the duration and the number of waypoints
+            # randomize the duration
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
-            self.num_waypoints = int(control_freq * self.duration // 10)
             # randomize the desired height
             desired_height = np.random.uniform(low=0.001, high=0.020)
             # update the target force
@@ -1079,10 +1086,12 @@ class OSXGrind(ManipulationEnv):
             self.target_force = self.trajectory_config["target_force"]
         # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
-        reference_trajectory = generate_mortar_trajectory(
+        reference_trajectory = generate_mortar_trajectory_timed(
             mortar_diameter=self.mortar_config["diameter"],
             desired_height=desired_height,
-            n_steps=self.num_waypoints,
+            control_frequency=control_freq,
+            duration=self.duration,
+            total_timesteps=self.num_waypoints,
             default_quat=np.array(initial_orientation),
             max_angle=max_inclination_angle
         )

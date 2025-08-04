@@ -158,10 +158,10 @@ class LinearInterpolator(Interpolator):
         return x_current
 
 
-def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
+def _generate_mortar_trajectory_core(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
     """
-    Generate a trajectory to trace the surface of an upward-facing bowl at a given height.
-    The pen orientation at the center (0,0,0) is represented by quaternion [0,-1,0,0].
+    Core logic for generating a mortar trajectory. This function contains the common
+    trajectory generation logic used by both step-based and time-based trajectory functions.
 
     Args:
         mortar_diameter (float): Diameter of the bowl in meters
@@ -290,9 +290,94 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
     # Step 7: Combine positions and orientations
     trajectory = np.column_stack((x, y, z, quaternions))
 
+    return trajectory
+
+
+def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
+    """
+    Generate a trajectory to trace the surface of an upward-facing bowl at a given height.
+    The pen orientation at the center (0,0,0) is represented by quaternion [0,-1,0,0].
+
+    Args:
+        mortar_diameter (float): Diameter of the bowl in meters
+        desired_height (float): Desired height from the bottom of the bowl in meters
+        n_steps (int): Number of points in the trajectory
+        default_quat (list): Quaternion [qx, qy, qz, qw] representing orientation at the bowl center at (0,0,0)
+        fraction: (float): If defined, the final quaternion returned is the slerp fraction from the default_quat to the 
+                           corresponding normal vector
+        max_angle (float): If defined, takes priority over fraction. Maximum angle (in radians) between default_quat
+                           and the final quaternion. The fraction will be calculated to ensure this constraint.
+        pestle_radius (float): Radius of the pestle tip in meters. Used to adjust trajectory to prevent penetration
+                              when inclination is constrained.
+
+    Returns:
+        np.array: Array of shape (n_steps, 7) containing [x, y, z, qx, qy, qz, qw]
+                 for each point in the trajectory
+    """
+    trajectory = _generate_mortar_trajectory_core(
+        mortar_diameter, desired_height, n_steps, default_quat, 
+        fraction, max_angle, pestle_radius
+    )
+    
     # Add initial pose to the end of the trajectory to complete the circle
     trajectory = np.concatenate([trajectory, [trajectory[0]]])
+    
+    return trajectory
 
+
+def generate_mortar_trajectory_timed(mortar_diameter, desired_height, control_frequency, duration, total_timesteps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
+    """
+    Generate a time-based trajectory to trace the surface of an upward-facing bowl at a given height.
+    The trajectory duration and number of revolutions are determined by the control frequency, 
+    revolution duration, and total timesteps.
+
+    Args:
+        mortar_diameter (float): Diameter of the bowl in meters
+        desired_height (float): Desired height from the bottom of the bowl in meters
+        control_frequency (float): Control frequency in Hz
+        duration (float): Time in seconds for one complete revolution
+        total_timesteps (int): Total number of timesteps for the trajectory
+        default_quat (list): Quaternion [qx, qy, qz, qw] representing orientation at the bowl center at (0,0,0)
+        fraction: (float): If defined, the final quaternion returned is the slerp fraction from the default_quat to the 
+                           corresponding normal vector
+        max_angle (float): If defined, takes priority over fraction. Maximum angle (in radians) between default_quat
+                           and the final quaternion. The fraction will be calculated to ensure this constraint.
+        pestle_radius (float): Radius of the pestle tip in meters. Used to adjust trajectory to prevent penetration
+                              when inclination is constrained.
+
+    Returns:
+        np.array: Array of shape (total_timesteps, 7) containing [x, y, z, qx, qy, qz, qw]
+                 for each point in the trajectory
+    """
+    # Calculate timesteps per revolution
+    timesteps_per_revolution = int(control_frequency * duration)
+    
+    # Calculate how many full revolutions and remainder timesteps
+    full_revolutions = total_timesteps // timesteps_per_revolution
+    remainder_timesteps = total_timesteps % timesteps_per_revolution
+    
+    # Generate a single revolution trajectory
+    single_revolution_trajectory = _generate_mortar_trajectory_core(
+        mortar_diameter, desired_height, timesteps_per_revolution, 
+        default_quat, fraction, max_angle, pestle_radius
+    )
+    
+    # Build the complete trajectory
+    trajectory_points = []
+    
+    # Add full revolutions
+    for _ in range(full_revolutions):
+        trajectory_points.extend(single_revolution_trajectory)
+    
+    # Add partial revolution if there are remainder timesteps
+    if remainder_timesteps > 0:
+        trajectory_points.extend(single_revolution_trajectory[:remainder_timesteps])
+    
+    # Convert to numpy array
+    trajectory = np.array(trajectory_points)
+    
+    assert len(trajectory) == total_timesteps, f"Trajectory length {len(trajectory)} does not match total_timesteps {total_timesteps}"
+    
     return trajectory
 
 
