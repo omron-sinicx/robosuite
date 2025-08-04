@@ -11,12 +11,6 @@ from robosuite.controllers.parts.generic.joint_vel import JointVelocityControlle
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 from robosuite.utils.control_utils import *
 
-try:
-    from ur_pykdl.ik_solver import IKSolver
-except ImportError:
-    IKSolver = None
-
-
 # Supported impedance modes
 COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_and_p_gains"}
 
@@ -250,6 +244,7 @@ class ForwardDynamicsComplianceController(Controller):
         self.desired_force_torque = np.zeros(6)
 
         if self.use_kdl:
+            from ur_pykdl.ik_solver import IKSolver
             self.kdl_solver = IKSolver(robot='ur5e_powder_grinding_default', rospackage='osx_powder_grinding',
                                        base_link='base_link', ee_link='gripper_tip_link')
             self.kdl_solver.build_generic_model()
