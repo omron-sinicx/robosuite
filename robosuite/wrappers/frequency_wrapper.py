@@ -26,12 +26,15 @@ class FrequencyWrapper:
 
         # Calculate the number of inner steps per outer step
         self.steps_per_action = int(trajectory_target_freq / action_control_freq)
+        print(f"steps_per_action: {self.steps_per_action}")
 
         # Create a copy of the environment config
         env_config_copy = env_config.copy() if env_config else {}
 
         # Set the control frequency to the high frequency
         env_config_copy["control_freq"] = trajectory_target_freq
+        if env_config_copy["task_config"]["trajectory"]["num_waypoints"] is not None:
+            env_config_copy["task_config"]["trajectory"]["num_waypoints"] = env_config_copy["task_config"]["trajectory"]["num_waypoints"] * self.steps_per_action
         self.ignore_done = env_config_copy.get("ignore_done", False)
         env_config_copy["ignore_done"] = True
         env_config_copy["action_control_freq"] = action_control_freq
@@ -45,7 +48,7 @@ class FrequencyWrapper:
     def reset(self, **kwargs):
         """Reset the environment and return the initial observation."""
         obs = self.env.reset(**kwargs)
-        self.env.horizon = self.env.duration * self.action_control_freq * 2  # at most twice the duration
+        self.env.horizon = self.env.num_waypoints // self.steps_per_action
         self.last_action = None
         self.timestep = 0
         return obs

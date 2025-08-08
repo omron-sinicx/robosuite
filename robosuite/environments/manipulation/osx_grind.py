@@ -9,7 +9,7 @@ from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.observables import Observable, sensor
 from robosuite.utils.placement_samplers import UniformRandomSampler
-from robosuite.utils.traj_utils import compute_max_step_size, generate_mortar_trajectory
+from robosuite.utils.traj_utils import compute_max_step_size, generate_mortar_trajectory, generate_mortar_trajectory_timed
 from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
 import robosuite.utils.transform_utils as T
 
@@ -70,7 +70,7 @@ DEFAULT_GRIND_CONFIG = {
         "init_qpos": [-0.24317403, -0.82343785,  1.99487586, -2.74223148, -1.57079607,  1.32762232],
 
         "randomize_reference_trajectory": False,
-        "num_waypoints": 1000,
+        "num_waypoints": None,
 
         "duration": 10,
         "duration_range": [3.0, 30.0],
@@ -308,10 +308,14 @@ class OSXGrind(ManipulationEnv):
 
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-        self.duration = self.trajectory_config["duration"]
+        self.duration = self.trajectory_config["duration"] # in seconds per revolution
         self.duration_range = self.trajectory_config["duration_range"]
         freq = action_control_freq if action_control_freq is not None else control_freq
-        self.num_waypoints = freq * self.duration
+        self.steps_per_revolution = freq * self.duration
+        if self.trajectory_config["num_waypoints"] is not None:
+            self.num_waypoints = self.trajectory_config["num_waypoints"]
+        else:
+            self.num_waypoints = self.steps_per_revolution
         self.seconds_per_waypoint = 1 / freq
         self.step_duration = max(1.0/500, self.seconds_per_waypoint)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
@@ -332,10 +336,10 @@ class OSXGrind(ManipulationEnv):
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
         self.randomize_reference_trajectory = self.trajectory_config['randomize_reference_trajectory']
-        if reference_trajectory is None:
-            self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
-        else:
-            self.reference_trajectory = reference_trajectory
+        self.reference_trajectory = None
+        if self.reference_trajectory is None:
+            self.reference_trajectory = self.create_randomize_reference_trajectory(control_freq)
+
 
         if not self.randomize_reference_trajectory:
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
@@ -369,6 +373,11 @@ class OSXGrind(ManipulationEnv):
         self.cumulative_reward = 0.0
         self.global_timestep = 0
         self.ik = None
+
+        #for sensor values.
+        self.reference_pos = np.zeros(3)
+        self.reference_ortho6d = np.zeros(6)
+        self.reference_wrench = np.zeros(6)
 
         self.translated_action = OrderedDict()
         self.controller_configs = controller_configs
@@ -609,15 +618,81 @@ class OSXGrind(ManipulationEnv):
         return reward
 
     def _compute_relative_distance(self):
+        #relative distance in the base frame
         relative_distance = T.compute_pose_error(self.reference_trajectory[self.current_waypoint_index], self.eef_pose)
-
+        #relative_distance : [x,y,z,rx,ry,rz]
         # track error of the actions controlled by the policy
         # normalize by the trajectory follow normalization
         normalized_relative_distance = relative_distance / self.max_step_size
 
         # only consider the error for the position controlled directions
         self.tracking_error = np.linalg.norm(relative_distance*self.position_control_dims) #np.linalg.norm(normalized_relative_distance * self.position_control_dims)
-        return relative_distance#normalized_relative_distance
+
+        #relative distance in the end-effector frame
+        # Calculate the end-effector rotation matrix from the current end-effector quaternion
+        # Convert reference pose (x, y, z, qx, qy, qz, qw) to 4x4 matrix
+        ref_pos = self.reference_trajectory[self.current_waypoint_index][:3]
+        ref_quat = self.reference_trajectory[self.current_waypoint_index][3:]
+        ref_rot = T.quat2mat(ref_quat)
+
+        # Convert current eef pose (x, y, z, qx, qy, qz, qw) to 4x4 matrix
+        eef_pos = self.eef_pose[:3]
+        eef_quat = self.eef_pose[3:]
+        eef_rot = T.quat2mat(eef_quat)
+
+        # Transform reference pose to end-effector frame
+        # Compute the transformation from reference pose to end-effector frame without using np.linalg.inv
+        # eef_rot: 3x3, eef_pos: (3,), ref_rot: 3x3, ref_pos: (3,)
+        # The transformation from world to eef is: [R_eef^T, -R_eef^T * t_eef]
+        # So, in eef frame: p_ref_in_eef = R_eef^T @ (ref_pos - eef_pos)
+        # and R_ref_in_eef = R_eef^T @ R_ref
+        ref_pos_in_eef = eef_rot.T @ (ref_pos - eef_pos)
+        ref_rot_in_eef = eef_rot.T @ ref_rot
+        relative_rot_quat = T.mat2quat(ref_rot_in_eef)
+        # Use only the imaginary part (x, y, z) of the quaternion as the rotational error
+        relative_rot_vec = relative_rot_quat[:3]
+        # Concatenate to get the full relative pose in the end-effector frame
+        relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_vec])
+
+        return relative_distance_ee #normalized_relative_distance
+
+    def _compute_reference_pos(self):
+        self.reference_pos = self.reference_trajectory[self.current_waypoint_index][:3]
+        #transform the reference_pos to the end-effector frame
+        t_eef = self.eef_pos.flatten()
+        t_ref = self.reference_pos.flatten()
+        # Calculate the end-effector rotation matrix from the current end-effector quaternion
+        # Use T.quat2mat to convert quaternion to rotation matrix
+        R_fk = T.quat2mat(self.eef_quat)
+        reference_pos_ee = R_fk.T @ (t_ref - t_eef) #(3,)
+        #reference_ortho6d_ee = R_fk.T @ t_ref_ortho6d #(3,)
+        return reference_pos_ee #return the reference_pos in the end-effector frame
+
+    def _compute_reference_ortho6d(self):
+        self.reference_ortho6d = T.quat2ortho6(self.reference_trajectory[self.current_waypoint_index][3:])
+        #transform the reference_ortho6d to the end-effector frame
+        t_ref = self.reference_ortho6d #.flatten()
+        # Calculate the end-effector rotation matrix from the current end-effector quaternion
+        # Use T.quat2mat to convert quaternion to rotation matrix
+        R_fk = T.quat2mat(self.eef_quat)
+
+        # FIXED: ortho6d is 6-dimensional, need to handle it properly
+        # ortho6d format: [x1, y1, z1, x2, y2, z2] where x1,y1,z1 and x2,y2,z2 are the first two columns of rotation matrix
+        # We need to transform both columns separately
+        x1 = t_ref[:3]  # First column of reference rotation matrix
+        x2 = t_ref[3:6]  # Second column of reference rotation matrix
+
+        # Transform both columns to end-effector frame
+        x1_ee = R_fk.T @ x1
+        x2_ee = R_fk.T @ x2
+
+        # Reconstruct ortho6d in end-effector frame
+        reference_ortho6d_ee = np.concatenate([x1_ee, x2_ee])
+        return reference_ortho6d_ee #return the reference_ortho6d in the end-effector frame
+
+    def _compute_reference_wrench(self):
+        self.reference_wrench = self.reference_force[self.current_waypoint_index]
+        return self.reference_wrench
 
     def _compute_relative_wrenches(self):
         # in base frame
@@ -779,6 +854,18 @@ class OSXGrind(ManipulationEnv):
             return self._compute_relative_wrenches()
 
         @sensor(modality=f"{pf}proprio")
+        def reference_pos(obs_cache):
+            return self._compute_reference_pos()
+
+        @sensor(modality=f"{pf}proprio")
+        def reference_ortho6d(obs_cache):
+            return self._compute_reference_ortho6d()
+
+        @sensor(modality=f"{pf}proprio")
+        def reference_wrench(obs_cache):
+            return self._compute_reference_wrench()
+
+        @sensor(modality=f"{pf}proprio")
         def eef_wrench(obs_cache):
             return self.eef_wrench
 
@@ -802,7 +889,7 @@ class OSXGrind(ManipulationEnv):
         def previous_action(obs_cache):
             return self.previous_action
 
-        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, previous_action]
+        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, reference_pos, reference_ortho6d, reference_wrench, previous_action]
         names = [s.__name__ for s in sensors]
 
         # Create observables
@@ -842,8 +929,8 @@ class OSXGrind(ManipulationEnv):
         self.sim.model._model.vis.scale.contactwidth = 0.01
         self.sim.model._model.vis.scale.contactheight = 0.01
 
-        if self.randomize_reference_trajectory:
-            self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
+        if self.randomize_reference_trajectory and self.reference_trajectory is None:
+            self.reference_trajectory = self.create_randomize_reference_trajectory(self.control_freq)
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
@@ -1099,7 +1186,11 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def _randomize_reference_trajectory(self, control_freq):
+    def set_trajectory(self, reference_trajectory):
+        self.reference_trajectory = reference_trajectory
+        self.num_waypoints = len(reference_trajectory)
+
+    def create_randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
 
@@ -1125,14 +1216,18 @@ class OSXGrind(ManipulationEnv):
             self.target_force = self.trajectory_config["target_force"]
         # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
-        reference_trajectory = generate_mortar_trajectory(
+        reference_trajectory = generate_mortar_trajectory_timed(
             mortar_diameter=self.mortar_config["diameter"],
             desired_height=desired_height,
-            n_steps=self.num_waypoints,
+            control_frequency=control_freq,
+            duration=self.duration,
+            total_timesteps=self.num_waypoints,
             default_quat=np.array(initial_orientation),
             max_angle=max_inclination_angle
         )
         reference_trajectory[:, :3] += initial_position
+
+        self.reference_trajectory = reference_trajectory #update the environment's reference trajectory
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization
