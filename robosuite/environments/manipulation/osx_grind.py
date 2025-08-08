@@ -336,10 +336,10 @@ class OSXGrind(ManipulationEnv):
         # Add an extra waypoint to make sure that every waypoint is
         # tracked before considering the tracking completed
         self.randomize_reference_trajectory = self.trajectory_config['randomize_reference_trajectory']
-        self.reference_trajectory = None
-        if self.reference_trajectory is None:
-            self.reference_trajectory = self.create_randomize_reference_trajectory(control_freq)
-
+        if reference_trajectory is None:
+            self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
+        else:
+            self.reference_trajectory = reference_trajectory
 
         if not self.randomize_reference_trajectory:
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
@@ -357,6 +357,11 @@ class OSXGrind(ManipulationEnv):
         self.input_min = np.array([-1]*6)
         self.input_max = np.array([1]*6)
 
+        #for sensor values.
+        self.reference_pos = np.zeros(3)
+        self.reference_ortho6d = np.zeros(6)
+        self.reference_wrench = np.zeros(6)
+
         self.reward_dict = {
             "force_reward": 0.0,
             "traj_reward": 0.0,
@@ -373,11 +378,6 @@ class OSXGrind(ManipulationEnv):
         self.cumulative_reward = 0.0
         self.global_timestep = 0
         self.ik = None
-
-        #for sensor values.
-        self.reference_pos = np.zeros(3)
-        self.reference_ortho6d = np.zeros(6)
-        self.reference_wrench = np.zeros(6)
 
         self.translated_action = OrderedDict()
         self.controller_configs = controller_configs
@@ -598,11 +598,10 @@ class OSXGrind(ManipulationEnv):
         speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
         reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty + speed_reward
+        # print(f"{force_reward=:0.02f} {traj_reward=:0.02f} {action_smoothness_penalty=:0.02f} {self.step_penalty=:0.02f} {speed_reward=:0.02f}")
 
         if self.clip_reward:
-            reward = np.clip(reward, -4.0, 4.0)
-
-        #print(f"{self.clip_reward},{reward=:0.04f} {self.tracking_error=:0.04f} {self.tracking_force_error=:0.04f} {force_reward=:0.04f} {traj_reward=:0.04f} {action_smoothness_penalty=:0.04f} {self.step_penalty=:0.04f} {self.task_complete_reward=:0.04f} {self.early_termination_penalty=:0.04f} {speed_reward=:0.04f}")
+            reward = np.clip(reward, -2.0, 1.0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
@@ -613,7 +612,7 @@ class OSXGrind(ManipulationEnv):
         self.reward_dict["traj_total_reward"] += traj_reward
         self.reward_dict["speed_total_reward"] += speed_reward
         self.reward_dict["action_smoothness_total_reward"] += action_smoothness_penalty
-        #print(f"{force_reward=} {traj_reward=} {self.step_penalty=}")
+        # print(f"{force_reward=} {traj_reward=} {self.step_penalty=}")
 
         return reward
 
@@ -701,20 +700,16 @@ class OSXGrind(ManipulationEnv):
         normalized_relative_wrench = relative_wrench / self.force_torque_normalization
 
         # only consider the error for the force controlled directions
-        #tracking_force_error = normalized_relative_wrench * self.force_control_dims
-        tracking_force_error = relative_wrench*self.force_control_dims
+        tracking_force_error = normalized_relative_wrench * self.force_control_dims
         self.tracking_force_error = np.linalg.norm(tracking_force_error)
 
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
         if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
-            #force_controlled_indices = np.where(self.force_control_dims == 1)[0]
-            #force_controlled_values = normalized_relative_wrench[force_controlled_indices]
-            #return force_controlled_values
-            #print(f"!!!!!!!!!!!!! ==================== tracking_force_error in Env.: {tracking_force_error}")
-            return tracking_force_error #return force error in the force controlled directions
+            force_controlled_indices = np.where(self.force_control_dims == 1)[0]
+            force_controlled_values = normalized_relative_wrench[force_controlled_indices]
+            return force_controlled_values
         elif self.task_config["relative_wrench_mode"] == "all":
-            #return normalized_relative_wrench
-            return relative_wrench
+            return normalized_relative_wrench
         else:
             raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
 
@@ -929,43 +924,22 @@ class OSXGrind(ManipulationEnv):
         self.sim.model._model.vis.scale.contactwidth = 0.01
         self.sim.model._model.vis.scale.contactheight = 0.01
 
-        if self.randomize_reference_trajectory and self.reference_trajectory is None:
-            self.reference_trajectory = self.create_randomize_reference_trajectory(self.control_freq)
+        if self.randomize_reference_trajectory:
+            self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
             initial_pos = self.reference_trajectory[0][:3]
-            #initial_pos[2] += 0.005
-            target_rot = T.quat2mat(self.reference_trajectory[0][3:])
-
+            initial_pos[2] += 0.001
             result = self.ik.solve_ik(target_pos=initial_pos,
-                                      target_rot=target_rot,
+                                      target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
                                       initial_guess=self.init_qpos)
 
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
-                # Debug: Print target pose when IK fails
-                print(f"IK failed - Target position: {initial_pos}")
-                print(f"IK failed - Target rotation (quat): {self.reference_trajectory[0][3:]}")
-                print(f"IK failed - Initial guess: {self.init_qpos}")
-                print(f"IK failed - Error message: {result.message}")
-
-                # Fallback: Try with a slightly different position
-                print("Trying IK with adjusted position...")
-                adjusted_pos = initial_pos.copy()
-                adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
-
-                result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
-                                                  target_rot=target_rot,
-                                                  initial_guess=self.init_qpos)
-
-                if result_adjusted.success:
-                    print("IK succeeded with adjusted position")
-                    self.robots[0].init_qpos = result_adjusted.joint_angles
-                else:
-                    print("IK still failed with adjusted position, using default init_qpos")
-                    self.robots[0].init_qpos = self.init_qpos
+                self.robots[0].init_qpos = self.init_qpos
+                print("IK solution not found, using default init_q. Error msg: ", result.message)
 
         super()._reset_internal()
 
@@ -989,6 +963,10 @@ class OSXGrind(ManipulationEnv):
             for obj_pos, obj_quat, obj in object_placements.values():
                 self.sim.model.body_pos[self.mortar_body_id] = obj_pos
                 self.sim.model.body_quat[self.mortar_body_id] = obj_quat
+
+    def set_trajectory(self, reference_trajectory):
+        self.reference_trajectory = reference_trajectory
+        self.num_waypoints = len(reference_trajectory)
 
     def _post_action(self, action):
         """
@@ -1093,7 +1071,6 @@ class OSXGrind(ManipulationEnv):
 
             - Task space limit reached
             - Task completion (tracking completed)
-            - Force limit exceeded (100N)
 
         Returns:
             bool: True if episode is terminated
@@ -1152,16 +1129,6 @@ class OSXGrind(ManipulationEnv):
         ee_pos = self.robots[0].recent_ee_pose['right'].current[:3]
         return not np.any(np.abs(ee_pos) > self.task_box)
 
-    def _check_force_torque_limits(self):
-        """
-        Check that the robot is not exerting too much force/torque
-
-        Returns:
-            bool: True within force/torque limits
-        """
-        abs_ft = np.abs(self.eef_wrench)
-        return not np.any(abs_ft > self.force_torque_limits)
-
     def _check_force_limit(self):
         """
         Check if the force exceeds 100N threshold
@@ -1172,6 +1139,17 @@ class OSXGrind(ManipulationEnv):
         # Get the magnitude of the force (first 3 components of wrench)
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
         return force_magnitude > 300.0
+
+
+    def _check_force_torque_limits(self):
+        """
+        Check that the robot is not exerting too much force/torque
+
+        Returns:
+            bool: True within force/torque limits
+        """
+        abs_ft = np.abs(self.eef_wrench)
+        return not np.any(abs_ft > self.force_torque_limits)
 
     def _check_waypoint_completion_delay(self):
         """
@@ -1186,25 +1164,17 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def set_trajectory(self, reference_trajectory):
-        self.reference_trajectory = reference_trajectory
-        self.num_waypoints = len(reference_trajectory)
-
-    def create_randomize_reference_trajectory(self, control_freq):
+    def _randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
 
         inner_height = self.mortar_config["inner_height"]
         initial_position = self.trajectory_config["initial_position"].copy()
-
-        # Only add inner_height to Z-coordinate if randomization is enabled
-        #if self.randomize_reference_trajectory:
         initial_position[2] += inner_height  # Add inner height to z position
 
         if self.randomize_reference_trajectory:
-            # randomize the duration and the number of waypoints
+            # randomize the duration
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
-            self.num_waypoints = int(control_freq * self.duration // 10)
             # randomize the desired height
             desired_height = np.random.uniform(low=0.001, high=0.020)
             # update the target force
@@ -1226,8 +1196,6 @@ class OSXGrind(ManipulationEnv):
             max_angle=max_inclination_angle
         )
         reference_trajectory[:, :3] += initial_position
-
-        self.reference_trajectory = reference_trajectory #update the environment's reference trajectory
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization
