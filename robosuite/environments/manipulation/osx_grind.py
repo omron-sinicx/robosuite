@@ -245,7 +245,7 @@ class OSXGrind(ManipulationEnv):
         control_freq=20,
         action_control_freq=None,
         lite_physics=True,
-        horizon=1000,
+        horizon=1e5,
         ignore_done=False,
         hard_reset=False,
         enable_reward=True,
@@ -310,6 +310,7 @@ class OSXGrind(ManipulationEnv):
 
         self.duration = self.trajectory_config["duration"] # in seconds per revolution
         self.duration_range = self.trajectory_config["duration_range"]
+        self.action_control_freq = action_control_freq
         freq = action_control_freq if action_control_freq is not None else control_freq
         self.steps_per_revolution = freq * self.duration
         if self.trajectory_config["num_waypoints"] is not None:
@@ -337,7 +338,7 @@ class OSXGrind(ManipulationEnv):
         # tracked before considering the tracking completed
         self.randomize_reference_trajectory = self.trajectory_config['randomize_reference_trajectory']
         if reference_trajectory is None:
-            self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
+            self.reference_trajectory = self._randomize_reference_trajectory(action_control_freq)
         else:
             self.reference_trajectory = reference_trajectory
 
@@ -925,7 +926,7 @@ class OSXGrind(ManipulationEnv):
         self.sim.model._model.vis.scale.contactheight = 0.01
 
         if self.randomize_reference_trajectory:
-            self.reference_trajectory = self._randomize_reference_trajectory(self.control_freq)
+            self.reference_trajectory = self._randomize_reference_trajectory(self.action_control_freq)
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
@@ -938,8 +939,27 @@ class OSXGrind(ManipulationEnv):
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
-                self.robots[0].init_qpos = self.init_qpos
-                print("IK solution not found, using default init_q. Error msg: ", result.message)
+                # Debug: Print target pose when IK fails
+                print(f"IK failed - Target position: {initial_pos}")
+                print(f"IK failed - Target rotation (quat): {self.reference_trajectory[0][3:]}")
+                print(f"IK failed - Initial guess: {self.init_qpos}")
+                print(f"IK failed - Error message: {result.message}")
+
+                # Fallback: Try with a slightly different position
+                print("Trying IK with adjusted position...")
+                adjusted_pos = initial_pos.copy()
+                adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
+
+                result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
+                                                  target_rot=target_rot,
+                                                  initial_guess=self.init_qpos)
+
+                if result_adjusted.success:
+                    print("IK succeeded with adjusted position")
+                    self.robots[0].init_qpos = result_adjusted.joint_angles
+                else:
+                    print("IK still failed with adjusted position, using default init_qpos")
+                    self.robots[0].init_qpos = self.init_qpos
 
         super()._reset_internal()
 
