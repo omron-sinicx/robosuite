@@ -645,24 +645,29 @@ class OSXGrind(ManipulationEnv):
         T_ref_in_eef = np.linalg.inv(T_eef_in_base) @ T_ref_in_base
         ref_pos_in_eef = T_ref_in_eef[:3, 3]
         ref_rot_in_eef = T.mat2quat(T_ref_in_eef[:3, :3])
-        # Use only the imaginary part (x, y, z) of the quaternion as the rotational error
-        relative_rot_vec = ref_rot_in_eef[:3]
-        # Concatenate to get the full relative pose in the end-effector frame
-        relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_vec])
 
-        # Transform reference pose to end-effector frame
-        # Compute the transformation from reference pose to end-effector frame without using np.linalg.inv
-        # eef_rot: 3x3, eef_pos: (3,), ref_rot: 3x3, ref_pos: (3,)
-        # The transformation from world to eef is: [R_eef^T, -R_eef^T * t_eef]
-        # So, in eef frame: p_ref_in_eef = R_eef^T @ (ref_pos - eef_pos)
-        # and R_ref_in_eef = R_eef^T @ R_ref
-        #ref_pos_in_eef = eef_rot.T @ (ref_pos - eef_pos)
-        #ref_rot_in_eef = eef_rot.T @ ref_rot
-        #relative_rot_quat = T.mat2quat(ref_rot_in_eef)
-        # Use only the imaginary part (x, y, z) of the quaternion as the rotational error
-        #relative_rot_vec = relative_rot_quat[:3]
+        # METHOD 1: Current approach - using only imaginary part of quaternion
+        #relative_rot_vec = ref_rot_in_eef[:3]
+
+        # METHOD 3: Alternative - use axis-angle representation (more intuitive for control)
+        # Convert quaternion to axis-angle for more intuitive error representation
+        angle = 2 * np.arccos(np.clip(ref_rot_in_eef[3], -1, 1))  # Rotation angle
+        if angle > 1e-6:  # Avoid division by zero
+            axis = ref_rot_in_eef[:3] / np.sin(angle/2)  # Rotation axis
+            relative_rot_axis_angle = axis * angle  # Axis-angle representation
+        else:
+            relative_rot_axis_angle = np.zeros(3)
+
+        # METHOD 4: Alternative - use log map of SO(3) (standard in robotics)
+        # This gives a 3D vector representation of rotational error
+        #R_ref_in_eef = T_ref_in_eef[:3, :3]
+        #relative_rot_log_map = T.mat2logmap(R_ref_in_eef)
+
         # Concatenate to get the full relative pose in the end-effector frame
-        #relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_vec])
+        # Choose which rotational error representation to use:
+        #relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_vec])  # Current method
+        relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_axis_angle])  # Method 3
+        # relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_log_map])  # Method 4
 
         return relative_distance_ee #normalized_relative_distance
 
