@@ -710,7 +710,7 @@ class OSXGrind(ManipulationEnv):
         seq_reference_pose = self.reference_trajectory[self.current_waypoint_index:min(self.current_waypoint_index+50, self.reference_trajectory.shape[0])]
         if seq_reference_pose.shape[0] < 50:
             seq_reference_pose = np.concatenate([seq_reference_pose, self.reference_trajectory[:(50-seq_reference_pose.shape[0])]])
-        return seq_reference_pose
+        return seq_reference_pose.ravel() #(50*7,)
 
     def _compute_reference_wrench(self):
         self.reference_wrench = self.reference_force[self.current_waypoint_index]
@@ -912,7 +912,7 @@ class OSXGrind(ManipulationEnv):
         def previous_action(obs_cache):
             return self.previous_action
 
-        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, reference_pos, reference_ortho6d, reference_wrench, previous_action]
+        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, reference_pos, reference_ortho6d, reference_wrench, previous_action, sequential_reference_pose]
         names = [s.__name__ for s in sensors]
 
         # Create observables
