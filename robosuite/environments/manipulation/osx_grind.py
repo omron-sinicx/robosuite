@@ -626,7 +626,7 @@ class OSXGrind(ManipulationEnv):
         normalized_relative_distance = relative_distance / self.max_step_size
 
         # only consider the error for the position controlled directions
-        self.tracking_error = np.linalg.norm(relative_distance*self.position_control_dims) #np.linalg.norm(normalized_relative_distance * self.position_control_dims)
+        self.tracking_error = np.linalg.norm(relative_distance)#*self.position_control_dims) #np.linalg.norm(normalized_relative_distance * self.position_control_dims)
 
         #relative distance in the end-effector frame
         # Calculate the end-effector rotation matrix from the current end-effector quaternion
@@ -634,11 +634,21 @@ class OSXGrind(ManipulationEnv):
         ref_pos = self.reference_trajectory[self.current_waypoint_index][:3]
         ref_quat = self.reference_trajectory[self.current_waypoint_index][3:]
         ref_rot = T.quat2mat(ref_quat)
+        T_ref_in_base = T.pose2mat(ref_pos, ref_rot)
 
         # Convert current eef pose (x, y, z, qx, qy, qz, qw) to 4x4 matrix
         eef_pos = self.eef_pose[:3]
         eef_quat = self.eef_pose[3:]
         eef_rot = T.quat2mat(eef_quat)
+        T_eef_in_base = T.pose2mat(eef_pos, eef_rot)
+
+        T_ref_in_eef = T_eef_in_base.inv() @ T_ref_in_base
+        ref_pos_in_eef = T_ref_in_eef[:3, 3]
+        ref_rot_in_eef = T.mat2quat(T_ref_in_eef[:3, :3])
+        # Use only the imaginary part (x, y, z) of the quaternion as the rotational error
+        relative_rot_vec = ref_rot_in_eef[:3]
+        # Concatenate to get the full relative pose in the end-effector frame
+        relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_vec])
 
         # Transform reference pose to end-effector frame
         # Compute the transformation from reference pose to end-effector frame without using np.linalg.inv
@@ -646,13 +656,13 @@ class OSXGrind(ManipulationEnv):
         # The transformation from world to eef is: [R_eef^T, -R_eef^T * t_eef]
         # So, in eef frame: p_ref_in_eef = R_eef^T @ (ref_pos - eef_pos)
         # and R_ref_in_eef = R_eef^T @ R_ref
-        ref_pos_in_eef = eef_rot.T @ (ref_pos - eef_pos)
-        ref_rot_in_eef = eef_rot.T @ ref_rot
-        relative_rot_quat = T.mat2quat(ref_rot_in_eef)
+        #ref_pos_in_eef = eef_rot.T @ (ref_pos - eef_pos)
+        #ref_rot_in_eef = eef_rot.T @ ref_rot
+        #relative_rot_quat = T.mat2quat(ref_rot_in_eef)
         # Use only the imaginary part (x, y, z) of the quaternion as the rotational error
-        relative_rot_vec = relative_rot_quat[:3]
+        #relative_rot_vec = relative_rot_quat[:3]
         # Concatenate to get the full relative pose in the end-effector frame
-        relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_vec])
+        #relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_vec])
 
         return relative_distance_ee #normalized_relative_distance
 
@@ -695,22 +705,23 @@ class OSXGrind(ManipulationEnv):
         return self.reference_wrench
 
     def _compute_relative_wrenches(self):
-        # in base frame
+        # in end-effector frame
         relative_wrench = self.reference_force[self.current_waypoint_index] - self.eef_wrench
         # normalize by the force follow normalization
         normalized_relative_wrench = relative_wrench / self.force_torque_normalization
 
         # only consider the error for the force controlled directions
-        tracking_force_error = normalized_relative_wrench * self.force_control_dims
-        self.tracking_force_error = np.linalg.norm(tracking_force_error)
+        tracking_force_error = relative_wrench #normalized_relative_wrench #* self.force_control_dims
+        self.tracking_force_error = np.linalg.norm(tracking_force_error[:3]) #consider only the force. torque is ignored.
 
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
         if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
             force_controlled_indices = np.where(self.force_control_dims == 1)[0]
             force_controlled_values = normalized_relative_wrench[force_controlled_indices]
-            return force_controlled_values
+            relative_wrench = relative_wrench*self.force_control_dims #consider only the z-axis direction.
+            return relative_wrench #force_controlled_values
         elif self.task_config["relative_wrench_mode"] == "all":
-            return normalized_relative_wrench
+            return relative_wrench
         else:
             raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
 
@@ -951,7 +962,7 @@ class OSXGrind(ManipulationEnv):
                 adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
 
                 result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
-                                                  target_rot=target_rot,
+                                                  target_rot=self.reference_trajectory[0][3:],
                                                   initial_guess=self.init_qpos)
 
                 if result_adjusted.success:
@@ -1184,6 +1195,10 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
+    def update_reference_trajectory(self, control_freq):
+        self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
+        self.current_waypoint_index = 0 #initialize the waypoint index to 0
+
     def _randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
@@ -1216,6 +1231,7 @@ class OSXGrind(ManipulationEnv):
             max_angle=max_inclination_angle
         )
         reference_trajectory[:, :3] += initial_position
+        self.current_waypoint_index = 0 #initialize the waypoint index to 0
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization
