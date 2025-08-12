@@ -633,16 +633,16 @@ class OSXGrind(ManipulationEnv):
         # Convert reference pose (x, y, z, qx, qy, qz, qw) to 4x4 matrix
         ref_pos = self.reference_trajectory[self.current_waypoint_index][:3]
         ref_quat = self.reference_trajectory[self.current_waypoint_index][3:]
-        ref_rot = T.quat2mat(ref_quat)
-        T_ref_in_base = T.pose2mat(ref_pos, ref_rot)
+        #ref_rot = T.quat2mat(ref_quat)
+        T_ref_in_base = T.pose2mat((ref_pos, ref_quat))
 
         # Convert current eef pose (x, y, z, qx, qy, qz, qw) to 4x4 matrix
         eef_pos = self.eef_pose[:3]
         eef_quat = self.eef_pose[3:]
-        eef_rot = T.quat2mat(eef_quat)
-        T_eef_in_base = T.pose2mat(eef_pos, eef_rot)
+        #eef_rot = T.quat2mat(eef_quat)
+        T_eef_in_base = T.pose2mat((eef_pos, eef_quat))
 
-        T_ref_in_eef = T_eef_in_base.inv() @ T_ref_in_base
+        T_ref_in_eef = np.linalg.inv(T_eef_in_base) @ T_ref_in_base
         ref_pos_in_eef = T_ref_in_eef[:3, 3]
         ref_rot_in_eef = T.mat2quat(T_ref_in_eef[:3, :3])
         # Use only the imaginary part (x, y, z) of the quaternion as the rotational error
