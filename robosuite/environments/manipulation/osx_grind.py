@@ -705,6 +705,13 @@ class OSXGrind(ManipulationEnv):
         reference_ortho6d_ee = np.concatenate([x1_ee, x2_ee])
         return reference_ortho6d_ee #return the reference_ortho6d in the end-effector frame
 
+    def _extract_seq_reference_pose(self):
+        #extract the reference pose for the next 50 waypoints
+        seq_reference_pose = self.reference_trajectory[self.current_waypoint_index:min(self.current_waypoint_index+50, self.reference_trajectory.shape[0])]
+        if seq_reference_pose.shape[0] < 50:
+            seq_reference_pose = np.concatenate([seq_reference_pose, self.reference_trajectory[:(50-seq_reference_pose.shape[0])]])
+        return seq_reference_pose
+
     def _compute_reference_wrench(self):
         self.reference_wrench = self.reference_force[self.current_waypoint_index]
         return self.reference_wrench
@@ -876,6 +883,10 @@ class OSXGrind(ManipulationEnv):
         @sensor(modality=f"{pf}proprio")
         def reference_wrench(obs_cache):
             return self._compute_reference_wrench()
+
+        @sensor(modality=f"{pf}proprio")
+        def sequential_reference_pose(obs_cache):
+            return self._extract_seq_reference_pose()
 
         @sensor(modality=f"{pf}proprio")
         def eef_wrench(obs_cache):
