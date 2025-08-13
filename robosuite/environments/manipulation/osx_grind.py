@@ -363,6 +363,7 @@ class OSXGrind(ManipulationEnv):
         self.reference_ortho6d = np.zeros(6)
         self.reference_wrench = np.zeros(6)
 
+        self.reward_initializd =True
         self.reward_dict = {
             "force_reward": 0.0,
             "traj_reward": 0.0,
@@ -599,10 +600,12 @@ class OSXGrind(ManipulationEnv):
         speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
         reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty + speed_reward
+        #print(f"{self.reward_weights=}")
+        #print(f"{force_reward=:0.05f} {traj_reward=:0.05f} {action_smoothness_penalty=:0.05f} {self.step_penalty=:0.05f} {speed_reward=:0.05f}")
         # print(f"{force_reward=:0.02f} {traj_reward=:0.02f} {action_smoothness_penalty=:0.02f} {self.step_penalty=:0.02f} {speed_reward=:0.02f}")
 
         if self.clip_reward:
-            reward = np.clip(reward, -2.0, 1.0)
+            reward = np.clip(reward, -1.0, 1.0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
@@ -707,9 +710,9 @@ class OSXGrind(ManipulationEnv):
 
     def _extract_seq_reference_pose(self):
         #extract the reference pose for the next 50 waypoints
-        seq_reference_pose = self.reference_trajectory[self.current_waypoint_index:min(self.current_waypoint_index+50, self.reference_trajectory.shape[0])]
-        if seq_reference_pose.shape[0] < 50:
-            seq_reference_pose = np.concatenate([seq_reference_pose, self.reference_trajectory[:(50-seq_reference_pose.shape[0])]])
+        seq_reference_pose = self.reference_trajectory[self.current_waypoint_index:min(self.current_waypoint_index+40, self.reference_trajectory.shape[0])]
+        if seq_reference_pose.shape[0] < 40:
+            seq_reference_pose = np.concatenate([seq_reference_pose, self.reference_trajectory[:(40-seq_reference_pose.shape[0])]])
         return seq_reference_pose.ravel() #(50*7,)
 
     def _compute_reference_wrench(self):
@@ -888,6 +891,10 @@ class OSXGrind(ManipulationEnv):
         def sequential_reference_pose(obs_cache):
             return self._extract_seq_reference_pose()
 
+        #@sensor(modality=f"{pf}proprio")
+        #def current_waypoint_index(obs_cache):
+        #   return self.current_waypoint_index
+
         @sensor(modality=f"{pf}proprio")
         def eef_wrench(obs_cache):
             return self.eef_wrench
@@ -912,7 +919,7 @@ class OSXGrind(ManipulationEnv):
         def previous_action(obs_cache):
             return self.previous_action
 
-        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, reference_pos, reference_ortho6d, reference_wrench, previous_action, sequential_reference_pose]
+        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, reference_pos, reference_ortho6d, reference_wrench, previous_action, sequential_reference_pose] #current_waypoint_index] # sequential_reference_pose]
         names = [s.__name__ for s in sensors]
 
         # Create observables
@@ -930,6 +937,7 @@ class OSXGrind(ManipulationEnv):
         """
         Resets simulation internal configurations.
         """
+        #print(f"In env:: _reset_internal")
         self.current_waypoint_index = 0
         self.collisions = 0
         self.f_excess = 0
@@ -1185,7 +1193,7 @@ class OSXGrind(ManipulationEnv):
         """
         # Get the magnitude of the force (first 3 components of wrench)
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
-        return force_magnitude > 300.0
+        return force_magnitude > 500.0
 
 
     def _check_force_torque_limits(self):
@@ -1211,11 +1219,139 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def update_reference_trajectory(self, control_freq):
-        self.reference_trajectory = self._randomize_reference_trajectory(control_freq)
+    def update_reference_trajectory(self, control_freq,boolrandomize=False):
+        """
+        Resets simulation internal configurations.
+        """
+        self.current_waypoint_index = 0
+        self.collisions = 0
+        self.f_excess = 0
+        self.task_space_exits = 0
+        self.global_timestep = 0
+        self.translated_action = None
+
+        # Update the contact point visual properties
+        self.sim.model._model.vis.scale.contactwidth = 0.01
+        self.sim.model._model.vis.scale.contactheight = 0.01
+
+        self.reference_trajectory = self.random_reference_trajectory(control_freq,boolrandomize)
+        trajectory_direction = np.random.choice([-1, 1], size=len(self.reference_trajectory))
+        trajectory_direction = np.array([trajectory_direction]*4).T
+        self.reference_trajectory[:, 3:] *= trajectory_direction
+        self.reward_dict = {
+        "force_reward": 0.0,
+        "traj_reward": 0.0,
+        "action_smoothness": 0.0,
+        "step_penalty": 0.0,
+        "speed_reward": 0.0,
+        "force_total_reward": 0.0,
+        "traj_total_reward": 0.0,
+        "speed_total_reward": 0.0,
+        "action_smoothness_total_reward": 0.0,
+        }
+
+        # Update the initial position of the robot based on the initial pose of the reference trajectory
+        if self.reset_with_ik:
+            initial_pos = self.reference_trajectory[0][:3]
+            initial_pos[2] += 0.001
+            result = self.ik.solve_ik(target_pos=initial_pos,
+                                      target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
+                                      initial_guess=self.init_qpos)
+
+            if result.success:
+                self.robots[0].init_qpos = result.joint_angles
+            else:
+                # Debug: Print target pose when IK fails
+                print(f"IK failed - Target position: {initial_pos}")
+                print(f"IK failed - Target rotation (quat): {self.reference_trajectory[0][3:]}")
+                print(f"IK failed - Initial guess: {self.init_qpos}")
+                print(f"IK failed - Error message: {result.message}")
+
+                # Fallback: Try with a slightly different position
+                print("Trying IK with adjusted position...")
+                adjusted_pos = initial_pos.copy()
+                adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
+
+                result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
+                                                  target_rot=self.reference_trajectory[0][3:],
+                                                  initial_guess=self.init_qpos)
+
+                if result_adjusted.success:
+                    print("IK succeeded with adjusted position")
+                    self.robots[0].init_qpos = result_adjusted.joint_angles
+                else:
+                    print("IK still failed with adjusted position, using default init_qpos")
+                    self.robots[0].init_qpos = self.init_qpos
+
+        super()._reset_internal()
+
+        # update the trajectory indicator
+        offset_cylinder_half_size = T.rotate_vector_by_quaternion([0, 0, -self.cylinder_length], self.reference_trajectory[self.current_waypoint_index][3:])
+        self.sim.model.body_pos[self.force_cylinder_body_id] = self.reference_trajectory[self.current_waypoint_index][:3] + offset_cylinder_half_size
+        self.sim.model.body_quat[self.force_cylinder_body_id] = T.convert_quat(self.reference_trajectory[self.current_waypoint_index][3:], "wxyz")
+
+        if self.trajectory_config["compute_joint_trajectory"]:
+            self.joint_reference_trajectory = self.calculate_joint_reference_trajectory(reference_trajectory=self.reference_trajectory)
+
+        self.last_step_time = self.sim.data._data.time
+
+        # Reset all object positions using initializer sampler if we're not directly loading from an xml
+        if self.spawn_mortar and not self.deterministic_reset:
+
+            # Sample from the placement initializer for all objects
+            object_placements = self.placement_initializer.sample()
+
+            # Loop through all objects and reset their positions
+            for obj_pos, obj_quat, obj in object_placements.values():
+                self.sim.model.body_pos[self.mortar_body_id] = obj_pos
+                self.sim.model.body_quat[self.mortar_body_id] = obj_quat
+
+        return self.reference_trajectory,self.duration,self.target_force
+
+    def random_reference_trajectory(self, control_freq,boolrandomize=False):
+        max_inclination_angle = self.trajectory_config["max_inclination_angle"]
+        initial_orientation = self.trajectory_config["initial_orientation"]
+
+        inner_height = self.mortar_config["inner_height"]
+        initial_position = self.trajectory_config["initial_position"].copy()
+        initial_position[2] += inner_height  # Add inner height to z position
+
+        if boolrandomize:
+            #print(f"In env:: boolrandomize true")
+            # randomize the duration
+            self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
+            # randomize the desired height
+            desired_height = np.random.uniform(low=0.001, high=0.020)
+            # update the target force
+            self.target_force = int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
+            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
+
+        else:
+            #print(f"In env:: boolrandomize false")
+            desired_height = self.trajectory_config["desired_height"]
+            #self.target_force = self.target_force#self.trajectory_config["target_force"]
+        #print(f"In env:: duration: {boolrandomize}, {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
+
+        reference_trajectory = generate_mortar_trajectory_timed(
+            mortar_diameter=self.mortar_config["diameter"],
+            desired_height=desired_height,
+            control_frequency=control_freq,
+            duration=self.duration,
+            total_timesteps=self.num_waypoints,
+            default_quat=np.array(initial_orientation),
+            max_angle=max_inclination_angle
+        )
+        reference_trajectory[:, :3] += initial_position
         self.current_waypoint_index = 0 #initialize the waypoint index to 0
 
+        # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
+        self.max_step_size = self.pose_normalization
+        self.pose_error_threshold = np.linalg.norm(self.tracking_trajectory_threshold * self.position_control_dims / self.max_step_size)
+        self.force_error_threshold = np.linalg.norm(self.tracking_force_threshold * self.force_control_dims / self.force_torque_normalization)
+        return reference_trajectory
+
     def _randomize_reference_trajectory(self, control_freq):
+        #print(f"In env:: _randomize_reference_trajectory")
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
 
@@ -1234,7 +1370,6 @@ class OSXGrind(ManipulationEnv):
 
         else:
             desired_height = self.trajectory_config["desired_height"]
-            self.target_force = self.trajectory_config["target_force"]
         # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
         reference_trajectory = generate_mortar_trajectory_timed(
