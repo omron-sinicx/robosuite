@@ -2,7 +2,7 @@ import multiprocessing
 from collections import OrderedDict
 
 import numpy as np
-
+from robosuite.utils import transform_utils as T
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import WipeArena
 from robosuite.models.tasks import ManipulationTask
@@ -64,6 +64,12 @@ class Wipe(ManipulationEnv):
             gripper models from gripper factory.
             For this environment, setting a value other than the default ("WipingGripper") will raise an
             AssertionError, as this environment is not meant to be used with any other alternative gripper.
+
+        base_types (None or str or list of str): type of base, used to instantiate base models from base factory.
+            Default is "default", which is the default base associated with the robot(s) the 'robots' specification.
+            None results in no base, and any other (valid) model overrides the default base. Should either be
+            single str if same base type is to be used for all robots or else it should be a list of the same
+            length as "robots" param
 
         initialization_noise (dict or list of dict): Dict containing the initialization noise parameters.
             The expected keys and corresponding value types are specified below:
@@ -169,6 +175,7 @@ class Wipe(ManipulationEnv):
         env_configuration="default",
         controller_configs=None,
         gripper_types="WipingGripper",
+        base_types="default",
         initialization_noise="default",
         use_camera_obs=True,
         use_object_obs=True,
@@ -295,6 +302,15 @@ class Wipe(ManipulationEnv):
         # set after init to ensure self.robots is set
         self.ee_force_bias = {arm: np.zeros(3) for arm in self.robots[0].arms}
         self.ee_torque_bias = {arm: np.zeros(3) for arm in self.robots[0].arms}
+
+    def step(self, raw_action):
+        if len(raw_action) == 9:
+            action = np.zeros(self.robots[0].dof)
+            action[:3] = raw_action[:3]
+            action[3:] = T.ortho62axisangle(raw_action[3:])
+        else:
+            action = raw_action
+        return super().step(action)
 
     def _get_active_markers(self, c_geoms):
         """

@@ -3,6 +3,7 @@ from typing import Dict, List, Optional  # for abstract base class definitions
 
 import numpy as np
 
+from robosuite.controllers.parts.generic.joint_pos import JointPositionController
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 
@@ -112,6 +113,7 @@ class Device(metaclass=abc.ABCMeta):
 
         # Get controller reference
         controller = robot.part_controllers[active_arm]
+        gripper = robot.gripper[active_arm]
         gripper_dof = robot.gripper[active_arm].dof
 
         assert controller.name in ["OSC_POSE", "JOINT_POSITION"], "only supporting OSC_POSE and JOINT_POSITION for now"
@@ -163,13 +165,18 @@ class Device(metaclass=abc.ABCMeta):
         )
         ac_dict[f"{active_arm}_abs"] = arm_action["abs"]
         ac_dict[f"{active_arm}_delta"] = arm_action["delta"]
-        ac_dict[f"{active_arm}_gripper"] = np.array([grasp] * gripper_dof)
+
+        if hasattr(gripper, "grasp_qpos"):
+            ac_dict[f"{active_arm}_gripper"] = getattr(gripper, "grasp_qpos")[grasp]
+        else:
+            ac_dict[f"{active_arm}_gripper"] = np.array([grasp] * gripper_dof)
 
         # clip actions between -1 and 1
         for (k, v) in ac_dict.items():
-            if "abs" not in k:
+            if "abs" not in k and "gripper" not in k:
                 ac_dict[k] = np.clip(v, -1, 1)
 
+        ac_dict["state"] = state
         return ac_dict
 
     def get_arm_action(self, robot, arm, norm_delta, goal_update_mode="target"):
@@ -180,16 +187,9 @@ class Device(metaclass=abc.ABCMeta):
             "target",
         ]  # update next target either based on achieved pose or current target pose
 
-        # TODO: the logic between OSC and while body based ik is fragmented right now. Unify
-        if isinstance(robot.part_controllers[arm], OperationalSpaceController):
-            arm_controller = robot.part_controllers[arm]
-            delta_action = arm_controller.scale_action(norm_delta.copy())
-            abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None)
-            return {
-                "delta": norm_delta,
-                "abs": abs_action,
-            }
-        elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK"]:
+        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, JointPositionController)):
+            return get_arm_action_simple(robot, arm, norm_delta)
+        elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK", "HYBRID_WHOLE_BODY_MINK_IK"]:
             ref_frame = self.env.robots[0].composite_controller.composite_controller_specific_config.get(
                 "ik_input_ref_frame", "world"
             )
@@ -263,3 +263,28 @@ class Device(metaclass=abc.ABCMeta):
             }
         else:
             raise NotImplementedError
+
+
+def get_arm_action_simple(robot, arm, norm_delta):
+    # TODO: the logic between OSC and while body based ik is fragmented right now. Unify
+    if isinstance(robot.part_controllers[arm], OperationalSpaceController):
+        arm_controller = robot.part_controllers[arm]
+        delta_action = arm_controller.scale_action(norm_delta.copy())
+        abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None)
+        return {
+            "delta": norm_delta,
+            "abs": abs_action,
+            f"{arm}_delta": norm_delta,
+            f"{arm}_abs": abs_action,
+            # "joint": joint_action,
+        }
+    elif isinstance(robot.part_controllers[arm], JointPositionController):
+        arm_controller = robot.part_controllers[arm]
+        joint_action, delta_action = arm_controller.ik_action(norm_delta.copy())
+
+        return {
+            "delta": delta_action,
+            "abs": joint_action,
+            f"{arm}_delta": norm_delta,
+            f"{arm}_abs": joint_action,
+        }

@@ -8,7 +8,7 @@ from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
 
 # Supported impedance modes
-IMPEDANCE_MODES = {"fixed", "variable", "variable_kp", "variable_full_kp"}
+IMPEDANCE_MODES = {"fixed", "variable", "variable_kp"}
 
 # TODO: Maybe better naming scheme to differentiate between input / output min / max and pos/ori limits, etc.
 
@@ -136,6 +136,8 @@ class OperationalSpaceController(Controller):
         input_ref_frame="base",
         uncouple_pos_ori=True,
         lite_physics=True,
+        ft_buffer_size=10,
+        gripper_body_name=None,
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
 
@@ -147,6 +149,8 @@ class OperationalSpaceController(Controller):
             lite_physics=lite_physics,
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
+            ft_buffer_size=ft_buffer_size,
+            gripper_body_name=gripper_body_name,
         )
         # Determine whether this is pos ori or just pos
         self.use_ori = control_ori
@@ -195,11 +199,6 @@ class OperationalSpaceController(Controller):
             self.control_dim += 12
         elif self.impedance_mode == "variable_kp":
             self.control_dim += 6
-        elif self.impedance_mode == "variable_full_kp":
-            # Assumes cholesky vector so 6 for position and 6 for orientation
-            self.control_dim += 12
-            self.kp_min = self.nums2array(kp_limits[0], 12)
-            self.kp_max = self.nums2array(kp_limits[1], 12)
 
         # limits
         self.position_limits = np.array(position_limits) if position_limits is not None else position_limits
@@ -238,7 +237,6 @@ class OperationalSpaceController(Controller):
             :Mode `'fixed'`: [joint pos command]
             :Mode `'variable'`: [damping_ratio values, kp values, joint pos command]
             :Mode `'variable_kp'`: [kp values, joint pos command]
-            :Mode `'variable_full_kp'`: [cholesky vector of kp values, joint pos command]
 
         Args:
             action (Iterable): Desired relative joint position goal state
@@ -248,35 +246,19 @@ class OperationalSpaceController(Controller):
 
         # Parse action based on the impedance mode, and update kp / kd as necessary
         if self.impedance_mode == "variable":
-            damping_ratio, kp, delta = action[:6], action[6:12], action[12:]
+            damping_ratio, kp, goal_update = action[:6], action[6:12], action[12:]
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
             self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio, self.damping_ratio_min, self.damping_ratio_max)
         elif self.impedance_mode == "variable_kp":
-            kp, delta = action[:6], action[6:]
+            kp, goal_update = action[:6], action[6:]
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
             self.kd = 2 * np.sqrt(self.kp)  # critically damped
-        elif self.impedance_mode == "variable_full_kp":
-            cholesky_kp, delta = action[:12], action[12:]
-            stiffness_pos_matrix = T.cholesky_vector_to_spd(cholesky_kp[:6])
-            stiffness_ori_matrix = T.cholesky_vector_to_spd(cholesky_kp[6:])
-            kp = np.concatenate([stiffness_pos_matrix.flatten(), stiffness_ori_matrix.flatten()])
-
-            self.kp = np.zeros_like(kp)
-
-            # assume positive diagonal stiffness
-            diag_indices = [0, 4, 8, 9, 13, 17]
-            self.kp[diag_indices] = np.clip(kp[diag_indices], self.kp_min[0], self.kp_max[0])
-            # other values have no min value, it can even be negative up to the -kp_max value
-            other_indices = np.ones(len(kp), bool)
-            other_indices[diag_indices] = False
-            self.kp[other_indices] = np.sign(kp[other_indices]) * np.clip(np.abs(kp[other_indices]), 0, self.kp_max[0])
-            # Compute damping (preserve sign)
-            self.kd = 2 * np.sqrt(self.kp[diag_indices])  # critically damped
         else:  # This is case "fixed"
-            delta = action
+            goal_update = action
 
         # If we're using deltas, interpret actions as such
         if self.input_type == "delta":
+            delta = goal_update
             scaled_delta = self.scale_action(delta)
             self.goal_pos = self.compute_goal_pos(scaled_delta[0:3])
             if self.use_ori is True:
@@ -285,9 +267,10 @@ class OperationalSpaceController(Controller):
                 self.goal_ori = self.compute_goal_ori(np.zeros(3))
         # Else, interpret actions as absolute values
         elif self.input_type == "absolute":
-            self.goal_pos = action[0:3]
+            abs_action = goal_update
+            self.goal_pos = abs_action[0:3]
             if self.use_ori is True:
-                self.goal_ori = Rotation.from_rotvec(action[3:6]).as_matrix()
+                self.goal_ori = Rotation.from_rotvec(abs_action[3:6]).as_matrix()
             else:
                 self.goal_ori = self.compute_goal_ori(np.zeros(3))
         else:
@@ -327,7 +310,7 @@ class OperationalSpaceController(Controller):
     def compute_goal_pos(self, delta, goal_update_mode=None):
         """
         Compute new goal position, given a delta to update. Can either update the new goal based on
-        current achieved position or current desired goal. Updating based on current desired goal can be useful
+        current achieved position or current deisred goal. Updating based on current deisred goal can be useful
         if we want the robot to adhere with a sequence of target poses as closely as possible,
         without lagging or overshooting.
 
@@ -474,34 +457,16 @@ class OperationalSpaceController(Controller):
         base_pos_vel = np.array(self.sim.data.get_site_xvelp(f"{self.naming_prefix}{self.part_name}_center"))
         vel_pos_error = -(self.ref_pos_vel - base_pos_vel)
 
-        if self.impedance_mode != "variable_full_kp":
-            position_kp = np.diag(self.kp[0:3])
-            orientation_kp = np.diag(self.kp[3:6])
-        else:
-            position_kp = np.array(self.kp[0:9]).reshape((3, 3))
-            orientation_kp = np.array(self.kp[9:18]).reshape((3, 3))
-
-        # Scale position gains proportionally up to 10x as error gets smaller
-        error_norm = np.linalg.norm(position_error)
-        if error_norm < 1:
-            scale = 10 * (1 - error_norm) + 1  # Linear scaling from 1x to 10x
-            position_kp *= scale
         # F_r = kp * pos_err + kd * vel_err
-        desired_force = np.dot(position_error, position_kp) + np.multiply(
+        desired_force = np.multiply(np.array(position_error), np.array(self.kp[0:3])) + np.multiply(
             vel_pos_error, self.kd[0:3]
         )
 
         base_ori_vel = np.array(self.sim.data.get_site_xvelr(f"{self.naming_prefix}{self.part_name}_center"))
         vel_ori_error = -(self.ref_ori_vel - base_ori_vel)
 
-        # Scale position gains proportionally up to 10x as error gets smaller
-
-        ori_error_norm = np.linalg.norm(ori_error)
-        if ori_error_norm < 1:
-            scale = 10 * (1 - ori_error_norm) + 1  # Linear scaling from 1x to 10x
-            orientation_kp *= scale
         # Tau_r = kp * ori_err + kd * vel_err
-        desired_torque = np.dot(ori_error, orientation_kp) + np.multiply(
+        desired_torque = np.multiply(np.array(ori_error), np.array(self.kp[3:6])) + np.multiply(
             vel_ori_error, self.kd[3:6]
         )
 
@@ -602,9 +567,6 @@ class OperationalSpaceController(Controller):
             low = np.concatenate([self.damping_ratio_min, self.kp_min, self.input_min])
             high = np.concatenate([self.damping_ratio_max, self.kp_max, self.input_max])
         elif self.impedance_mode == "variable_kp":
-            low = np.concatenate([self.kp_min, self.input_min])
-            high = np.concatenate([self.kp_max, self.input_max])
-        elif self.impedance_mode == "variable_full_kp":
             low = np.concatenate([self.kp_min, self.input_min])
             high = np.concatenate([self.kp_max, self.input_max])
         else:  # This is case "fixed"

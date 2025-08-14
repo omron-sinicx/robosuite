@@ -112,8 +112,8 @@ AxisSpec = namedtuple("AxisSpec", ["direction", "range", "scale"])
 GAMEPAD_SPEC = {
     'ABS_HAT0X': AxisSpec(direction=4, range=[-1, 1], scale=1),
     'ABS_HAT0Y': AxisSpec(direction=3, range=[-1, 1], scale=1),
-    'ABS_X': AxisSpec(direction=1, range=[-1, 1], scale=1),
-    'ABS_Y': AxisSpec(direction=0, range=[-1, 1], scale=1),
+    'ABS_X': AxisSpec(direction=1, range=[-1, 1], scale=-1),
+    'ABS_Y': AxisSpec(direction=0, range=[-1, 1], scale=-1),
     'ABS_RX': '',
     'ABS_RY': AxisSpec(direction=2, range=[-1, 1], scale=-1),
     'ABS_Z': AxisSpec(direction=5, range=[-1, 0], scale=-1),
@@ -124,12 +124,11 @@ GAMEPAD_SPEC = {
     'BTN_WEST': 'Y',
     'BTN_SOUTH': 'A',
     'BTN_EAST': 'B',
-    'BTN_TL': 'gripper',
-    'BTN_TR': 'gripper',
-    'BTN_SELECT': '',
+    'BTN_TL': 'gripper_on',
+    'BTN_TR': 'gripper_off',
+    'BTN_SELECT': 'back',
     'BTN_START': 'reset',
 }
-
 
 
 def scale_to_control(x, axis_scale=350.0, min_v=-1.0, max_v=1.0):
@@ -169,11 +168,15 @@ class GamePad(Device):
 
     def __init__(
         self,
+        env,
         device_name=macros.GAMEPAD_NAME,
         pos_sensitivity=1.0,
         rot_sensitivity=1.0,
         deadzone=0.05,
     ):
+        super().__init__(env)
+
+        self._reset_internal_state()
 
         if len(devices.gamepads) == 0:
             raise UnpluggedError("No gamepad found.")
@@ -200,7 +203,7 @@ class GamePad(Device):
 
         self._control = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._reset_state = 0
-        self._btn_state = [0, 0, 0, 0] # state of X, Y, A, B buttons
+        self._btn_state = [0, 0, 0, 0]  # state of X, Y, A, B buttons
         self.rotation = np.array([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
         self._enabled = False
 
@@ -232,6 +235,8 @@ class GamePad(Device):
         """
         Resets internal state of controller, except for the reset signal.
         """
+        super()._reset_internal_state()
+
         self.rotation = np.array([[-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0]])
         # Reset 6-DOF variables
         self.x, self.y, self.z = 0, 0, 0
@@ -240,6 +245,9 @@ class GamePad(Device):
         self._control = np.zeros(6)
         # Reset grasp
         self.single_click_and_hold = False
+
+    def _postprocess_device_outputs(self, dpos, drotation):
+        return dpos, drotation
 
     def start_control(self):
         """
@@ -257,8 +265,8 @@ class GamePad(Device):
         Returns:
             dict: A dictionary containing dpos, orn, unmodified orn, grasp, and reset
         """
-        dpos = self.control[:3] * 0.005 * self.pos_sensitivity
-        roll, pitch, yaw = self.control[3:] * 0.005 * self.rot_sensitivity
+        dpos = self.control[:3] * 0.05 * self.pos_sensitivity
+        roll, pitch, yaw = self.control[3:] * 0.05 * self.rot_sensitivity
 
         # convert RPY to an absolute orientation
         drot1 = rotation_matrix(angle=-pitch, direction=[1.0, 0, 0], point=None)[:3, :3]
@@ -289,11 +297,14 @@ class GamePad(Device):
                     if isinstance(btn, AxisSpec):
                         scaled_input = scale_to_control(event.state*btn.scale, BUTTONS_INFO[event.code]['max'], min_v=btn.range[0], max_v=btn.range[1])
                         self._control[btn.direction] = scaled_input if abs(scaled_input) > self.deadzone else 0.0
-                        # print(self._control)
-                    elif btn == 'gripper':
-                        self.control_gripper = float(event.state)
+                    elif 'gripper' in btn:  # Only trigger on button release
+                        self.control_gripper = 1 if btn == 'gripper_on' else 0
                     elif btn == 'reset':
-                        self._reset_state = int(event.state)
+                        self._reset_state = 1
+                        self._enabled = False
+                        self._reset_internal_state()
+                    elif btn == 'back' and event.state == 0:  # Only trigger on button release
+                        self.active_robot = (self.active_robot + 1) % self.num_robots
                     elif btn == 'X':
                         self._btn_state[0] = int(event.state)
                     elif btn == 'Y':
@@ -302,7 +313,6 @@ class GamePad(Device):
                         self._btn_state[2] = int(event.state)
                     elif btn == 'B':
                         self._btn_state[3] = int(event.state)
-
 
     @property
     def control(self):

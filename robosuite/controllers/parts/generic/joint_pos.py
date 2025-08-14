@@ -1,10 +1,11 @@
-from typing import Dict, List, Literal
+from typing import Literal
 
 import numpy as np
+import robosuite.utils.transform_utils as T
 
 from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
-from robosuite.utils.buffers import RingBuffer
+from robosuite.utils.ik_solver import MuJoCoIKSolver
 
 # Supported impedance modes
 IMPEDANCE_MODES = {"fixed", "variable", "variable_kp"}
@@ -107,11 +108,10 @@ class JointPositionController(Controller):
         interpolator=None,
         input_type: Literal["delta", "absolute"] = "delta",
         ft_buffer_size=10,
+        initial_rot=None,
+        gripper_body_name=None,
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
-        self.ft_prefix = ref_name.split(
-            '_')[0] + '_' + kwargs.get("part_name", None)
-        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
 
         super().__init__(
             sim,
@@ -121,6 +121,8 @@ class JointPositionController(Controller):
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
             lite_physics=lite_physics,
+            ft_buffer_size=ft_buffer_size,
+            gripper_body_name=gripper_body_name,
         )
 
         self.joint_indexes = joint_indexes
@@ -179,34 +181,25 @@ class JointPositionController(Controller):
 
         # initialize
         self.goal_qpos = None
+        self.goal_pos = None
+        self.goal_ori = None
+        self.initial_rot = initial_rot
+
+        self.use_torque_compensation = kwargs.get("use_torque_compensation", True)
+
+        self.ik_solver = MuJoCoIKSolver(
+            self.sim.model.get_xml(),
+            [],
+            ref_name,
+            position_threshold=0.001,
+            rotation_threshold=0.01,
+            time_limit=0.1,
+            joint_indexes=self.qpos_index,
+            base_body_name=None
+        )
 
     def update(self):
         super().update()
-
-        self.wrench_in_eef_frame_buf.push(self.get_wrench())
-
-    def get_wrench(self):
-        return np.concatenate([
-            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
-            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
-        ])
-
-    def get_sensor_measurement(self, sensor_name):
-        """
-        Grabs relevant sensor data from the sim object
-
-        Args:
-            sensor_name (str): name of the sensor
-
-        Returns:
-            np.array: sensor values
-        """
-        sensor_idx = np.sum(
-            self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
-        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(
-            sensor_name)]
-
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
 
     def set_goal(self, action, set_qpos=None):
         """
@@ -293,7 +286,10 @@ class JointPositionController(Controller):
         desired_torque = np.multiply(np.array(position_error), np.array(self.kp)) + np.multiply(vel_pos_error, self.kd)
 
         # Return desired torques plus gravity compensations
-        self.torques = np.dot(self.mass_matrix, desired_torque) + self.torque_compensation
+        if self.use_torque_compensation:
+            self.torques = np.dot(self.mass_matrix, desired_torque) + self.torque_compensation
+        else:
+            self.torques = desired_torque
 
         # Always run superclass call for any cleanups at the end
         super().run_controller()
@@ -304,10 +300,75 @@ class JointPositionController(Controller):
         Resets joint position goal to be current position
         """
         self.goal_qpos = self.joint_pos
+        self.goal_pos = self.ref_pos.copy()
+        self.goal_ori = self.ref_ori_mat.copy()
 
         # Reset interpolator if required
         if self.interpolator is not None:
             self.interpolator.set_goal(self.goal_qpos)
+
+    def compute_goal_pos(self, delta):
+        """
+        Compute new goal position, given a delta to update.
+
+        Args:
+            delta (np.array): Desired relative change in position [x, y, z]
+
+        Returns:
+            np.array: updated goal position in the controller frame
+        """
+        return self.goal_pos + delta
+
+    def compute_goal_ori(self, delta):
+        """
+        Compute new goal orientation, given a delta to update.
+
+        Args:
+            delta (np.array): Desired relative change in orientation, in axis-angle form [ax, ay, az]
+
+        Returns:
+            np.array: updated goal orientation in the controller frame
+        """
+        if np.all(delta == 0.0):
+            return self.goal_ori
+
+        # convert axis-angle value to rotation matrix
+        quat_error = T.axisangle2quat(delta)
+        rotation_mat_error = T.quat2mat(quat_error)
+        goal_ori = np.dot(rotation_mat_error, self.goal_ori)
+
+        return goal_ori
+
+    def ik_action(self, delta_ac):
+        """
+        Convert delta pose action to absolute joint action
+
+        Returns:
+            np.array: joint action positions
+            np.array: joint action deltas
+        """
+
+        abs_pos = self.compute_goal_pos(delta_ac[0:3])
+        abs_ori = self.compute_goal_ori(delta_ac[3:6])
+        if self.initial_rot is not None:
+            abs_ori = T.quat2mat(self.initial_rot)
+
+        ik_result = self.ik_solver.solve_ik(abs_pos, abs_ori, initial_guess=self.joint_pos)
+
+        if not ik_result.success:
+            print("Inverse kinematics failed")
+            return self.joint_pos, np.zeros_like(self.joint_pos)
+
+        self.goal_pos = abs_pos
+        self.goal_ori = abs_ori
+
+        return ik_result.joint_angles, ik_result.joint_angles - self.joint_pos
+
+    def delta_to_abs_action(self, delta_ac):
+        """
+        Convert delta action to absolute action
+        """
+        return self.joint_pos + delta_ac
 
     @property
     def control_limits(self):
@@ -338,11 +399,3 @@ class JointPositionController(Controller):
     @property
     def name(self):
         return "JOINT_POSITION"
-
-    @property
-    def eef_wrench(self):
-        return self.wrench_in_eef_frame_buf.average
-
-    @property
-    def current_wrench(self):
-        return self.get_wrench()

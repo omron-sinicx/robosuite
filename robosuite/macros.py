@@ -38,6 +38,10 @@ MUJOCO_GPU_RENDERING = True
 SPACEMOUSE_VENDOR_ID = 9583
 SPACEMOUSE_PRODUCT_ID = 50734
 
+# DualSense settings. Used by DualSense class in robosuite/devices/dualsense.py
+DUALSENSE_VENDOR_ID = 0x054C
+DUALSENSE_PRODUCT_ID = 0x0CE6
+
 # Gamepad settings. used by GamePad class in robosuite/devices/gamepad.py
 GAMEPAD_NAME = "Logitech Gamepad F310"
 

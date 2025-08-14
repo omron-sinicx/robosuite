@@ -36,7 +36,7 @@ class MjviewerRenderer:
 
             self.viewer.opt.geomgroup[0] = 0
             # self.viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = True
-            self.viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = True
+            self.viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = False
 
             if self.camera_config is not None:
                 self.viewer.cam.lookat = self.camera_config["lookat"]

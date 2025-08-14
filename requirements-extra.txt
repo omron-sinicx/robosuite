@@ -15,7 +15,7 @@ h5py
 robosuite-models==1.0.0
 
 # for USD export and rendering
-usd-core
+# usd-core
 
 # required for gamepad
 inputs

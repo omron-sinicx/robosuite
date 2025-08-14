@@ -356,10 +356,14 @@ class Robot(object):
         def joint_vel(obs_cache):
             return np.array([self.sim.data.qvel[x] for x in self._ref_joint_vel_indexes])
 
-        sensors = [joint_pos, joint_pos_cos, joint_pos_sin, joint_vel]
-        names = ["joint_pos", "joint_pos_cos", "joint_pos_sin", "joint_vel"]
+        @sensor(modality=modality)
+        def joint_acc(obs_cache):
+            return np.array([self.sim.data.qacc[x] for x in self._ref_joint_vel_indexes])
+
+        sensors = [joint_pos, joint_pos_cos, joint_pos_sin, joint_vel, joint_acc]
+        names = ["joint_pos", "joint_pos_cos", "joint_pos_sin", "joint_vel", "joint_acc"]
         # We don't want to include the direct joint pos sensor outputs
-        actives = [True, True, True, True]
+        actives = [True, True, True, True, True]
 
         for arm in self.arms:
             arm_sensors, arm_sensor_names = self._create_arm_sensors(arm, modality=modality)
@@ -461,11 +465,20 @@ class Robot(object):
         def eef_vel_ang(obs_cache):
             return np.array(self.sim.data.get_body_xvelr(self.robot_model.eef_name[arm]))
 
+        @sensor(modality=modality)
+        def eef_vel_ang(obs_cache):
+            return np.array(self.sim.data.get_body_xvelr(self.robot_model.eef_name[arm]))
+
+        @sensor(modality=modality)
+        def eef_force_torque(obs_cache):
+            return np.concatenate([self.get_sensor_measurement(self.gripper[arm].important_sensors["force_ee"]),
+                                   self.get_sensor_measurement(self.gripper[arm].important_sensors["torque_ee"])])
+
         # only consider prefix if there is more than one arm
         pf = f"{arm}_" if len(self.arms) > 1 else ""
 
-        sensors = [eef_pos, eef_quat, eef_quat_site, eef_vel_lin, eef_vel_ang]
-        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site", f"{pf}eef_vel_lin", f"{pf}eef_vel_ang"]
+        sensors = [eef_pos, eef_quat, eef_quat_site, eef_vel_lin, eef_vel_ang, eef_force_torque]
+        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site", f"{pf}eef_vel_lin", f"{pf}eef_vel_ang", f"{pf}eef_force_torque"]
 
         # add in gripper sensors if this robot has a gripper
         if self.has_gripper[arm]:
@@ -916,7 +929,7 @@ class Robot(object):
                 self.part_controller_config[gripper_name]["ndim"] = self.gripper[arm].dof
                 self.part_controller_config[gripper_name]["policy_freq"] = self.control_freq
                 self.part_controller_config[gripper_name]["joint_indexes"] = {
-                    "joints": self.gripper_joints[arm],
+                    "joints": self._ref_joints_indexes_dict[gripper_name],
                     "actuators": self._ref_joint_gripper_actuator_indexes[arm],
                     "qpos": self._ref_gripper_joint_pos_indexes[arm],
                     "qvel": self._ref_gripper_joint_vel_indexes[arm],

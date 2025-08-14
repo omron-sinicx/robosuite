@@ -145,14 +145,9 @@ class ForwardDynamicsComplianceController(Controller):
         self.use_kdl = use_kdl
         self.iterations = iterations
         self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
-        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
         self.frame_of_reference = frame_of_reference
         self.selection_matrix = selection_matrix
-        self.gripper_body_name = gripper_body_name
         self.virtual_force = np.zeros(6)
-        if self.gripper_body_name:
-            self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{gripper_body_name}")
 
         super().__init__(
             sim,
@@ -162,6 +157,8 @@ class ForwardDynamicsComplianceController(Controller):
             lite_physics=lite_physics,
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
+            ft_buffer_size=ft_buffer_size,
+            gripper_body_name=gripper_body_name,
         )
 
         # Instantiate the inner position/velocity controller
@@ -271,34 +268,6 @@ class ForwardDynamicsComplianceController(Controller):
         self.last_joint_positions = copy(self.joint_pos)
         self.current_joint_velocities = self.joint_vel
         self.last_joint_velocities = copy(self.joint_vel)
-
-        self.transform_wrench_to_base_frame()
-
-    def get_wrench(self):
-        return np.concatenate([
-            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
-            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
-        ])
-
-    def transform_wrench_to_base_frame(self):
-        # Compute force/torque
-        # get sensor f/t measurements from gripper site, transform to world frame
-        gripper_in_robot_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")
-        wFtS = T.force_frame_transform(gripper_in_robot_base)
-
-        wrench_force = self.get_wrench()
-
-        if self.gripper_body_name:
-            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
-                                                 self.gripper_inertial_properties['mass'],
-                                                 self.gripper_inertial_properties['local_com'],
-                                                 self.gripper_inertial_properties['world_rot_mat'],
-                                                 self.sim.model._model.opt.gravity)
-
-        current_wrench = np.dot(wFtS, wrench_force)  # compute force/torque reading in base_frame
-
-        self.wrench_in_base_frame_buf.push(current_wrench)
-        self.wrench_in_eef_frame_buf.push(wrench_force)
 
     def set_goal(self, action, set_pos=None, set_ori=None):
         """
@@ -582,30 +551,6 @@ class ForwardDynamicsComplianceController(Controller):
         sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
 
         return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
-
-    def pose_in_base_from_name(self, name):
-        """
-        A helper function that takes in a named data field and returns the pose
-        of that object in the base frame.
-
-        Args:
-            name (str): Name of body in sim to grab pose
-
-        Returns:
-            np.array: (4,4) array corresponding to the pose of @name in the base frame
-        """
-
-        pos_in_world = self.sim.data.get_body_xpos(name)
-        rot_in_world = self.sim.data.get_body_xmat(name).reshape((3, 3))
-        pose_in_world = T.make_pose(pos_in_world, rot_in_world)
-
-        base_pos_in_world = self.sim.data.get_body_xpos(f"{self.naming_prefix}base")
-        base_rot_in_world = self.sim.data.get_body_xmat(f"{self.naming_prefix}base").reshape((3, 3))
-        base_pose_in_world = T.make_pose(base_pos_in_world, base_rot_in_world)
-        world_pose_in_base = T.pose_inv(base_pose_in_world)
-
-        pose_in_base = T.pose_in_A_to_pose_in_B(pose_in_world, world_pose_in_base)
-        return pose_in_base
 
     def pose_in_A_to_pose_in_B_by_site_name(self, A, B):
         pos_in_A = self.sim.data.site_xpos[self.sim.model.site_name2id(A)]

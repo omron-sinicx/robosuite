@@ -1055,6 +1055,10 @@ def cholesky_vector_to_spd(cholesky_vector):
     return cholesky_matrix @ cholesky_matrix.T
 
 
+def ortho62axisangle(ortho6):
+    return quat2axisangle(ortho62quat(ortho6))
+
+
 def ortho62quat(ortho6):
     R = ortho62mat(ortho6)
     return mat2quat(R)
@@ -1190,11 +1194,11 @@ def rotate_quaternion_by_rpy(rpy, q_in, rotated_frame=False):
 def compute_pose_error(target_pose, current_pose):
     """
     Computes the pose error between a target pose and a current pose.
-    
+
     Args:
         target_pose (np.array): Target pose as [position (3), orientation (4)] where orientation is a quaternion (x,y,z,w)
         current_pose (np.array): Current pose as [position (3), orientation (4)] where orientation is a quaternion (x,y,z,w)
-        
+
     Returns:
         np.array: 6D pose error vector containing [position_error (3), orientation_error (3)]
                   Position error is expressed in the target frame
@@ -1211,3 +1215,158 @@ def compute_pose_error(target_pose, current_pose):
     relative_distance[3:] = quaternions_orientation_error(ref_quat, current_pose[3:])
 
     return relative_distance
+
+
+def mat2logmap(R):
+    """
+    Convert a rotation matrix to its logarithm map representation.
+
+    The logarithm map of SO(3) converts a rotation matrix to a 3D vector in the Lie algebra.
+    This is useful for representing rotational errors in robotics applications.
+
+    Args:
+        R (np.array): 3x3 rotation matrix
+
+    Returns:
+        np.array: 3D vector representing the rotation in the Lie algebra (so(3))
+
+    Notes:
+        - The output vector represents the rotation as an axis-angle representation
+        - The magnitude of the vector is the rotation angle
+        - The direction of the vector is the rotation axis
+        - For identity rotation, returns zero vector
+        - For rotations close to identity, uses small angle approximation
+    """
+    # Ensure R is a numpy array
+    R = np.asarray(R, dtype=np.float64)
+
+    # Check if R is a valid rotation matrix (orthogonal and determinant = 1)
+    if R.shape != (3, 3):
+        raise ValueError("Input must be a 3x3 matrix")
+
+    # Check if R is orthogonal (R * R^T = I)
+    if not np.allclose(R @ R.T, np.eye(3), atol=1e-6):
+        raise ValueError("Input matrix is not orthogonal")
+
+    # Check if determinant is 1 (proper rotation matrix)
+    if not np.allclose(np.linalg.det(R), 1.0, atol=1e-6):
+        raise ValueError("Input matrix is not a proper rotation matrix (det != 1)")
+
+    # Extract the skew-symmetric part of the rotation matrix
+    # The skew-symmetric part is (R - R^T) / 2
+    skew_symmetric = (R - R.T) / 2.0
+
+    # Extract the rotation vector from the skew-symmetric matrix
+    # [0, -z, y; z, 0, -x; -y, x, 0] -> [x, y, z]
+    rotation_vector = np.array([skew_symmetric[2, 1],
+                               skew_symmetric[0, 2],
+                               skew_symmetric[1, 0]])
+
+    # Calculate the rotation angle
+    # For small rotations, use the magnitude of the rotation vector
+    # For larger rotations, use the arcsin of the skew-symmetric part
+    angle = np.linalg.norm(rotation_vector)
+
+    # Handle the case where angle is very small (near identity)
+    if angle < 1e-6:
+        # For very small rotations, the rotation vector is already the log map
+        return rotation_vector
+
+    # For larger rotations, we need to scale by the angle
+    # The log map is: (angle / sin(angle)) * rotation_vector
+    # But we need to handle the case where angle approaches pi
+
+    # Calculate trace of R
+    trace_R = np.trace(R)
+
+    # Handle different cases based on the trace
+    if trace_R > 2.999:  # Very close to identity
+        # Small angle approximation
+        return rotation_vector
+    elif trace_R < -0.999:  # Rotation close to pi
+        # For rotations close to pi, we need special handling
+        # Find the eigenvector corresponding to eigenvalue 1
+        eigenvalues, eigenvectors = np.linalg.eig(R)
+        # Find the index of eigenvalue closest to 1
+        idx = np.argmin(np.abs(eigenvalues - 1.0))
+        axis = np.real(eigenvectors[:, idx])
+
+        # Determine the sign of the rotation
+        # Check if the rotation is positive or negative around the axis
+        test_vector = np.array([1.0, 0.0, 0.0])
+        if np.allclose(axis, test_vector):
+            test_vector = np.array([0.0, 1.0, 0.0])
+
+        rotated_vector = R @ test_vector
+        cross_product = np.cross(axis, test_vector)
+        dot_product = np.dot(cross_product, rotated_vector)
+
+        if dot_product > 0:
+            angle = np.pi
+        else:
+            angle = -np.pi
+
+        return angle * axis
+    else:
+        # Normal case: use the standard formula
+        # angle = arccos((trace(R) - 1) / 2)
+        cos_angle = (trace_R - 1.0) / 2.0
+        cos_angle = np.clip(cos_angle, -1.0, 1.0)  # Ensure it's in valid range
+        angle = np.arccos(cos_angle)
+
+        # Normalize the rotation vector and scale by angle
+        if angle > 1e-6:
+            normalized_axis = rotation_vector / np.linalg.norm(rotation_vector)
+            return angle * normalized_axis
+        else:
+            return rotation_vector
+
+
+def logmap2mat(rotation_vector):
+    """
+    Convert a rotation vector (logarithm map) back to a rotation matrix.
+
+    This is the inverse of mat2logmap. It converts a 3D vector in the Lie algebra
+    back to a rotation matrix using the exponential map.
+
+    Args:
+        rotation_vector (np.array): 3D vector representing rotation in Lie algebra
+
+    Returns:
+        np.array: 3x3 rotation matrix
+
+    Notes:
+        - Uses Rodrigues' rotation formula for efficiency
+        - Handles zero rotation vector (returns identity matrix)
+    """
+    # Ensure input is a numpy array
+    rotation_vector = np.asarray(rotation_vector, dtype=np.float64)
+
+    if rotation_vector.shape != (3,):
+        raise ValueError("Input must be a 3D vector")
+
+    # Calculate the rotation angle
+    angle = np.linalg.norm(rotation_vector)
+
+    # Handle zero rotation
+    if angle < 1e-6:
+        return np.eye(3)
+
+    # Normalize the rotation axis
+    axis = rotation_vector / angle
+
+    # Use Rodrigues' rotation formula
+    # R = I + sin(angle) * K + (1 - cos(angle)) * K^2
+    # where K is the skew-symmetric matrix of the axis
+
+    # Create skew-symmetric matrix K
+    K = np.array([[0, -axis[2], axis[1]],
+                  [axis[2], 0, -axis[0]],
+                  [-axis[1], axis[0], 0]])
+
+    # Apply Rodrigues' formula
+    R = (np.eye(3) +
+         np.sin(angle) * K +
+         (1 - np.cos(angle)) * (K @ K))
+
+    return R

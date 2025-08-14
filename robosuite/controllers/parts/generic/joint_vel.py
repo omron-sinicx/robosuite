@@ -73,11 +73,9 @@ class JointVelocityController(Controller):
         velocity_limits=None,
         interpolator=None,
         ft_buffer_size=10,
+        gripper_body_name=None,
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
-
-        self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
-        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
 
         super().__init__(
             sim,
@@ -87,6 +85,8 @@ class JointVelocityController(Controller):
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
             lite_physics=lite_physics,
+            ft_buffer_size=ft_buffer_size,
+            gripper_body_name=gripper_body_name,
         )
         # Control dimension
         self.control_dim = len(joint_indexes["joints"])
@@ -106,8 +106,8 @@ class JointVelocityController(Controller):
             low, high = self.actuator_limits
             self.kp = kp * (high - low)
 
-        self.ki = 0.0#self.kp * 0.005
-        self.kd = 0.0#self.kp * 0.001
+        self.ki = self.kp * 0.005
+        self.kd = self.kp * 0.001
         self.last_err = np.zeros(self.joint_dim)
         self.derr_buf = RingBuffer(dim=self.joint_dim, length=5)
         self.summed_err = np.zeros(self.joint_dim)
@@ -128,31 +128,7 @@ class JointVelocityController(Controller):
         self.current_vel = np.zeros(self.joint_dim)  # Current velocity setpoint, pre-compensation
         self.torques = None  # Torques returned every time run_controller is called
 
-    def update(self):
-        super().update()
-
-        self.wrench_in_eef_frame_buf.push(self.get_wrench())
-
-    def get_wrench(self):
-        return np.concatenate([
-            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
-            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
-        ])
-
-    def get_sensor_measurement(self, sensor_name):
-        """
-        Grabs relevant sensor data from the sim object
-
-        Args:
-            sensor_name (str): name of the sensor
-
-        Returns:
-            np.array: sensor values
-        """
-        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
-        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
-
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
+        self.use_torque_compensation = kwargs.get("use_torque_compensation", True)
 
     def set_goal(self, velocities):
         """
@@ -217,7 +193,12 @@ class JointVelocityController(Controller):
             self.summed_err += err
 
         # Compute command torques via PID velocity controller plus gravity compensation torques
-        torques = self.kp * err + self.ki * self.summed_err + self.kd * self.derr_buf.average + self.torque_compensation
+        if self.use_torque_compensation:
+            torques = (
+                self.kp * err + self.ki * self.summed_err + self.kd * self.derr_buf.average + self.torque_compensation
+            )
+        else:
+            torques = self.kp * err + self.ki * self.summed_err + self.kd * self.derr_buf.average
 
         # Clip torques
         self.torques = self.clip_torques(torques)
@@ -244,7 +225,3 @@ class JointVelocityController(Controller):
     @property
     def name(self):
         return "JOINT_VELOCITY"
-
-    @property
-    def eef_wrench(self):
-        return self.wrench_in_eef_frame_buf.average

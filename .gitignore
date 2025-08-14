@@ -126,3 +126,4 @@ MUJOCO_LOG.TXT
 
 # private demonstration files
 robosuite/models/assets/demonstrations_private
+**/outputs/
