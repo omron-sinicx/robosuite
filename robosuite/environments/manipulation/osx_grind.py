@@ -600,7 +600,7 @@ class OSXGrind(ManipulationEnv):
         speed_reward = self.reward_weights['speed'] * (self.current_waypoint_index - self.global_timestep) / self.num_waypoints
 
         reward = force_reward + traj_reward + action_smoothness_penalty + self.step_penalty + speed_reward
-        #print(f"{self.reward_weights=}")
+        #print(f"{self.reward_weights=} {self.step_penalty=}")
         #print(f"{force_reward=:0.05f} {traj_reward=:0.05f} {action_smoothness_penalty=:0.05f} {self.step_penalty=:0.05f} {speed_reward=:0.05f}")
         # print(f"{force_reward=:0.02f} {traj_reward=:0.02f} {action_smoothness_penalty=:0.02f} {self.step_penalty=:0.02f} {speed_reward=:0.02f}")
 
@@ -1193,7 +1193,7 @@ class OSXGrind(ManipulationEnv):
         """
         # Get the magnitude of the force (first 3 components of wrench)
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
-        return force_magnitude > 500.0
+        return force_magnitude > 1000.0
 
 
     def _check_force_torque_limits(self):
