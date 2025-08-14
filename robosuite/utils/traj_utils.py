@@ -315,17 +315,19 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
                  for each point in the trajectory
     """
     trajectory = _generate_mortar_trajectory_core(
-        mortar_diameter, desired_height, n_steps, default_quat, 
+        mortar_diameter, desired_height, n_steps, default_quat,
         fraction, max_angle, pestle_radius
     )
-    
+
     # Add initial pose to the end of the trajectory to complete the circle
     trajectory = np.concatenate([trajectory, [trajectory[0]]])
-    
+
     return trajectory
 
 
-def generate_mortar_trajectory_timed(mortar_diameter, desired_height, control_frequency, duration, total_timesteps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
+def generate_mortar_trajectory_timed(
+        mortar_diameter, desired_height, control_frequency, duration, total_timesteps, default_quat=np.array([0, -1, 0, 0]),
+        fraction=None, max_angle=None, pestle_radius=0.0125):
     """
     Generate a time-based trajectory to trace the surface of an upward-facing bowl at a given height.
     The trajectory duration and number of revolutions are determined by the control frequency, 
@@ -351,33 +353,33 @@ def generate_mortar_trajectory_timed(mortar_diameter, desired_height, control_fr
     """
     # Calculate timesteps per revolution
     timesteps_per_revolution = int(control_frequency * duration)
-    
+
     # Calculate how many full revolutions and remainder timesteps
     full_revolutions = total_timesteps // timesteps_per_revolution
     remainder_timesteps = total_timesteps % timesteps_per_revolution
-    
+
     # Generate a single revolution trajectory
     single_revolution_trajectory = _generate_mortar_trajectory_core(
-        mortar_diameter, desired_height, timesteps_per_revolution, 
+        mortar_diameter, desired_height, timesteps_per_revolution,
         default_quat, fraction, max_angle, pestle_radius
     )
-    
+
     # Build the complete trajectory
     trajectory_points = []
-    
+
     # Add full revolutions
     for _ in range(full_revolutions):
         trajectory_points.extend(single_revolution_trajectory)
-    
+
     # Add partial revolution if there are remainder timesteps
     if remainder_timesteps > 0:
         trajectory_points.extend(single_revolution_trajectory[:remainder_timesteps])
-    
+
     # Convert to numpy array
     trajectory = np.array(trajectory_points)
-    
+
     assert len(trajectory) == total_timesteps, f"Trajectory length {len(trajectory)} does not match total_timesteps {total_timesteps}"
-    
+
     return trajectory
 
 

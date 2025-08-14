@@ -33,8 +33,6 @@ class FrequencyWrapper:
 
         # Set the control frequency to the high frequency
         env_config_copy["control_freq"] = trajectory_target_freq
-        if env_config_copy["task_config"]["trajectory"]["num_waypoints"] is not None:
-            env_config_copy["task_config"]["trajectory"]["num_waypoints"] = env_config_copy["task_config"]["trajectory"]["num_waypoints"] * self.steps_per_action
         self.ignore_done = env_config_copy.get("ignore_done", False)
         env_config_copy["ignore_done"] = True
         env_config_copy["action_control_freq"] = action_control_freq
@@ -48,7 +46,7 @@ class FrequencyWrapper:
     def reset(self, **kwargs):
         """Reset the environment and return the initial observation."""
         obs = self.env.reset(**kwargs)
-        self.env.horizon = self.env.num_waypoints // self.steps_per_action
+        self.env.horizon = self.env.num_waypoints
         self.last_action = None
         self.timestep = 0
         return obs
