@@ -362,7 +362,11 @@ class JointPositionController(Controller):
         self.goal_pos = abs_pos
         self.goal_ori = abs_ori
 
-        return ik_result.joint_angles, ik_result.joint_angles - self.joint_pos
+        return {
+            "joint_abs": ik_result.joint_angles,
+            "joint_delta": ik_result.joint_angles - self.joint_pos,
+            "cartesian_abs": np.concatenate([abs_pos, T.quat2axisangle(T.mat2quat(abs_ori))]),
+        }
 
     def delta_to_abs_action(self, delta_ac):
         """
