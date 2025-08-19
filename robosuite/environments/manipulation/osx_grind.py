@@ -315,6 +315,7 @@ class OSXGrind(ManipulationEnv):
 
         self.duration = self.trajectory_config["duration"]  # in seconds per revolution
         self.duration_range = self.trajectory_config["duration_range"]
+        print(f"action_control_freq: {action_control_freq}, control_freq: {control_freq}")
         self.action_freq = action_control_freq if action_control_freq is not None else control_freq
         self.steps_per_revolution = self.action_freq * self.duration
         if self.trajectory_config["num_waypoints"] is not None:
@@ -740,9 +741,9 @@ class OSXGrind(ManipulationEnv):
             force_controlled_indices = np.where(self.force_control_dims == 1)[0]
             force_controlled_values = normalized_relative_wrench[force_controlled_indices]
             relative_wrench = relative_wrench*self.force_control_dims #consider only the z-axis direction.
-            return normalized_relative_wrench #relative_wrench #force_controlled_values
+            return relative_wrench #normalized_relative_wrench #force_controlled_values
         elif self.task_config["relative_wrench_mode"] == "all":
-            return normalized_relative_wrench
+            return relative_wrench #normalized_relative_wrench
         else:
             raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
 
