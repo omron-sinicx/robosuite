@@ -628,16 +628,16 @@ class OSXGrind(ManipulationEnv):
         # normalize by the force follow normalization
         normalized_relative_wrench = relative_wrench / self.force_torque_normalization
 
-        # only consider the error for the force controlled directions
-        tracking_force_error = normalized_relative_wrench * self.force_control_dims
-        self.tracking_force_error = np.linalg.norm(tracking_force_error)
-
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
         if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
+            # only consider the error for the force controlled directions
+            tracking_force_error = normalized_relative_wrench * self.force_control_dims
+            self.tracking_force_error = np.linalg.norm(tracking_force_error)
             force_controlled_indices = np.where(self.force_control_dims == 1)[0]
             force_controlled_values = normalized_relative_wrench[force_controlled_indices]
             return force_controlled_values
         elif self.task_config["relative_wrench_mode"] == "all":
+            self.tracking_force_error = np.linalg.norm(normalized_relative_wrench)
             return normalized_relative_wrench
         else:
             raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
@@ -909,6 +909,7 @@ class OSXGrind(ManipulationEnv):
 
         self.cumulative_reward += reward
         if done:
+            print(f"done {self.timestep} reason: {reason} duration: {self.duration} target force: {self.target_force} ")
             self.cumulative_reward = 0.0
 
         return reward, done, info
@@ -1036,7 +1037,7 @@ class OSXGrind(ManipulationEnv):
         mortar_center = np.array(self.mortar_config["position"]) + np.array([0.0, 0.0, self.mortar_config["radius"]])
         distance = self.mortar_config["radius"] - np.linalg.norm(mortar_center - eef[:3])
         if distance < -0.01:
-            print(f"collision broken at step {self.current_waypoint_index}. Distance: {distance}")
+            # print(f"collision broken at step {self.current_waypoint_index}. Distance: {distance}")
             return True
         return False
 

@@ -103,8 +103,6 @@ class FrequencyWrapper:
 
     # Forward all other attributes to the wrapped environment
     def __getattr__(self, name):
-        if name.startswith('_'):
-            raise AttributeError(f"Cannot access private attribute '{name}'")
         return getattr(self.env, name)
 
 
