@@ -677,7 +677,7 @@ class OSXGrind(ManipulationEnv):
         relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_axis_angle])  # Method 3
         # relative_distance_ee = np.concatenate([ref_pos_in_eef, relative_rot_log_map])  # Method 4
 
-        return relative_distance_ee #normalized_relative_distance
+        return relative_distance #relative_distance_ee #normalized_relative_distance
 
     def _compute_reference_pos(self):
         self.reference_pos = self.reference_trajectory[self.current_waypoint_index][:3]
