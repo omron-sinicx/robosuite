@@ -325,7 +325,9 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
     return trajectory
 
 
-def generate_mortar_trajectory_timed(mortar_diameter, desired_height, control_frequency, duration, total_timesteps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
+def generate_mortar_trajectory_timed(
+        mortar_diameter, desired_height, control_frequency, duration, total_timesteps, default_quat=np.array([0, -1, 0, 0]),
+        fraction=None, max_angle=None, pestle_radius=0.0125):
     """
     Generate a time-based trajectory to trace the surface of an upward-facing bowl at a given height.
     The trajectory duration and number of revolutions are determined by the control frequency,

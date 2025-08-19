@@ -48,7 +48,7 @@ class FrequencyWrapper:
     def reset(self, **kwargs):
         """Reset the environment and return the initial observation."""
         obs = self.env.reset(**kwargs)
-        self.env.horizon = self.env.num_waypoints // self.steps_per_action
+        self.env.horizon = self.env.num_waypoints
         self.last_action = None
         self.timestep = 0
         return obs
@@ -105,8 +105,6 @@ class FrequencyWrapper:
 
     # Forward all other attributes to the wrapped environment
     def __getattr__(self, name):
-        if name.startswith('_'):
-            raise AttributeError(f"Cannot access private attribute '{name}'")
         return getattr(self.env, name)
 
 

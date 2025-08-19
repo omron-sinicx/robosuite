@@ -138,6 +138,8 @@ class Device(metaclass=abc.ABCMeta):
             )
             ac_dict[f"{arm}_abs"] = arm_action["abs"]
             ac_dict[f"{arm}_delta"] = arm_action["delta"]
+            ac_dict[f"{arm}_joint_abs"] = arm_action.get("joint_abs", None)
+            ac_dict[f"{arm}_joint_delta"] = arm_action.get("joint_delta", None)
             ac_dict[f"{arm}_gripper"] = np.zeros(robot.gripper[arm].dof)
 
         if robot.is_mobile:
@@ -165,6 +167,8 @@ class Device(metaclass=abc.ABCMeta):
         )
         ac_dict[f"{active_arm}_abs"] = arm_action["abs"]
         ac_dict[f"{active_arm}_delta"] = arm_action["delta"]
+        ac_dict[f"{active_arm}_joint_abs"] = arm_action.get("joint_abs", None)
+        ac_dict[f"{active_arm}_joint_delta"] = arm_action.get("joint_delta", None)
 
         if hasattr(gripper, "grasp_qpos"):
             ac_dict[f"{active_arm}_gripper"] = getattr(gripper, "grasp_qpos")[grasp]
@@ -274,17 +278,16 @@ def get_arm_action_simple(robot, arm, norm_delta):
         return {
             "delta": norm_delta,
             "abs": abs_action,
-            f"{arm}_delta": norm_delta,
-            f"{arm}_abs": abs_action,
-            # "joint": joint_action,
         }
     elif isinstance(robot.part_controllers[arm], JointPositionController):
         arm_controller = robot.part_controllers[arm]
-        joint_action, delta_action = arm_controller.ik_action(norm_delta.copy())
+        actions = arm_controller.ik_action(norm_delta.copy())
+        joint_action, delta_action = actions["joint_abs"], actions["joint_delta"]
+        cartesian_action = actions["cartesian_abs"]
 
         return {
-            "delta": delta_action,
-            "abs": joint_action,
-            f"{arm}_delta": norm_delta,
-            f"{arm}_abs": joint_action,
+            "joint_delta": delta_action,
+            "joint_abs": joint_action,
+            "delta": norm_delta,  # cartesian delta
+            "abs": cartesian_action,
         }

@@ -1,7 +1,6 @@
 from copy import copy
 from pathlib import Path
 import numpy as np
-import rospkg
 
 from robosuite.utils.binding_utils import MjSim
 from robosuite.utils.buffers import RingBuffer
@@ -13,10 +12,7 @@ from robosuite.controllers.parts.generic.joint_pos import JointPositionControlle
 from robosuite.controllers.parts.generic.joint_vel import JointVelocityController
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 from robosuite.utils.control_utils import *
-try:
-    from ur_pykdl.ik_solver import IKSolver
-except ImportError:
-    IKSolver = None
+
 
 
 # Supported impedance modes
@@ -216,6 +212,7 @@ class ComplianceController(Controller):
         self.desired_force_torque = np.zeros(6)
 
         if self.use_kdl:
+            from ur_pykdl.ik_solver import IKSolver
             self.ik_solver = IKSolver(robot='ur5e_powder_grinding_default', rospackage='osx_powder_grinding',
                                       base_link='base_link', ee_link='tool0')
             self.ik_solver.build_generic_model()

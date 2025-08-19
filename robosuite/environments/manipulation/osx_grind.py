@@ -313,16 +313,15 @@ class OSXGrind(ManipulationEnv):
 
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-        self.duration = self.trajectory_config["duration"] # in seconds per revolution
+        self.duration = self.trajectory_config["duration"]  # in seconds per revolution
         self.duration_range = self.trajectory_config["duration_range"]
-        self.action_control_freq = action_control_freq
-        freq = action_control_freq if action_control_freq is not None else control_freq
-        self.steps_per_revolution = freq * self.duration
+        self.action_freq = action_control_freq if action_control_freq is not None else control_freq
+        self.steps_per_revolution = self.action_freq * self.duration
         if self.trajectory_config["num_waypoints"] is not None:
             self.num_waypoints = self.trajectory_config["num_waypoints"]
         else:
             self.num_waypoints = self.steps_per_revolution
-        self.seconds_per_waypoint = 1 / freq
+        self.seconds_per_waypoint = 1 / self.action_freq
         self.step_duration = max(1.0/500, self.seconds_per_waypoint)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
@@ -343,7 +342,7 @@ class OSXGrind(ManipulationEnv):
         # tracked before considering the tracking completed
         self.randomize_reference_trajectory = self.trajectory_config['randomize_reference_trajectory']
         if reference_trajectory is None:
-            self.reference_trajectory = self._randomize_reference_trajectory(action_control_freq)
+            self.reference_trajectory = self._randomize_reference_trajectory(self.action_freq)
         else:
             self.reference_trajectory = reference_trajectory
 
@@ -736,12 +735,14 @@ class OSXGrind(ManipulationEnv):
 
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
         if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
+            # only consider the error for the force controlled directions
+            tracking_force_error = normalized_relative_wrench * self.force_control_dims
             force_controlled_indices = np.where(self.force_control_dims == 1)[0]
             force_controlled_values = normalized_relative_wrench[force_controlled_indices]
             relative_wrench = relative_wrench*self.force_control_dims #consider only the z-axis direction.
-            return relative_wrench #force_controlled_values
+            return normalized_relative_wrench #relative_wrench #force_controlled_values
         elif self.task_config["relative_wrench_mode"] == "all":
-            return relative_wrench
+            return normalized_relative_wrench
         else:
             raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
 
@@ -837,9 +838,9 @@ class OSXGrind(ManipulationEnv):
             self._xml_processors,
             "gripper0_right_grip_site",
             joint_indexes=np.arange(6),
-            position_threshold=0.001,
-            rotation_threshold=0.01,
-            time_limit=0.05,
+            position_threshold=0.0001,
+            rotation_threshold=0.0001,
+            time_limit=0.5,
             base_body_name="robot0_base"
         )
 
@@ -966,12 +967,13 @@ class OSXGrind(ManipulationEnv):
         self.sim.model._model.vis.scale.contactheight = 0.01
 
         if self.randomize_reference_trajectory:
-            self.reference_trajectory = self._randomize_reference_trajectory(self.action_control_freq)
+            self.reference_trajectory = self._randomize_reference_trajectory(self.action_freq)
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
-            initial_pos = self.reference_trajectory[0][:3]
-            initial_pos[2] += 0.001
+            initial_pos = self.reference_trajectory[0][:3].copy()
+            offset = np.array([0.0, 0.0, -self.trajectory_config["initial_offset"]])
+            initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
             result = self.ik.solve_ik(target_pos=initial_pos,
                                       target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
                                       initial_guess=self.init_qpos)
@@ -1051,6 +1053,7 @@ class OSXGrind(ManipulationEnv):
 
         self.cumulative_reward += reward
         if done:
+            print(f"done {self.timestep} reason: {reason} duration: {self.duration} target force: {self.target_force} ")
             self.cumulative_reward = 0.0
 
         return reward, done, info
@@ -1166,7 +1169,26 @@ class OSXGrind(ManipulationEnv):
             terminated = True
             reason = "WAYPOINT COMPLETION DELAY REACHED"
 
+        if self._check_broken_simulation():
+            terminated = True
+            reason = "BROKEN SIMULATION"
+
         return terminated, reason
+
+    def _check_broken_simulation(self):
+        """
+        Check if the simulation is broken
+        """
+        if not self.mortar_config["spawn"]:
+            return False
+
+        eef = self.eef_pose
+        mortar_center = np.array(self.mortar_config["position"]) + np.array([0.0, 0.0, self.mortar_config["radius"]])
+        distance = self.mortar_config["radius"] - np.linalg.norm(mortar_center - eef[:3])
+        if distance < -0.01:
+            # print(f"collision broken at step {self.current_waypoint_index}. Distance: {distance}")
+            return True
+        return False
 
     def _check_success(self):
         """
@@ -1384,7 +1406,8 @@ class OSXGrind(ManipulationEnv):
             duration=self.duration,
             total_timesteps=self.num_waypoints,
             default_quat=np.array(initial_orientation),
-            max_angle=max_inclination_angle
+            max_angle=max_inclination_angle,
+            pestle_radius=self.mortar_config["pestle_radius"]
         )
         reference_trajectory[:, :3] += initial_position
         self.current_waypoint_index = 0 #initialize the waypoint index to 0
