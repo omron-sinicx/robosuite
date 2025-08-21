@@ -252,7 +252,7 @@ class Controller(object, metaclass=abc.ABCMeta):
         gripper_in_robot_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")
         world_pose = T.make_pose(self.ref_pos, self.ref_ori_mat)
 
-        wrench_force = self.get_wrench()
+        wrench_force = -self.get_wrench()
         if self.gripper_inertial_properties:
             wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
                                                  self.gripper_inertial_properties['mass'],
