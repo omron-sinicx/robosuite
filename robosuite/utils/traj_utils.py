@@ -158,7 +158,10 @@ class LinearInterpolator(Interpolator):
         return x_current
 
 
-def _generate_mortar_trajectory_core(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
+def _generate_mortar_trajectory_core(mortar_diameter, desired_height,
+                                     n_steps, default_quat=np.array([0, -1, 0, 0]),
+                                     fraction=None, max_angle=None,
+                                     pestle_radius=0.0125, circumferential_offset=0.0):
     """
     Core logic for generating a mortar trajectory. This function contains the common
     trajectory generation logic used by both step-based and time-based trajectory functions.
@@ -174,7 +177,7 @@ def _generate_mortar_trajectory_core(mortar_diameter, desired_height, n_steps, d
                            and the final quaternion. The fraction will be calculated to ensure this constraint.
         pestle_radius (float): Radius of the pestle tip in meters. Used to adjust trajectory to prevent penetration
                               when inclination is constrained.
-
+        circumferential_offset (float): Offset in radians for initial orientation of the trajectory
     Returns:
         np.array: Array of shape (n_steps, 7) containing [x, y, z, qx, qy, qz, qw]
                  for each point in the trajectory
@@ -191,7 +194,7 @@ def _generate_mortar_trajectory_core(mortar_diameter, desired_height, n_steps, d
     circle_radius = np.sqrt(radius**2 - (radius - desired_height)**2)
 
     # Step 4: Generate points along a circle at desired height
-    theta = np.linspace(np.pi/2, np.pi/2 + 2*np.pi, n_steps)
+    theta = np.linspace(circumferential_offset, 2*np.pi + circumferential_offset, n_steps)
 
     # Step 5: Calculate normal vectors at each point on the original circle
     # For an upward facing bowl, the normal vector points outward from the center of curvature
@@ -327,7 +330,7 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
 
 def generate_mortar_trajectory_timed(
         mortar_diameter, desired_height, control_frequency, duration, total_timesteps, default_quat=np.array([0, -1, 0, 0]),
-        fraction=None, max_angle=None, pestle_radius=0.0125):
+        fraction=None, max_angle=None, pestle_radius=0.0125, circumferential_offset=0.0):
     """
     Generate a time-based trajectory to trace the surface of an upward-facing bowl at a given height.
     The trajectory duration and number of revolutions are determined by the control frequency,
@@ -346,6 +349,7 @@ def generate_mortar_trajectory_timed(
                            and the final quaternion. The fraction will be calculated to ensure this constraint.
         pestle_radius (float): Radius of the pestle tip in meters. Used to adjust trajectory to prevent penetration
                               when inclination is constrained.
+        circumferential_offset (float): Offset in radians for initial orientation of the trajectory
 
     Returns:
         np.array: Array of shape (total_timesteps, 7) containing [x, y, z, qx, qy, qz, qw]
@@ -361,7 +365,7 @@ def generate_mortar_trajectory_timed(
     # Generate a single revolution trajectory
     single_revolution_trajectory = _generate_mortar_trajectory_core(
         mortar_diameter, desired_height, timesteps_per_revolution,
-        default_quat, fraction, max_angle, pestle_radius
+        default_quat, fraction, max_angle, pestle_radius, circumferential_offset
     )
 
     # Build the complete trajectory

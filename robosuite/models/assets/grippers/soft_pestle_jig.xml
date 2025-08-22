@@ -16,7 +16,7 @@
 	</default>
 	<worldbody>
 		<body name="pestle_body" pos="0 0 0" quat="1 0 0 0">
-			<site name="ft_frame" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1" />
+			<site name="ft_frame" pos="0 0 0" quat="0 0 1 0" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1" />
 			<!-- This site was added for visualization. -->
 			<body name="eef" pos="0 0 0.136" quat="1 0 0 0">
 				<site name="grip_site" pos="0 0 0.0" size="0.01 0.01 0.01" rgba="1 0 0 0.5" type="sphere" group="1" />
@@ -33,7 +33,7 @@
 				<body name="pestle_jig_body" pos="0 0 0.02" quat="0.707107 0 0 0.707107">
 					<inertial pos="0 0 0.08" mass="3e-2" diaginertia="1e-2 1e-2 1e-2" />
 
-					<joint name="spring_z" axis="0 0 1" type="slide" stiffness="50000" damping="20.0" range="-0.005 0.0" frictionloss="20.0" />
+					<joint name="spring_z" axis="0 0 1" type="slide" stiffness="10000" damping="100.0" range="-0.005 0.0" frictionloss="20.0" />
 
 					<geom pos="0 0 0" type="mesh" mesh="pestle" name="pestle_inner_visualization" class="pestle_visual" />
 					<geom pos="0 0 0" type="mesh" mesh="pestle" name="pestle_inner_collision" class="pestle_collision"/>
