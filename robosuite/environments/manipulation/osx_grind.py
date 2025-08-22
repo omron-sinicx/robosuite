@@ -84,6 +84,7 @@ DEFAULT_GRIND_CONFIG = {
         "max_inclination_angle": 0.5,  # fraction of mortar radius for inclination
         "initial_orientation": [0.0, 1.0, 0.0, 0.0],  # initial quaternion orientation
         "initial_position": [0, 0, 0.8],  # initial position offset
+        "circumferential_offset": np.pi/4,  # initial orientation offset in radians
     },
 }
 
@@ -1003,6 +1004,7 @@ class OSXGrind(ManipulationEnv):
 
         # Prematurely terminate if contacting the table with the arm
         if self.check_contact(self.robots[0].robot_model):
+            print(f"COLLIDED at qpos: {self.robots[0]._joint_positions}")
             terminated = True
             reason = "COLLIDED"
 
@@ -1036,7 +1038,7 @@ class OSXGrind(ManipulationEnv):
         eef = self.eef_pose
         mortar_center = np.array(self.mortar_config["position"]) + np.array([0.0, 0.0, self.mortar_config["radius"]])
         distance = self.mortar_config["radius"] - np.linalg.norm(mortar_center - eef[:3])
-        if distance < -0.01:
+        if eef[2] < mortar_center[2] and distance < -0.01:
             # print(f"collision broken at step {self.current_waypoint_index}. Distance: {distance}")
             return True
         return False
@@ -1101,10 +1103,11 @@ class OSXGrind(ManipulationEnv):
             # update the target force
             self.target_force = int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
-
+            circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
         else:
             desired_height = self.trajectory_config["desired_height"]
             self.target_force = self.trajectory_config["target_force"]
+            circumferential_offset = self.trajectory_config["circumferential_offset"]
         # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
         reference_trajectory = generate_mortar_trajectory_timed(
@@ -1115,7 +1118,8 @@ class OSXGrind(ManipulationEnv):
             total_timesteps=self.num_waypoints,
             default_quat=np.array(initial_orientation),
             max_angle=max_inclination_angle,
-            pestle_radius=self.mortar_config["pestle_radius"]
+            pestle_radius=self.mortar_config["pestle_radius"],
+            circumferential_offset=circumferential_offset
         )
         reference_trajectory[:, :3] += initial_position
 

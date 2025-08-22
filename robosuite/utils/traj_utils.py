@@ -158,7 +158,10 @@ class LinearInterpolator(Interpolator):
         return x_current
 
 
-def _generate_mortar_trajectory_core(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125, circumferential_offset=0.0):
+def _generate_mortar_trajectory_core(mortar_diameter, desired_height,
+                                     n_steps, default_quat=np.array([0, -1, 0, 0]),
+                                     fraction=None, max_angle=None,
+                                     pestle_radius=0.0125, circumferential_offset=0.0):
     """
     Core logic for generating a mortar trajectory. This function contains the common
     trajectory generation logic used by both step-based and time-based trajectory functions.
