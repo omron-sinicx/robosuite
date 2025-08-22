@@ -5,7 +5,7 @@ This branch implements Diffusion Policies with RL for contact‑rich robotic man
 
 ---
 
-## 1. Modify `scu_hand.xml`
+### 1. Modify `scu_hand.xml`
 
 Due to MuJoCo’s current `flexcomp` limitations, you must use an **absolute path** to load the mesh. Open:
 
