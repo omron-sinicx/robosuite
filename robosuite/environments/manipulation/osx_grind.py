@@ -311,6 +311,7 @@ class OSXGrind(ManipulationEnv):
 
         self.duration = self.trajectory_config["duration"]  # in seconds per revolution
         self.duration_range = self.trajectory_config["duration_range"]
+        print(f"action_control_freq: {action_control_freq}, control_freq: {control_freq}")
         self.action_freq = action_control_freq if action_control_freq is not None else control_freq
         self.steps_per_revolution = self.action_freq * self.duration
         if self.trajectory_config["num_waypoints"] is not None:
@@ -358,6 +359,12 @@ class OSXGrind(ManipulationEnv):
         self.input_min = np.array([-1]*6)
         self.input_max = np.array([1]*6)
 
+        #for sensor values.
+        self.reference_pos = np.zeros(3)
+        self.reference_ortho6d = np.zeros(6)
+        self.reference_wrench = np.zeros(6)
+
+        self.reward_initializd =True
         self.reward_dict = {
             "force_reward": 0.0,
             "traj_reward": 0.0,
@@ -597,7 +604,7 @@ class OSXGrind(ManipulationEnv):
         # print(f"{force_reward=:0.02f} {traj_reward=:0.02f} {action_smoothness_penalty=:0.02f} {self.step_penalty=:0.02f} {speed_reward=:0.02f}")
 
         if self.clip_reward:
-            reward = np.clip(reward, -2.0, 1.0)
+            reward = np.clip(reward, -1.0, 1.0)
 
         self.reward_dict["force_reward"] = force_reward
         self.reward_dict["traj_reward"] = traj_reward
@@ -857,8 +864,27 @@ class OSXGrind(ManipulationEnv):
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
-                self.robots[0].init_qpos = self.init_qpos
-                print("IK solution not found, using default init_q. Error msg: ", result.message)
+                # Debug: Print target pose when IK fails
+                print(f"IK failed - Target position: {initial_pos}")
+                print(f"IK failed - Target rotation (quat): {self.reference_trajectory[0][3:]}")
+                print(f"IK failed - Initial guess: {self.init_qpos}")
+                print(f"IK failed - Error message: {result.message}")
+
+                # Fallback: Try with a slightly different position
+                print("Trying IK with adjusted position...")
+                adjusted_pos = initial_pos.copy()
+                adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
+
+                result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
+                                                  target_rot=self.reference_trajectory[0][3:],
+                                                  initial_guess=self.init_qpos)
+
+                if result_adjusted.success:
+                    print("IK succeeded with adjusted position")
+                    self.robots[0].init_qpos = result_adjusted.joint_angles
+                else:
+                    print("IK still failed with adjusted position, using default init_qpos")
+                    self.robots[0].init_qpos = self.init_qpos
 
         super()._reset_internal()
 
@@ -1013,6 +1039,11 @@ class OSXGrind(ManipulationEnv):
             terminated = True
             reason = "TASK SPACE LIMIT REACHED"
 
+        # Prematurely terminate if force exceeds 100N
+        if self._check_force_limit():
+            terminated = True
+            reason = "FORCE LIMIT EXCEEDED"
+
         # Prematurely terminate if task is completed
         if self._check_success():
             terminated = True
@@ -1063,6 +1094,18 @@ class OSXGrind(ManipulationEnv):
 
         ee_pos = self.robots[0].recent_ee_pose['right'].current[:3]
         return not np.any(np.abs(ee_pos) > self.task_box)
+
+    def _check_force_limit(self):
+        """
+        Check if the force exceeds 100N threshold
+
+        Returns:
+            bool: True if force limit is exceeded
+        """
+        # Get the magnitude of the force (first 3 components of wrench)
+        force_magnitude = np.linalg.norm(self.eef_wrench[:3])
+        return force_magnitude > 500.0
+
 
     def _check_force_torque_limits(self):
         """
@@ -1122,6 +1165,7 @@ class OSXGrind(ManipulationEnv):
             circumferential_offset=circumferential_offset
         )
         reference_trajectory[:, :3] += initial_position
+        self.current_waypoint_index = 0 #initialize the waypoint index to 0
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization
