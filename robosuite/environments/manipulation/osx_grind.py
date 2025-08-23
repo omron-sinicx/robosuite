@@ -359,12 +359,12 @@ class OSXGrind(ManipulationEnv):
         self.input_min = np.array([-1]*6)
         self.input_max = np.array([1]*6)
 
-        #for sensor values.
+        # for sensor values.
         self.reference_pos = np.zeros(3)
         self.reference_ortho6d = np.zeros(6)
         self.reference_wrench = np.zeros(6)
 
-        self.reward_initializd =True
+        self.reward_initializd = True
         self.reward_dict = {
             "force_reward": 0.0,
             "traj_reward": 0.0,
@@ -876,8 +876,8 @@ class OSXGrind(ManipulationEnv):
                 adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
 
                 result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
-                                                  target_rot=self.reference_trajectory[0][3:],
-                                                  initial_guess=self.init_qpos)
+                                                   target_rot=self.reference_trajectory[0][3:],
+                                                   initial_guess=self.init_qpos)
 
                 if result_adjusted.success:
                     print("IK succeeded with adjusted position")
@@ -909,9 +909,14 @@ class OSXGrind(ManipulationEnv):
                 self.sim.model.body_pos[self.mortar_body_id] = obj_pos
                 self.sim.model.body_quat[self.mortar_body_id] = obj_quat
 
-    def set_trajectory(self, reference_trajectory):
+    def set_trajectory(self, reference_trajectory, target_force=None):
         self.reference_trajectory = reference_trajectory
         self.num_waypoints = len(reference_trajectory)
+        if target_force is not None:
+            assert len(target_force) == 6, "target_force must be a 6D vector"
+            self.reference_force = np.array([target_force] * self.num_waypoints)
+        else:
+            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
 
     def _post_action(self, action):
         """
@@ -1106,7 +1111,6 @@ class OSXGrind(ManipulationEnv):
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
         return force_magnitude > 500.0
 
-
     def _check_force_torque_limits(self):
         """
         Check that the robot is not exerting too much force/torque
@@ -1165,7 +1169,7 @@ class OSXGrind(ManipulationEnv):
             circumferential_offset=circumferential_offset
         )
         reference_trajectory[:, :3] += initial_position
-        self.current_waypoint_index = 0 #initialize the waypoint index to 0
+        self.current_waypoint_index = 0  # initialize the waypoint index to 0
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization
