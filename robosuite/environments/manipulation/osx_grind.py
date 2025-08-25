@@ -57,6 +57,7 @@ DEFAULT_GRIND_CONFIG = {
         "inner_height": 0.005,  # height of the mortar inner surface (m)
         "spawn": True,
         "space_threshold_max": 0.1,  # maximum distance from the mortar the eef is allowed to diverge (m)
+        "pestle_radius": 0.0125,  # radius of the pestle (m)
     },
     "trajectory": {
         # Tracking settings
@@ -304,7 +305,7 @@ class OSXGrind(ManipulationEnv):
 
         # references to follow
         self.current_waypoint_index = 0
-        self.target_force = self.trajectory_config["target_force"]
+        self.target_force = -self.trajectory_config["target_force"]
         self.target_force_range = self.trajectory_config["target_force_range"]
 
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
@@ -342,9 +343,6 @@ class OSXGrind(ManipulationEnv):
             self.reference_trajectory = self._randomize_reference_trajectory(self.action_freq)
         else:
             self.reference_trajectory = reference_trajectory
-
-        if not self.randomize_reference_trajectory:
-            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
 
         # actor action subset
         self.action_ndim = self.task_config['action_ndim']
@@ -701,10 +699,6 @@ class OSXGrind(ManipulationEnv):
             obj_type='visual',
         )
 
-        # Load cylinder object
-        self.force_cylinder_object = self.force_cylinder.get_obj()
-        self.force_cylinder_object.set("pos", "0.1  0.1  0.9")
-
         # Create placement initializer
         if self.placement_initializer is not None:
             self.placement_initializer.reset()
@@ -725,6 +719,10 @@ class OSXGrind(ManipulationEnv):
         objects = []
         if self.spawn_mortar:
             objects.append(self.mortar)
+
+        # Load cylinder object
+        self.force_cylinder_object = self.force_cylinder.get_obj()
+        self.force_cylinder_object.set("pos", "0.1  0.1  0.9")
         objects.append(self.force_cylinder)
 
         # task includes arena, robot, and objects of interest
@@ -864,19 +862,16 @@ class OSXGrind(ManipulationEnv):
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
-                # Debug: Print target pose when IK fails
-                print(f"IK failed - Target position: {initial_pos}")
-                print(f"IK failed - Target rotation (quat): {self.reference_trajectory[0][3:]}")
-                print(f"IK failed - Initial guess: {self.init_qpos}")
-                print(f"IK failed - Error message: {result.message}")
 
                 # Fallback: Try with a slightly different position
                 print("Trying IK with adjusted position...")
-                adjusted_pos = initial_pos.copy()
-                adjusted_pos[2] += np.random.uniform(low=-0.03, high=0.03)  # Move up and down by 1mm
+                offset = np.array([0.0, 0.0, np.random.uniform(low=-0.01, high=0.0)])
+                initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
+                offset_rot = np.random.uniform(low=-0.05, high=0.05, size=3)
+                adjusted_rot = T.rotate_quaternion_by_rpy(offset_rot, self.reference_trajectory[0][3:])
 
-                result_adjusted = self.ik.solve_ik(target_pos=adjusted_pos,
-                                                   target_rot=self.reference_trajectory[0][3:],
+                result_adjusted = self.ik.solve_ik(target_pos=initial_pos,
+                                                   target_rot=adjusted_rot,
                                                    initial_guess=self.init_qpos)
 
                 if result_adjusted.success:
@@ -1035,7 +1030,6 @@ class OSXGrind(ManipulationEnv):
 
         # Prematurely terminate if contacting the table with the arm
         if self.check_contact(self.robots[0].robot_model):
-            print(f"COLLIDED at qpos: {self.robots[0]._joint_positions}")
             terminated = True
             reason = "COLLIDED"
 
@@ -1148,16 +1142,17 @@ class OSXGrind(ManipulationEnv):
             # randomize the desired height
             desired_height = np.random.uniform(low=0.001, high=0.020)
             # update the target force
-            self.target_force = int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
-            self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
+            self.target_force = -int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
         else:
             desired_height = self.trajectory_config["desired_height"]
-            self.target_force = self.trajectory_config["target_force"]
+            self.target_force = -self.trajectory_config["target_force"]
             circumferential_offset = self.trajectory_config["circumferential_offset"]
-        # print(f"duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
+        # print(f"control_freq: {control_freq}, duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
-        reference_trajectory = generate_mortar_trajectory_timed(
+        self.reference_force = np.zeros((self.num_waypoints, 6))
+
+        reference_trajectory, unconstrained_quaternions = generate_mortar_trajectory_timed(
             mortar_diameter=self.mortar_config["diameter"],
             desired_height=desired_height,
             control_frequency=control_freq,
@@ -1170,6 +1165,8 @@ class OSXGrind(ManipulationEnv):
         )
         reference_trajectory[:, :3] += initial_position
         self.current_waypoint_index = 0  # initialize the waypoint index to 0
+        target_force = np.array([0.0, 0.0, -self.target_force])  # TODO: weird but needs to be negative
+        self.reference_force[:, :3] = np.apply_along_axis(lambda x: T.rotate_vector_by_quaternion(target_force, x), 1, unconstrained_quaternions[:self.num_waypoints])
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization
