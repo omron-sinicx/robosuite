@@ -71,6 +71,7 @@ DEFAULT_GRIND_CONFIG = {
         "init_qpos": [-0.24317403, -0.82343785,  1.99487586, -2.74223148, -1.57079607,  1.32762232],
 
         "randomize_reference_trajectory": False,
+        "target_force_to_surface_normal": False,
         "num_waypoints": None,
 
         "duration": 10,
@@ -1140,7 +1141,7 @@ class OSXGrind(ManipulationEnv):
             # randomize the duration
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
             # randomize the desired height
-            desired_height = np.random.uniform(low=0.001, high=0.020)
+            desired_height = np.random.uniform(low=0.001, high=0.015)
             # update the target force
             self.target_force = -int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
@@ -1151,6 +1152,7 @@ class OSXGrind(ManipulationEnv):
         # print(f"control_freq: {control_freq}, duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
         self.reference_force = np.zeros((self.num_waypoints, 6))
+        self.reference_force = np.array([[0.0, 0.0, self.target_force, 0.0, 0.0, 0.0]] * self.num_waypoints)
 
         reference_trajectory, unconstrained_quaternions = generate_mortar_trajectory_timed(
             mortar_diameter=self.mortar_config["diameter"],
@@ -1165,8 +1167,10 @@ class OSXGrind(ManipulationEnv):
         )
         reference_trajectory[:, :3] += initial_position
         self.current_waypoint_index = 0  # initialize the waypoint index to 0
-        target_force = np.array([0.0, 0.0, -self.target_force])  # TODO: weird but needs to be negative
-        self.reference_force[:, :3] = np.apply_along_axis(lambda x: T.rotate_vector_by_quaternion(target_force, x), 1, unconstrained_quaternions[:self.num_waypoints])
+
+        if self.trajectory_config['target_force_to_surface_normal']:
+            target_force = np.array([0.0, 0.0, -self.target_force])  # TODO: weird but needs to be negative
+            self.reference_force[:, :3] = np.apply_along_axis(lambda x: T.rotate_vector_by_quaternion(target_force, x), 1, unconstrained_quaternions[:self.num_waypoints])
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization
