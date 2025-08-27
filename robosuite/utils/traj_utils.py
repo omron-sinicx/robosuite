@@ -212,6 +212,7 @@ def _generate_mortar_trajectory_core(mortar_diameter, desired_height,
 
     # Step 6: Calculate quaternions and determine penetration adjustment
     quaternions = np.zeros((n_steps, 4))
+    unconstrained_quaternions = np.zeros((n_steps, 4))
     initial_rotation = T.quat2mat(default_quat)
 
     # Calculate the maximum penetration depth to adjust circle radius
@@ -243,7 +244,7 @@ def _generate_mortar_trajectory_core(mortar_diameter, desired_height,
         final_quaternion = T.mat2quat(final_rotation)
 
         # Store the unconstrained quaternion to calculate penetration
-        unconstrained_quaternion = np.array(final_quaternion)
+        unconstrained_quaternions[i] = np.array(final_quaternion)
 
         # Apply constraints if specified
         if max_angle is not None:
@@ -257,22 +258,18 @@ def _generate_mortar_trajectory_core(mortar_diameter, desired_height,
                 # Calculate penetration due to constrained inclination
                 if pestle_radius > 0:
                     # Calculate the difference between ideal and constrained orientation
-                    angle_diff = total_angle - max_angle
+                    angle_diff = abs(total_angle - max_angle)
                     # Estimate penetration based on pestle radius and angle difference
-                    # Using trigonometry: penetration ≈ pestle_radius * (1 - cos(angle_diff))
-                    penetration = pestle_radius * (1 - np.cos(angle_diff))
+                    penetration = pestle_radius * (np.sin(angle_diff))
                     max_penetration = max(max_penetration, penetration)
         elif fraction is not None:
-            # Store the unconstrained quaternion
-            unconstrained_quaternion = np.array(final_quaternion)
-
             # Apply the fraction constraint
             final_quaternion = T.quat_slerp(default_quat, final_quaternion, fraction=fraction)
 
             # Calculate penetration due to constrained inclination
             if pestle_radius > 0:
                 # Calculate the angle between unconstrained and constrained orientation
-                angle_diff = compute_quat_angle(final_quaternion, unconstrained_quaternion)
+                angle_diff = compute_quat_angle(final_quaternion, unconstrained_quaternions[i])
                 # Estimate penetration based on pestle radius and angle difference
                 penetration = pestle_radius * (1 - np.cos(angle_diff))
                 max_penetration = max(max_penetration, penetration)
@@ -293,7 +290,7 @@ def _generate_mortar_trajectory_core(mortar_diameter, desired_height,
     # Step 7: Combine positions and orientations
     trajectory = np.column_stack((x, y, z, quaternions))
 
-    return trajectory
+    return trajectory, unconstrained_quaternions
 
 
 def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default_quat=np.array([0, -1, 0, 0]), fraction=None, max_angle=None, pestle_radius=0.0125):
@@ -317,7 +314,7 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
         np.array: Array of shape (n_steps, 7) containing [x, y, z, qx, qy, qz, qw]
                  for each point in the trajectory
     """
-    trajectory = _generate_mortar_trajectory_core(
+    trajectory, unconstrained_quaternions = _generate_mortar_trajectory_core(
         mortar_diameter, desired_height, n_steps, default_quat,
         fraction, max_angle, pestle_radius
     )
@@ -325,7 +322,7 @@ def generate_mortar_trajectory(mortar_diameter, desired_height, n_steps, default
     # Add initial pose to the end of the trajectory to complete the circle
     trajectory = np.concatenate([trajectory, [trajectory[0]]])
 
-    return trajectory
+    return trajectory, unconstrained_quaternions
 
 
 def generate_mortar_trajectory_timed(
@@ -363,28 +360,32 @@ def generate_mortar_trajectory_timed(
     remainder_timesteps = total_timesteps % timesteps_per_revolution
 
     # Generate a single revolution trajectory
-    single_revolution_trajectory = _generate_mortar_trajectory_core(
+    single_revolution_trajectory, unconstrained_quaternions = _generate_mortar_trajectory_core(
         mortar_diameter, desired_height, timesteps_per_revolution,
         default_quat, fraction, max_angle, pestle_radius, circumferential_offset
     )
 
     # Build the complete trajectory
     trajectory_points = []
+    unconstrained_quaternions_points = []
 
     # Add full revolutions
     for _ in range(full_revolutions):
         trajectory_points.extend(single_revolution_trajectory)
+        unconstrained_quaternions_points.extend(unconstrained_quaternions)
 
     # Add partial revolution if there are remainder timesteps
     if remainder_timesteps > 0:
         trajectory_points.extend(single_revolution_trajectory[:remainder_timesteps])
+        unconstrained_quaternions_points.extend(unconstrained_quaternions[:remainder_timesteps])
 
     # Convert to numpy array
     trajectory = np.array(trajectory_points)
+    unconstrained_quaternions = np.array(unconstrained_quaternions_points)
 
     assert len(trajectory) == total_timesteps, f"Trajectory length {len(trajectory)} does not match total_timesteps {total_timesteps}"
 
-    return trajectory
+    return trajectory, unconstrained_quaternions
 
 
 def compute_quat_angle(quat1, quat2):

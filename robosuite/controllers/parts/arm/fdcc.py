@@ -474,7 +474,7 @@ class ForwardDynamicsComplianceController(Controller):
         eef_to_base = None
         if self.frame_of_reference == "eef":
             # Convert pose error to end effector frame
-            eef_to_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")[:3, :3]
+            eef_to_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef2")[:3, :3]
             # Assume that the desired force torque is given in the end effector frame
             pose_error = T.rotate_by_transformation(pose_error, eef_to_base.T)
 
@@ -530,39 +530,6 @@ class ForwardDynamicsComplianceController(Controller):
             )  # goal is the total orientation error
             self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
 
-    def get_sensor_measurement(self, sensor_name):
-        """
-        Grabs relevant sensor data from the sim object
-
-        Args:
-            sensor_name (str): name of the sensor
-
-        Returns:
-            np.array: sensor values
-        """
-        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
-        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
-
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
-
-    def pose_in_A_to_pose_in_B_by_site_name(self, A, B):
-        pos_in_A = self.sim.data.site_xpos[self.sim.model.site_name2id(A)]
-        rot_in_A = self.sim.data.site_xmat[self.sim.model.site_name2id(A)].reshape([3, 3])
-        pose_in_A = T.make_pose(pos_in_A, rot_in_A)
-
-        pos_in_B = self.sim.data.site_xpos[self.sim.model.site_name2id(B)]
-        rot_in_B = self.sim.data.site_xmat[self.sim.model.site_name2id(B)].reshape([3, 3])
-        pose_in_B = T.make_pose(pos_in_B, rot_in_B)
-        return T.pose_in_A_to_pose_in_B(pose_in_A, pose_in_B)
-
-    @property
-    def current_wrench(self):
-        return self.wrench_in_base_frame_buf.average
-
-    @property
-    def eef_wrench(self):
-        return self.wrench_in_eef_frame_buf.average
-
     @property
     def control_limits(self):
         """
@@ -597,3 +564,13 @@ class ForwardDynamicsComplianceController(Controller):
     @property
     def name(self):
         return "COMPLIANCE"
+
+    # @property
+    # def eef_wrench(self):
+    #     quat = np.array([0, 1, 0, 0])
+    #     sensor_wrench = self.wrench_in_eef_frame_buf.average
+    #     reoriented_wrench = np.concatenate([T.rotate_vector_by_quaternion(sensor_wrench[:3], quat), T.rotate_vector_by_quaternion(sensor_wrench[3:], quat)])
+    #     print(f"reoriented_wrench: {reoriented_wrench[:3]}")
+    #     print(f"sensor_wrench: {sensor_wrench[:3]}")
+    #     return reoriented_wrench
+    #     # return sensor_wrench
