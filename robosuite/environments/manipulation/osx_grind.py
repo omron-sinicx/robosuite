@@ -1108,21 +1108,7 @@ class OSXGrind(ManipulationEnv):
         """
         # Get the magnitude of the force (first 3 components of wrench)
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
-<<<<<<< HEAD
-        return force_magnitude > 500.0
-
-    def _check_force_torque_limits(self):
-        """
-        Check that the robot is not exerting too much force/torque
-
-        Returns:
-            bool: True within force/torque limits
-        """
-        abs_ft = np.abs(self.eef_wrench)
-        return not np.any(abs_ft > self.force_torque_limits)
-=======
         return force_magnitude > 300.0
->>>>>>> Add inner_height to init_pos.
 
     def _check_waypoint_completion_delay(self):
         """
@@ -1137,6 +1123,14 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
+    def update_randomize_settings(self,duration_range,target_force_range):
+        """
+        Update the randomization settings for curriculum learning.
+        """
+        self.duration_range = duration_range
+        self.target_force_range = target_force_range
+        self.randomize_reference_trajectory = True
+
     def _randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
@@ -1145,17 +1139,12 @@ class OSXGrind(ManipulationEnv):
         initial_position = self.trajectory_config["initial_position"].copy()
         initial_position[2] += inner_height  # Add inner height to z position
 
-<<<<<<< HEAD
-        if self.randomize_reference_trajectory:
-            # randomize the duration
-=======
         # Only add inner_height to Z-coordinate if randomization is enabled
         #if self.randomize_reference_trajectory:
         initial_position[2] += inner_height  # Add inner height to z position
 
         if self.randomize_reference_trajectory:
             # randomize the duration and the number of waypoints
->>>>>>> Add inner_height to init_pos.
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
             # randomize the desired height
             desired_height = np.random.uniform(low=0.001, high=0.015)
