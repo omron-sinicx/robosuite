@@ -1141,7 +1141,7 @@ class OSXGrind(ManipulationEnv):
             # randomize the duration
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
             # randomize the desired height
-            desired_height = np.random.uniform(low=0.001, high=0.015)
+            desired_height = np.random.uniform(low=self.trajectory_config["desired_height_range"][0], high=self.trajectory_config["desired_height_range"][1])
             # update the target force
             self.target_force = -int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
