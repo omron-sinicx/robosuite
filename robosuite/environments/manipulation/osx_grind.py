@@ -584,16 +584,16 @@ class OSXGrind(ManipulationEnv):
                 return self.early_termination_penalty
 
         # Reward for pushing into mortar with desired linear forces
-        distance_from_ref_force = -1.0*self.tracking_force_error
+        distance_from_ref_force = -self.tracking_force_error
         force_reward = self.reward_weights['tracking_force_error'] * distance_from_ref_force
 
         # Reward for following desired linear trajectory
-        tracking_trajectory_error = -1.0*self.tracking_error
+        tracking_trajectory_error = -self.tracking_error
         traj_reward = self.reward_weights['tracking_trajectory_error'] * tracking_trajectory_error
 
         # Reward for smooth actions - penalize squared differences between consecutive actions
         if self.current_action is not None and hasattr(self, 'previous_action') and self.action_change_type == "immediate":
-            action_smoothness_penalty = -1.0*self.reward_weights['action_smoothness'] * np.sqrt(np.sum((self.current_action - self.previous_action)**2))
+            action_smoothness_penalty = -self.reward_weights['action_smoothness'] * np.sqrt(np.sum((self.current_action - self.previous_action)**2))
         else:
             action_smoothness_penalty = 0.0
 
@@ -625,14 +625,9 @@ class OSXGrind(ManipulationEnv):
         # normalize by the trajectory follow normalization
         normalized_relative_distance = relative_distance / self.max_step_size
 
-        # only consider the error for the position controlled directions. compute the relative distance error.
-        if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
-            self.tracking_error = np.linalg.norm(relative_distance*self.position_control_dims) #normalized_relative_distance * self.position_control_dims)
-            relative_distance = relative_distance*self.position_control_dims
-        else:
-            self.tracking_error = np.linalg.norm(relative_distance) #normalized_relative_distance * self.position_control_dims)
-
-        return relative_distance #normalized_relative_distance
+        # only consider the error for the position controlled directions
+        self.tracking_error = np.linalg.norm(normalized_relative_distance * self.position_control_dims)
+        return normalized_relative_distance
 
     def _compute_relative_wrenches(self):
         # in base frame
@@ -643,14 +638,14 @@ class OSXGrind(ManipulationEnv):
         # Only return values where (1-selection_matrix) equals 1 (force-controlled directions)
         if self.task_config["relative_wrench_mode"] == "controlled_directions_only":
             # only consider the error for the force controlled directions
-            tracking_force_error = relative_wrench*self.force_control_dims #normalized_relative_wrench * self.force_control_dims
-            self.tracking_force_error = np.linalg.norm(tracking_force_error[:3]) #consider only the force. Ignore the torque.
+            tracking_force_error = normalized_relative_wrench * self.force_control_dims
+            self.tracking_force_error = np.linalg.norm(tracking_force_error)
             force_controlled_indices = np.where(self.force_control_dims == 1)[0]
             force_controlled_values = normalized_relative_wrench[force_controlled_indices]
-            return relative_wrench[force_controlled_indices] #force_controlled_values
+            return force_controlled_values
         elif self.task_config["relative_wrench_mode"] == "all":
-            self.tracking_force_error = np.linalg.norm(relative_wrench[:3]) #consider only the force. Ignore the torque.
-            return relative_wrench #normalized_relative_wrench
+            self.tracking_force_error = np.linalg.norm(normalized_relative_wrench)
+            return normalized_relative_wrench
         else:
             raise ValueError(f"Unsupported relative_wrench_mode: {self.task_config['relative_wrench_mode']}, only supported modes are 'controlled_directions_only' and 'all'")
 
@@ -1109,7 +1104,17 @@ class OSXGrind(ManipulationEnv):
         """
         # Get the magnitude of the force (first 3 components of wrench)
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
-        return force_magnitude > 300.0
+        return force_magnitude > 500.0
+
+    def _check_force_torque_limits(self):
+        """
+        Check that the robot is not exerting too much force/torque
+
+        Returns:
+            bool: True within force/torque limits
+        """
+        abs_ft = np.abs(self.eef_wrench)
+        return not np.any(abs_ft > self.force_torque_limits)
 
     def _check_waypoint_completion_delay(self):
         """
@@ -1124,14 +1129,6 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def update_randomize_settings(self,duration_range,target_force_range):
-        """
-        Update the randomization settings for curriculum learning.
-        """
-        self.duration_range = duration_range
-        self.target_force_range = target_force_range
-        self.randomize_reference_trajectory = True
-
     def _randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
@@ -1140,15 +1137,11 @@ class OSXGrind(ManipulationEnv):
         initial_position = self.trajectory_config["initial_position"].copy()
         initial_position[2] += inner_height  # Add inner height to z position
 
-        # Only add inner_height to Z-coordinate if randomization is enabled
-        #if self.randomize_reference_trajectory:
-        initial_position[2] += inner_height  # Add inner height to z position
-
         if self.randomize_reference_trajectory:
-            # randomize the duration and the number of waypoints
+            # randomize the duration
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
             # randomize the desired height
-            desired_height = np.random.uniform(low=0.001, high=0.015)
+            desired_height = np.random.uniform(low=self.trajectory_config["desired_height_range"][0], high=self.trajectory_config["desired_height_range"][1])
             # update the target force
             self.target_force = -int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
