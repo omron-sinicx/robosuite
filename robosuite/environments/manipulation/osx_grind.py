@@ -1129,6 +1129,14 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
+    def update_randomize_settings(self,duration_range,target_force_range):
+        """
+        Update the randomization settings for curriculum learning.
+        """
+        self.duration_range = duration_range
+        self.target_force_range = target_force_range
+        self.randomize_reference_trajectory = True
+
     def _randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
