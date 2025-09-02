@@ -1137,6 +1137,17 @@ class OSXGrind(ManipulationEnv):
         self.target_force_range = target_force_range
         self.randomize_reference_trajectory = True
 
+    def set_trajectory_config(self, target_force, duration):
+        self.randomize_reference_trajectory = False #don't randomize the trajectory
+        self.trajectory_config["target_force"] = target_force
+        self.trajectory_config["duration"] = duration
+        self.target_force = target_force
+        self.duration = duration
+        self.reference_trajectory = self._randomize_reference_trajectory(self.action_freq)
+
+    def randomize_reference_trajectory(self, control_freq):
+        self._randomize_reference_trajectory(control_freq)
+
     def _randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
         initial_orientation = self.trajectory_config["initial_orientation"]
@@ -1161,6 +1172,7 @@ class OSXGrind(ManipulationEnv):
 
         self.reference_force = np.zeros((self.num_waypoints, 6))
         self.reference_force = np.array([[0.0, 0.0, self.target_force, 0.0, 0.0, 0.0]] * self.num_waypoints)
+        #print(f"target_force: {self.target_force}, duration: {self.duration}, desired_height: {desired_height}")
 
         reference_trajectory, unconstrained_quaternions = generate_mortar_trajectory_timed(
             mortar_diameter=self.mortar_config["diameter"],
