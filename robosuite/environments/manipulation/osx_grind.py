@@ -308,6 +308,7 @@ class OSXGrind(ManipulationEnv):
         self.current_waypoint_index = 0
         self.target_force = -self.trajectory_config["target_force"]
         self.target_force_range = self.trajectory_config["target_force_range"]
+        self.desired_height_range = self.trajectory_config.get("desired_height_range", [0.002, 0.03])
 
         self.ft_action = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
@@ -1129,12 +1130,14 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def update_randomize_settings(self,duration_range,target_force_range):
+    def update_randomize_settings(self,duration_range,target_force_range,desired_height_range):
         """
         Update the randomization settings for curriculum learning.
         """
         self.duration_range = duration_range
         self.target_force_range = target_force_range
+        #update the desired height range
+        self.desired_height_range = desired_height_range
         self.randomize_reference_trajectory = True
 
     def set_trajectory_config(self, target_force, duration):
@@ -1160,7 +1163,7 @@ class OSXGrind(ManipulationEnv):
             # randomize the duration
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
             # randomize the desired height
-            desired_height = np.random.uniform(low=self.trajectory_config["desired_height_range"][0], high=self.trajectory_config["desired_height_range"][1])
+            desired_height = np.random.uniform(low=self.desired_height_range[0], high=self.desired_height_range[1])
             # update the target force
             self.target_force = -int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
