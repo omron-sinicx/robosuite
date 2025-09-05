@@ -677,6 +677,7 @@ class OSXGrind(ManipulationEnv):
 
         # Arena always gets set to zero origin
         mujoco_arena.set_origin([0, 0, 0])
+        self.mortar_range = (self.mortar_config["friction"], self.mortar_config["friction"])
 
         # initialize objects of interest
         if self.mortar_config["mode"] == "mesh":
@@ -1144,7 +1145,7 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def update_randomize_settings(self,duration_range,target_force_range,desired_height_range):
+    def update_randomize_settings(self,duration_range,target_force_range,desired_height_range,mortar_friction_range):
         """
         Update the randomization settings for curriculum learning.
         """
@@ -1153,6 +1154,8 @@ class OSXGrind(ManipulationEnv):
         #update the desired height range
         self.desired_height_range = desired_height_range
         self.randomize_reference_trajectory = True
+        self.mortar_range = mortar_friction_range
+        self.mortar_config["friction"] = np.random.uniform(low=self.mortar_range[0], high=self.mortar_range[1])
 
     def set_trajectory_config(self, target_force, duration):
         self.randomize_reference_trajectory = False #don't randomize the trajectory
@@ -1173,6 +1176,8 @@ class OSXGrind(ManipulationEnv):
         initial_position = self.trajectory_config["initial_position"].copy()
         initial_position[2] += inner_height  # Add inner height to z position
 
+
+
         if self.randomize_reference_trajectory:
             # randomize the duration
             self.duration = int(np.random.uniform(low=self.duration_range[0], high=self.duration_range[1]))
@@ -1181,9 +1186,10 @@ class OSXGrind(ManipulationEnv):
             # update the target force
             self.target_force = -int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
-            self.set_mortar_properties(friction=np.random.uniform(low=0.1, high=1.0),  # TODO: might need to change this
-                                       density=np.random.uniform(low=90, high=110),
-                                       mass=np.random.uniform(low=0.4, high=0.6))
+            self.mortar_config["friction"] = np.random.uniform(low=self.mortar_range[0], high=self.mortar_range[1])
+            self.set_mortar_properties(friction=self.mortar_config["friction"],  # TODO: might need to change this
+                                       density=self.mortar_config["density"],
+                                       mass=self.mortar_config["mass"])
         else:
             desired_height = self.trajectory_config["desired_height"]
             self.target_force = -self.trajectory_config["target_force"]
