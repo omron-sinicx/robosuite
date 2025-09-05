@@ -304,11 +304,15 @@ class DoorObject(MujocoXMLObject):
 
 class MortarObject(MujocoXMLObject):
     """
-    Mortar object (used for grinding safety controller)     
-    TODO maybe add friction and damping functions 
+    Mortar object (used for grinding safety controller)
+
+    Args:
+        friction (3-tuple of float): friction parameters to override the ones specified in the XML
+        density (float): density parameter to override the ones specified in the XML  
+        mass (float): mass parameter to override the ones specified in the XML
     """
 
-    def __init__(self, name):
+    def __init__(self, name, friction=None, density=None, mass=None):
         super().__init__(
             xml_path_completion("objects/mortar_mesh.xml"),
             name=name,
@@ -316,6 +320,57 @@ class MortarObject(MujocoXMLObject):
             obj_type="all",
             duplicate_collision_geoms=True,
         )
+
+        self.friction = friction
+        self.density = density
+        self.mass = mass
+
+        # Apply dynamic properties if provided
+        if self.friction is not None:
+            self._set_mortar_friction(self.friction)
+        if self.density is not None:
+            self._set_mortar_density(self.density)
+        if self.mass is not None:
+            self._set_mortar_mass(self.mass)
+
+    def _set_mortar_friction(self, friction):
+        """
+        Helper function to override the mortar friction directly in the XML
+
+        Args:
+            friction (3-tuple of float): friction parameters to override the ones specified in the XML
+        """
+        # Find all geom elements in the mortar body and update their friction
+        mortar_geoms = find_elements(root=self.worldbody, tags="geom", return_first=False)
+        if mortar_geoms:
+            for geom in mortar_geoms:
+                geom.set("friction", array_to_string(np.array(friction)))
+
+    def _set_mortar_density(self, density):
+        """
+        Helper function to override the mortar density directly in the XML
+
+        Args:
+            density (float): density parameter to override the ones specified in the XML
+        """
+        # Find all geom elements in the mortar body and update their density
+        mortar_geoms = find_elements(root=self.worldbody, tags="geom", return_first=False)
+        if mortar_geoms:
+            for geom in mortar_geoms:
+                geom.set("density", str(density))
+
+    def _set_mortar_mass(self, mass):
+        """
+        Helper function to override the mortar mass directly in the XML
+
+        Args:
+            mass (float): mass parameter to override the ones specified in the XML
+        """
+        # Find all geom elements in the mortar body and update their mass
+        mortar_geoms = find_elements(root=self.worldbody, tags="geom", return_first=False)
+        if mortar_geoms:
+            for geom in mortar_geoms:
+                geom.set("mass", str(mass))
 
 
 class MortarSDFObject(MujocoXMLObject):

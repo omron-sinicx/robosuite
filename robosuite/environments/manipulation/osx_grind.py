@@ -58,6 +58,9 @@ DEFAULT_GRIND_CONFIG = {
         "spawn": True,
         "space_threshold_max": 0.1,  # maximum distance from the mortar the eef is allowed to diverge (m)
         "pestle_radius": 0.0125,  # radius of the pestle (m)
+        "friction": 0.95,
+        "density": 100,
+        "mass": 0.5
     },
     "trajectory": {
         # Tracking settings
@@ -402,7 +405,7 @@ class OSXGrind(ManipulationEnv):
             lite_physics=lite_physics,
             horizon=horizon,
             ignore_done=ignore_done,
-            hard_reset=hard_reset,
+            hard_reset=self.randomize_reference_trajectory or hard_reset,  # if reference trajectory is random, we need to reload the model
             camera_names=camera_names,
             camera_heights=camera_heights,
             camera_widths=camera_widths,
@@ -679,6 +682,9 @@ class OSXGrind(ManipulationEnv):
         if self.mortar_config["mode"] == "mesh":
             self.mortar = MortarObject(
                 name="mortar",
+                friction=(self.mortar_config["friction"], 0.3, 0.1),
+                density=self.mortar_config["density"],
+                mass=self.mortar_config["mass"]
             )
         elif self.mortar_config["mode"] == "SDF":
             self.mortar = MortarSDFObject(
@@ -750,7 +756,7 @@ class OSXGrind(ManipulationEnv):
 
         # output_path = "/root/osx-ur/catkin_ws/src/osx_powder_grinding/mjcf"
         # xml_content = self.model.get_xml()
-        # with open(f"{output_path}/model.xml", "w") as f:
+        # with open(f"{output_path}/model_cb.xml", "w") as f:
         #     f.write(xml_content)
 
     def _setup_references(self):
@@ -914,6 +920,14 @@ class OSXGrind(ManipulationEnv):
             self.reference_force = np.array([target_force] * self.num_waypoints)
         else:
             self.reference_force = np.array([[0, 0, self.target_force, 0, 0, 0]] * self.num_waypoints)
+
+    def set_mortar_properties(self, friction=None, density=None, mass=None):
+        if friction is not None:
+            self.mortar_config["friction"] = friction
+        if density is not None:
+            self.mortar_config["density"] = density
+        if mass is not None:
+            self.mortar_config["mass"] = mass
 
     def _post_action(self, action):
         """
@@ -1167,6 +1181,9 @@ class OSXGrind(ManipulationEnv):
             # update the target force
             self.target_force = -int(np.random.uniform(low=self.target_force_range[0], high=self.target_force_range[1]))
             circumferential_offset = np.random.uniform(low=0, high=2*np.pi)
+            self.set_mortar_properties(friction=np.random.uniform(low=0.1, high=1.0),  # TODO: might need to change this
+                                       density=np.random.uniform(low=90, high=110),
+                                       mass=np.random.uniform(low=0.4, high=0.6))
         else:
             desired_height = self.trajectory_config["desired_height"]
             self.target_force = -self.trajectory_config["target_force"]
