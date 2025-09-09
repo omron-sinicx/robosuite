@@ -304,8 +304,13 @@ class OSXGrind(ManipulationEnv):
         self.task_box = np.array([self.mortar_config["radius"], self.mortar_config["radius"],
                                   self.mortar_config["height"]+self.table_offset[2]]) + self.mortar_config["space_threshold_max"]
 
+
         # setting for the robot.
         self.init_qpos = self.trajectory_config["init_qpos"]
+
+        #randomize initial position.
+        self.randomize_initial_position = False
+        self.deterministic_initial_position = False
 
         # references to follow
         self.current_waypoint_index = 0
@@ -861,23 +866,33 @@ class OSXGrind(ManipulationEnv):
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
-            initial_pos = self.reference_trajectory[0][:3].copy()
-            offset = np.array([0.0, 0.0, -self.trajectory_config["initial_offset"]])
-            initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
-            result = self.ik.solve_ik(target_pos=initial_pos,
-                                      target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
+            initial_pos = self.reference_trajectory[0][:3].copy() #3D position.
+
+            if self.randomize_initial_position:#randomize the initial position
+                initial_pos = self._randomize_initial_position(initial_pos)
+                # Randomize the initial rotation quaternion by applying a small rotation about the z-axis
+                initial_rot = self.reference_trajectory[0][3:].copy()
+                target_rot = self._randomize_initial_orientation(initial_rot)
+            else: #use the initial offset orientation
+                offset = np.array([0.0, 0.0, -self.trajectory_config["initial_offset_orientation"]])
+                initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
+                target_rot = T.quat2mat(self.reference_trajectory[0][3:].copy())
+
+            """Calculate the initial configuration of the robot."""
+            result = self.ik.solve_ik(target_pos=initial_pos, #3D position
+                                      target_rot=target_rot, #3D orientation
                                       initial_guess=self.init_qpos)
 
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
 
-                # Fallback: Try with a slightly different position
+               # Fallback: Try with a slightly different position
                 print("Trying IK with adjusted position...")
-                offset = np.array([0.0, 0.0, np.random.uniform(low=-0.01, high=0.0)])
-                initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
-                offset_rot = np.random.uniform(low=-0.05, high=0.05, size=3)
-                adjusted_rot = T.rotate_quaternion_by_rpy(offset_rot, self.reference_trajectory[0][3:])
+                offset_pos = np.array([0.0, 0.0, np.random.uniform(low=-0.005, high=0.005)])
+                initial_pos += offset_pos #3D position.
+                offset_rot = np.random.uniform(low=-0.01, high=0.01, size=3)
+                adjusted_rot = T.rotate_quaternion_by_rpy(offset_rot, self.reference_trajectory[0][3:]) #3D orientation.
 
                 result_adjusted = self.ik.solve_ik(target_pos=initial_pos,
                                                    target_rot=adjusted_rot,
@@ -912,6 +927,7 @@ class OSXGrind(ManipulationEnv):
             for obj_pos, obj_quat, obj in object_placements.values():
                 self.sim.model.body_pos[self.mortar_body_id] = obj_pos
                 self.sim.model.body_quat[self.mortar_body_id] = obj_quat
+
 
     def set_trajectory(self, reference_trajectory, target_force=None):
         self.reference_trajectory = reference_trajectory
@@ -1145,7 +1161,7 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def update_randomize_settings(self,duration_range,target_force_range,desired_height_range,mortar_friction_range):
+    def update_randomize_settings(self,duration_range,target_force_range,desired_height_range,mortar_friction_range,position_offset=None,orientation_offset=None,randomize_initial_position=False):
         """
         Update the randomization settings for curriculum learning.
         """
@@ -1156,17 +1172,138 @@ class OSXGrind(ManipulationEnv):
         self.randomize_reference_trajectory = True
         self.mortar_range = mortar_friction_range
         self.mortar_config["friction"] = np.random.uniform(low=self.mortar_range[0], high=self.mortar_range[1])
+        self.randomize_initial_position = randomize_initial_position
+        if randomize_initial_position:
+            self.trajectory_config["initial_offset_orientation"] = orientation_offset
+            self.trajectory_config["initial_offset_position"] = position_offset
+            self.deterministic_initial_position = False #probabilistic initial position instead of deterministic initial position for training.
 
-    def set_trajectory_config(self, target_force, duration):
+    def set_trajectory_config(self, target_force, duration,orientation_offset=None,position_offset=None):
         self.randomize_reference_trajectory = False #don't randomize the trajectory
         self.trajectory_config["target_force"] = target_force
         self.trajectory_config["duration"] = duration
         self.target_force = target_force
         self.duration = duration
-        self.reference_trajectory = self._randomize_reference_trajectory(self.action_freq)
+        #randomize the initial position
+        #change the flag
+        self.randomize_initial_position = True #randomize the initial position
+        self.deterministic_initial_position = True #deterministic initial position instead of probabilistic randomization for the fair comparison in evaluation.
+
+        #set the offset
+        if orientation_offset is not None:
+            self.trajectory_config["initial_offset_orientation"] = orientation_offset
+        if position_offset is not None:
+            self.trajectory_config["initial_offset_position"] = position_offset
+
+        #reset the environment
+        #self.reference_trajectory = self._randomize_reference_trajectory(self.action_freq)
 
     def randomize_reference_trajectory(self, control_freq):
         self._randomize_reference_trajectory(control_freq)
+
+    def _randomize_initial_position(self, initial_pos):
+        """
+        Randomize the initial position of the robot.
+
+        initial_pos: 3D position of the end-effector.
+        """
+        #randomize the offset position.
+        if self.deterministic_initial_position:
+            offset_z = self.trajectory_config["initial_offset_position"][2]
+            offset_x = self.trajectory_config["initial_offset_position"][0]
+            offset_y = self.trajectory_config["initial_offset_position"][1]
+
+            #check the constraints.
+            z_bottom = self.reference_trajectory[0][2]-self.trajectory_config["desired_height"] #bottom of the mortar
+            z_initial = initial_pos[2]+offset_z
+            if z_initial < z_bottom: #move to the bottom of the mortar.
+                offset_z = z_bottom - initial_pos[2]
+                z_initial = z_bottom
+            height_from_bottom = min(self.mortar_config["radius"], max(0.0, z_initial-z_bottom)) #calculate the height from the bottom of the mortar.
+            radius_admissible_sqr = self.mortar_config["radius"]**2 - (self.mortar_config["radius"]-height_from_bottom)**2
+            if offset_x**2 + offset_y**2 >= radius_admissible_sqr:
+                offset_z += 0.001 #go up by 1mm until the constraints are satisfied.
+                #update the admissible radius.
+                z_initial = initial_pos[2]+offset_z
+                height_from_bottom = min(self.mortar_config["radius"], max(0.0, z_initial-z_bottom)) #calculate the height from the bottom of the mortar.
+                radius_admissible_sqr = self.mortar_config["radius"]**2 - (self.mortar_config["radius"]-height_from_bottom)**2
+
+            #end of constraints.
+            offset_position = np.array([offset_x, offset_y, offset_z])
+            initial_pos += offset_position
+            """End of positional offset."""
+
+            print(f"radius_admissible_sqr: {radius_admissible_sqr}, offset_x: {offset_x}, offset_y: {offset_y}, offset_z: {offset_z}, z_initial: {z_initial}, z_bottom: {z_bottom}, height_from_bottom: {height_from_bottom}")
+
+            #reset the deterministic flag.
+            #self.deterministic_initial_position = False
+
+        else:
+            #initial initial z-axis offset is large, around 0.1 m above the reference trajectory.
+            offset_z = np.random.uniform(low=-self.trajectory_config["initial_offset_position"][2], high=self.trajectory_config["initial_offset_position"][2]) #self.trajectory_config["initial_offset_position"][2])) #offset_z should be at least 0.002-desired_height for the end-effector to be in the mortar.
+            offset_x = np.random.uniform(low=-self.trajectory_config["initial_offset_position"][0], high=self.trajectory_config["initial_offset_position"][0]) #mean 0, std of offset_position
+            offset_y = np.random.uniform(low=-self.trajectory_config["initial_offset_position"][1], high=self.trajectory_config["initial_offset_position"][1])
+
+            ## add constraints so as for the end-effector to be in the mortar.
+            z_bottom = self.reference_trajectory[0][2]-self.trajectory_config["desired_height"] #bottom of the mortar
+            z_initial = initial_pos[2]+offset_z
+            if z_initial < z_bottom: #move to the bottom of the mortar.
+                offset_z = z_bottom - initial_pos[2] #add 2mm to the bottom of the mortar.
+                z_initial = initial_pos[2]+offset_z
+            height_from_bottom = min(self.mortar_config["radius"], max(0.0, z_initial-z_bottom)) #calculate the height from the bottom of the mortar.
+            radius_admissible_sqr = self.mortar_config["radius"]**2 - (self.mortar_config["radius"]-height_from_bottom)**2
+            if offset_x**2 + offset_y**2 >= radius_admissible_sqr:
+                offset_x = np.random.uniform(low=-self.trajectory_config["initial_offset_position"][0], high=self.trajectory_config["initial_offset_position"][0])
+                offset_y = np.random.uniform(low=-self.trajectory_config["initial_offset_position"][1], high=self.trajectory_config["initial_offset_position"][1])
+                offset_z = np.random.uniform(low=-self.trajectory_config["initial_offset_position"][2], high=self.trajectory_config["initial_offset_position"][2]) #offset_z should be at least 0.002-desired_height for the end-effector to be in the mortar.
+
+                #update the admissible radius.
+                z_initial = initial_pos[2]+offset_z
+                if z_initial < z_bottom: #move to the bottom of the mortar.
+                    offset_z = z_bottom - initial_pos[2] + 0.001 #add 2mm to the bottom of the mortar.
+                    z_initial = initial_pos[2]+offset_z
+                height_from_bottom = min(self.mortar_config["radius"], max(0.0, z_initial-z_bottom)) #calculate the height from the bottom of the mortar.
+                radius_admissible_sqr = self.mortar_config["radius"]**2 - (self.mortar_config["radius"]-height_from_bottom)**2
+            ## End of constraints.
+
+            offset_position = np.array([offset_x, offset_y, offset_z])
+            initial_pos += offset_position
+            """End of positional offset."""
+
+        return initial_pos
+
+    def _randomize_initial_orientation(self, initial_rot):
+        """
+        Randomize the initial orientation of the robot.
+
+        initial_rot: 4D quaternion representing the initial rotation of the robot.
+        (x,y,z,w)
+
+        Returns:
+            target_rot: 3D rotation matrix.
+        """
+        if self.deterministic_initial_position:#deterministic initial orientation
+            offset_angle = self.trajectory_config["initial_offset_orientation"]
+        else:#probabilistic initial orientation
+            offset_angle = np.random.uniform(low=-self.trajectory_config["initial_offset_orientation"], high=self.trajectory_config["initial_offset_orientation"])
+
+        if offset_angle != 0.0:
+            # Create a quaternion representing a rotation about the z-axis by offset_angle
+            axis = np.array([0.0, 0.0, 1.0])
+            half_angle = offset_angle / 2.0
+            sin_half = np.sin(half_angle)
+            cos_half = np.cos(half_angle)
+            offset_quat = np.array([
+                axis[0] * sin_half,
+                axis[1] * sin_half,
+                axis[2] * sin_half,
+                cos_half
+            ])
+            # Compose the offset quaternion with the initial rotation
+            initial_rot = T.quat_multiply(offset_quat, initial_rot)
+        target_rot = T.quat2mat(initial_rot) #3D orientation.
+
+        return target_rot
 
     def _randomize_reference_trajectory(self, control_freq):
         max_inclination_angle = self.trajectory_config["max_inclination_angle"]
