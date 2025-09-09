@@ -874,8 +874,8 @@ class OSXGrind(ManipulationEnv):
                 initial_rot = self.reference_trajectory[0][3:].copy()
                 target_rot = self._randomize_initial_orientation(initial_rot)
             else: #use the initial offset orientation
-                offset = np.array([0.0, 0.0, -self.trajectory_config["initial_offset_orientation"]])
-                initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
+                offset = np.array([self.trajectory_config["initial_offset_position"][0], self.trajectory_config["initial_offset_position"][1], self.trajectory_config["initial_offset_position"][2]])
+                initial_pos += offset
                 target_rot = T.quat2mat(self.reference_trajectory[0][3:].copy())
 
             """Calculate the initial configuration of the robot."""
