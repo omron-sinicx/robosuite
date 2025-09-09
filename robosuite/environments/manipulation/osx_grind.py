@@ -296,6 +296,7 @@ class OSXGrind(ManipulationEnv):
 
         self.reset_with_ik = self.trajectory_config["reset_with_ik"]
         self.spawn_mortar = self.mortar_config["spawn"]
+        self.mortar_range = (self.mortar_config["friction"], self.mortar_config["friction"])
 
         # settings for table top
         self.table_full_size = self.task_config["table_full_size"]
