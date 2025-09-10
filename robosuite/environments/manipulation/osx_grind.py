@@ -877,7 +877,7 @@ class OSXGrind(ManipulationEnv):
                 target_rot = self._randomize_initial_orientation(initial_rot)
                 print(f"initial_pos with randomize: {initial_pos}")
             else: #use the initial offset orientation
-                offset = np.array([0.0, 0.0, 0.03]) #np.array([self.trajectory_config["initial_offset_position"][0], self.trajectory_config["initial_offset_position"][1], self.trajectory_config["initial_offset_position"][2]])
+                offset = np.array([0.0, 0.0, 0.001]) #np.array([self.trajectory_config["initial_offset_position"][0], self.trajectory_config["initial_offset_position"][1], self.trajectory_config["initial_offset_position"][2]])
                 initial_pos += offset #0.05 m above the mortar surface
                 print(f"initial_pos without randomize: {initial_pos}")
                 target_rot = T.quat2mat(self.reference_trajectory[0][3:].copy())
