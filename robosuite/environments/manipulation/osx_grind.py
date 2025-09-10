@@ -870,13 +870,16 @@ class OSXGrind(ManipulationEnv):
             initial_pos = self.reference_trajectory[0][:3].copy() #3D position.
 
             if self.randomize_initial_position:#randomize the initial position
+
                 initial_pos = self._randomize_initial_position(initial_pos)
                 # Randomize the initial rotation quaternion by applying a small rotation about the z-axis
                 initial_rot = self.reference_trajectory[0][3:].copy()
                 target_rot = self._randomize_initial_orientation(initial_rot)
+                print(f"initial_pos with randomize: {initial_pos}")
             else: #use the initial offset orientation
-                offset = np.array([self.trajectory_config["initial_offset_position"][0], self.trajectory_config["initial_offset_position"][1], self.trajectory_config["initial_offset_position"][2]])
-                initial_pos += offset
+                offset = np.array([0.0, 0.0, 0.03]) #np.array([self.trajectory_config["initial_offset_position"][0], self.trajectory_config["initial_offset_position"][1], self.trajectory_config["initial_offset_position"][2]])
+                initial_pos += offset #0.05 m above the mortar surface
+                print(f"initial_pos without randomize: {initial_pos}")
                 target_rot = T.quat2mat(self.reference_trajectory[0][3:].copy())
 
             """Calculate the initial configuration of the robot."""
@@ -1103,7 +1106,7 @@ class OSXGrind(ManipulationEnv):
         mortar_center = np.array(self.mortar_config["position"]) + np.array([0.0, 0.0, self.mortar_config["radius"]])
         distance = self.mortar_config["radius"] - np.linalg.norm(mortar_center - eef[:3])
         if eef[2] < mortar_center[2] and distance < -0.01:
-            # print(f"collision broken at step {self.current_waypoint_index}. Distance: {distance}")
+            #print(f"collision broken at step {self.current_waypoint_index}. Distance: {distance}, mortar_center: {mortar_center}, eef: {eef}, mortar_radius: {self.mortar_config['radius']}")
             return True
         return False
 
