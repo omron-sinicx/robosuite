@@ -312,6 +312,7 @@ class OSXGrind(ManipulationEnv):
         #randomize initial position.
         self.randomize_initial_position = False
         self.deterministic_initial_position = False
+        self.reverse_trajectory = False
 
         # references to follow
         self.current_waypoint_index = 0
@@ -1165,7 +1166,7 @@ class OSXGrind(ManipulationEnv):
         # print(f"delay: {delay}, delay_in_timesteps: {delay_in_timesteps}")
         return delay > delay_in_timesteps
 
-    def update_randomize_settings(self,duration_range,target_force_range,desired_height_range,mortar_friction_range,position_offset=None,orientation_offset=None,randomize_initial_position=False):
+    def update_randomize_settings(self,duration_range,target_force_range,desired_height_range,mortar_friction_range,position_offset=None,orientation_offset=None,randomize_initial_position=False,reverse_trajectory=False):
         """
         Update the randomization settings for curriculum learning.
         """
@@ -1181,6 +1182,7 @@ class OSXGrind(ManipulationEnv):
             self.trajectory_config["initial_offset_orientation"] = orientation_offset
             self.trajectory_config["initial_offset_position"] = position_offset
             self.deterministic_initial_position = False #probabilistic initial position instead of deterministic initial position for training.
+        self.reverse_trajectory = reverse_trajectory
 
     def set_trajectory_config(self, target_force, duration,orientation_offset=None,position_offset=None):
         self.randomize_reference_trajectory = False #don't randomize the trajectory
@@ -1363,6 +1365,12 @@ class OSXGrind(ManipulationEnv):
         self.max_step_size = self.pose_normalization
         self.pose_error_threshold = np.linalg.norm(self.tracking_trajectory_threshold * self.position_control_dims / self.max_step_size)
         self.force_error_threshold = np.linalg.norm(self.tracking_force_threshold * self.force_control_dims / self.force_torque_normalization)
+
+        if self.reverse_trajectory:#reverse the trajectory
+            r = np.random.random()
+            if r>0.5: #reverse the trajectory with 50% probability
+                reference_trajectory = reference_trajectory[::-1]
+
         return reference_trajectory
 
     @property
