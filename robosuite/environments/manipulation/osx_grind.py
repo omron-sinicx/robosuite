@@ -1140,7 +1140,7 @@ class OSXGrind(ManipulationEnv):
         """
         # Get the magnitude of the force (first 3 components of wrench)
         force_magnitude = np.linalg.norm(self.eef_wrench[:3])
-        return force_magnitude > 500.0
+        return force_magnitude > 100.0
 
     def _check_force_torque_limits(self):
         """
