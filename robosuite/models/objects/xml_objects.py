@@ -308,7 +308,7 @@ class MortarObject(MujocoXMLObject):
 
     Args:
         friction (3-tuple of float): friction parameters to override the ones specified in the XML
-        density (float): density parameter to override the ones specified in the XML  
+        density (float): density parameter to override the ones specified in the XML
         mass (float): mass parameter to override the ones specified in the XML
     """
 
@@ -375,8 +375,8 @@ class MortarObject(MujocoXMLObject):
 
 class MortarSDFObject(MujocoXMLObject):
     """
-    Mortar object (used for grinding safety controller)     
-    TODO maybe add friction and damping functions 
+    Mortar object (used for grinding safety controller)
+    TODO maybe add friction and damping functions
     """
 
     def __init__(self, name, height=0.0, radius=0.045, thickness=0.005, base_size=[0.02, 0.003], base_pos=None):

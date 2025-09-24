@@ -867,37 +867,35 @@ class OSXGrind(ManipulationEnv):
             self.reference_trajectory = self._randomize_reference_trajectory(self.action_freq)
 
         # Update the initial position of the robot based on the initial pose of the reference trajectory
+        # Update the initial position of the robot based on the initial pose of the reference trajectory
         if self.reset_with_ik:
-            initial_pos = self.reference_trajectory[0][:3].copy() #3D position.
+            initial_pos = self.reference_trajectory[0][:3].copy()
 
             if self.randomize_initial_position:#randomize the initial position
 
                 initial_pos = self._randomize_initial_position(initial_pos)
                 # Randomize the initial rotation quaternion by applying a small rotation about the z-axis
                 initial_rot = self.reference_trajectory[0][3:].copy()
-                target_rot = self._randomize_initial_orientation(initial_rot)
-                print(f"initial_pos with randomize: {initial_pos}")
-            else: #use the initial offset orientation
-                offset = np.array([0.0, 0.0, 0.001]) #np.array([self.trajectory_config["initial_offset_position"][0], self.trajectory_config["initial_offset_position"][1], self.trajectory_config["initial_offset_position"][2]])
-                initial_pos += offset #0.05 m above the mortar surface
-                print(f"initial_pos without randomize: {initial_pos}")
-                target_rot = T.quat2mat(self.reference_trajectory[0][3:].copy())
+                target_rot =self._randomize_initial_orientation(initial_rot)
+                #print(f"initial_pos with randomize: {initial_pos}")
+            else:
+                offset = np.array([0.0, 0.0, -self.trajectory_config["initial_offset"]])
+                initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
 
-            """Calculate the initial configuration of the robot."""
-            result = self.ik.solve_ik(target_pos=initial_pos, #3D position
-                                      target_rot=target_rot, #3D orientation
+            result = self.ik.solve_ik(target_pos=initial_pos,
+                                      target_rot=T.quat2mat(self.reference_trajectory[0][3:]),
                                       initial_guess=self.init_qpos)
 
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
 
-               # Fallback: Try with a slightly different position
+                # Fallback: Try with a slightly different position
                 print("Trying IK with adjusted position...")
-                offset_pos = np.array([0.0, 0.0, np.random.uniform(low=-0.005, high=0.005)])
-                initial_pos += offset_pos #3D position.
-                offset_rot = np.random.uniform(low=-0.01, high=0.01, size=3)
-                adjusted_rot = T.rotate_quaternion_by_rpy(offset_rot, self.reference_trajectory[0][3:]) #3D orientation.
+                offset = np.array([0.0, 0.0, np.random.uniform(low=-0.01, high=0.0)])
+                initial_pos += T.rotate_vector_by_quaternion(offset, self.reference_trajectory[0][3:])
+                offset_rot = np.random.uniform(low=-0.05, high=0.05, size=3)
+                adjusted_rot = T.rotate_quaternion_by_rpy(offset_rot, self.reference_trajectory[0][3:])
 
                 result_adjusted = self.ik.solve_ik(target_pos=initial_pos,
                                                    target_rot=adjusted_rot,
@@ -1183,6 +1181,7 @@ class OSXGrind(ManipulationEnv):
             self.trajectory_config["initial_offset_position"] = position_offset
             self.deterministic_initial_position = False #probabilistic initial position instead of deterministic initial position for training.
         self.reverse_trajectory = reverse_trajectory
+        #print(f"duration_range: {duration_range}, target_force_range: {target_force_range}, desired_height_range: {desired_height_range}, mortar_friction_range: {mortar_friction_range}, position_offset: {position_offset}, orientation_offset: {orientation_offset}, randomize_initial_position: {randomize_initial_position}, reverse_trajectory: {reverse_trajectory}")
 
     def set_trajectory_config(self, target_force, duration,orientation_offset=None,position_offset=None):
         self.randomize_reference_trajectory = False #don't randomize the trajectory
@@ -1238,6 +1237,7 @@ class OSXGrind(ManipulationEnv):
             offset_position = np.array([offset_x, offset_y, offset_z])
             initial_pos += offset_position
             """End of positional offset."""
+
 
             print(f"radius_admissible_sqr: {radius_admissible_sqr}, offset_x: {offset_x}, offset_y: {offset_y}, offset_z: {offset_z}, z_initial: {z_initial}, z_bottom: {z_bottom}, height_from_bottom: {height_from_bottom}")
 
@@ -1307,6 +1307,7 @@ class OSXGrind(ManipulationEnv):
             ])
             # Compose the offset quaternion with the initial rotation
             initial_rot = T.quat_multiply(offset_quat, initial_rot)
+            print(f"offset_quat: {offset_quat}, initial_rot: {initial_rot}")
         target_rot = T.quat2mat(initial_rot) #3D orientation.
 
         return target_rot
@@ -1333,6 +1334,7 @@ class OSXGrind(ManipulationEnv):
             self.set_mortar_properties(friction=self.mortar_config["friction"],  # TODO: might need to change this
                                        density=self.mortar_config["density"],
                                        mass=self.mortar_config["mass"])
+            print(f"duration: {self.duration}, desired_height: {desired_height}, target_force: {self.target_force}, circumferential_offset: {circumferential_offset}, friction: {self.mortar_config['friction']}")
         else:
             desired_height = self.trajectory_config["desired_height"]
             self.target_force = -self.trajectory_config["target_force"]
@@ -1367,9 +1369,10 @@ class OSXGrind(ManipulationEnv):
         self.force_error_threshold = np.linalg.norm(self.tracking_force_threshold * self.force_control_dims / self.force_torque_normalization)
 
         if self.reverse_trajectory:#reverse the trajectory
-            r = np.random.random()
+            r = np.random.random() #(N_step,7)
             if r>0.5: #reverse the trajectory with 50% probability
-                reference_trajectory = reference_trajectory[::-1]
+                # To reverse the order of reference_trajectory (shape: (N_step, 7)):
+                reference_trajectory = np.flip(reference_trajectory, axis=0)
 
         return reference_trajectory
 
