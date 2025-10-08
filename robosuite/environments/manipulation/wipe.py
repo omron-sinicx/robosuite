@@ -686,8 +686,7 @@ class Wipe(ManipulationEnv):
         super()._reset_internal()
 
         # inherited class should reset positions of objects (only if we're not using a deterministic reset)
-        if not self.deterministic_reset:
-            self.model.mujoco_arena.reset_arena(self.sim)
+        self.model.mujoco_arena.reset_arena(self.sim, deterministic=self.deterministic_reset)
 
         # Reset all internal vars for this wipe task
         self.timestep = 0

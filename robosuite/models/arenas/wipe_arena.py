@@ -101,7 +101,7 @@ class WipeArena(TableArena):
             # Add to the current dirt path
             pos = self.sample_path_pos(pos)
 
-    def reset_arena(self, sim):
+    def reset_arena(self, sim, deterministic=False):
         """
         Reset the visual marker locations in the environment. Requires @sim (MjSim) reference to be passed in so that
         the Mujoco sim can be directly modified
@@ -110,27 +110,30 @@ class WipeArena(TableArena):
             sim (MjSim): Simulation instance containing this arena and visual markers
         """
         # Sample new initial position and direction for generated marker paths
-        pos = self.sample_start_pos()
+        if not deterministic:
+            pos = self.sample_start_pos()
 
         # Loop through all visual markers
         for i, marker in enumerate(self.markers):
-            # If we're using two clusters, we resample the starting position and direction at the halfway point
-            if self.two_clusters and i == int(np.floor(self.num_markers / 2)):
-                pos = self.sample_start_pos()
             # Get IDs to the body, geom, and site of each marker
             body_id = sim.model.body_name2id(marker.root_body)
             geom_id = sim.model.geom_name2id(marker.visual_geoms[0])
             site_id = sim.model.site_name2id(marker.sites[0])
-            # Determine new position for this marker
-            position = np.array([pos[0], pos[1], self.table_half_size[2]])
             # Set the current marker (body) to this new position
-            sim.model.body_pos[body_id] = position
             # Reset the marker visualization -- setting geom rgba alpha value to 1
             sim.model.geom_rgba[geom_id][3] = 1
             # Hide the default visualization site
             sim.model.site_rgba[site_id][3] = 0
-            # Sample next values in local marker trajectory
-            pos = self.sample_path_pos(pos)
+
+            if not deterministic:
+                # If we're using two clusters, we resample the starting position and direction at the halfway point
+                if self.two_clusters and i == int(np.floor(self.num_markers / 2)):
+                    pos = self.sample_start_pos()
+                # Determine new position for this marker
+                position = np.array([pos[0], pos[1], self.table_half_size[2]])
+                sim.model.body_pos[body_id] = position
+                # Sample next values in local marker trajectory
+                pos = self.sample_path_pos(pos)
 
     def sample_start_pos(self):
         """
