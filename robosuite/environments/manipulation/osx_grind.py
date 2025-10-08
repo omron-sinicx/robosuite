@@ -1171,7 +1171,7 @@ class OSXGrind(ManipulationEnv):
         self.reference_force = np.zeros((self.num_waypoints, 6))
         self.reference_force = np.array([[0.0, 0.0, self.target_force, 0.0, 0.0, 0.0]] * self.num_waypoints)
 
-        reference_trajectory, unconstrained_quaternions = generate_mortar_trajectory_timed(
+        reference_trajectory, restricted_quaternions = generate_mortar_trajectory_timed(
             mortar_diameter=self.mortar_config["diameter"],
             desired_height=desired_height,
             control_frequency=control_freq,
@@ -1187,7 +1187,7 @@ class OSXGrind(ManipulationEnv):
 
         if self.trajectory_config['target_force_to_surface_normal']:
             target_force = np.array([0.0, 0.0, -self.target_force])  # TODO: weird but needs to be negative
-            self.reference_force[:, :3] = np.apply_along_axis(lambda x: T.rotate_vector_by_quaternion(target_force, x), 1, unconstrained_quaternions[:self.num_waypoints])
+            self.reference_force[:, :3] = np.apply_along_axis(lambda x: T.rotate_vector_by_quaternion(target_force, x), 1, restricted_quaternions[:self.num_waypoints])
 
         # self.max_step_size = compute_max_step_size(reference_trajectory) * 5
         self.max_step_size = self.pose_normalization

@@ -34,8 +34,8 @@
 				<body name="pestle_jig_body" pos="0 0 0.02" quat="0.707107 0 0 0.707107">
 					<inertial pos="0 0 0.08" mass="3e-2" diaginertia="1e-2 1e-2 1e-2" />
 
-					<joint name="spring_x" axis="1 0 0" type="slide" stiffness="15000" damping="10.0" range="-0.002 0.0" frictionloss="1.0" />
-					<joint name="spring_y" axis="0 1 0" type="slide" stiffness="15000" damping="10.0" range="-0.002 0.0" frictionloss="1.0" />
+					<!-- <joint name="spring_x" axis="1 0 0" type="slide" stiffness="15000" damping="10.0" range="-0.002 0.0" frictionloss="1.0" />
+					<joint name="spring_y" axis="0 1 0" type="slide" stiffness="15000" damping="10.0" range="-0.002 0.0" frictionloss="1.0" /> -->
 					<joint name="spring_z" axis="0 0 1" type="slide" stiffness="5000" damping="10.0" range="-0.005 0.0" frictionloss="1.0" />
 
 					<geom pos="0 0 0" type="mesh" mesh="pestle" name="pestle_inner_visualization" class="pestle_visual" />
