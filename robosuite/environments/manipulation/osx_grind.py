@@ -1,6 +1,8 @@
 import logging
 import numpy as np
 from collections import OrderedDict
+from osx_powder_grinding.mpc.mpc_utils import SDFUtils
+from osx_powder_grinding.traj_utils import get_windowed_subset
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import TableArena
 from robosuite.models.objects import MortarObject, CylinderObject
@@ -46,6 +48,7 @@ DEFAULT_GRIND_CONFIG = {
     "early_terminations": True,  # Whether we allow for early terminations or not
     "clip_reward": True,  # Whether we clip the reward or not
     "relative_wrench_mode": "controlled_directions_only",  # "controlled_directions_only" or "all"
+    "mpc_horizon": 0,
 
     # Task settings
     # Mortar parameters
@@ -66,7 +69,7 @@ DEFAULT_GRIND_CONFIG = {
         # Tracking settings
         "tracking_trajectory_threshold": 0.005,
         "tracking_force_threshold": 1.0,
-        "tracking_trajectory_method": 'per_error_threshold',
+        "tracking_method": 'per_error_threshold',
 
         "compute_joint_trajectory": False,
 
@@ -327,13 +330,13 @@ class OSXGrind(ManipulationEnv):
         self.step_duration = max(1.0/500, self.seconds_per_waypoint)  # Minimum 500Hz like in real UR5e
         self.last_step_time = 0
 
-        self.tracking_trajectory_method = self.trajectory_config['tracking_trajectory_method']
+        self.tracking_method = self.trajectory_config['tracking_method']
         self.tracking_trajectory_threshold = np.array(self.trajectory_config['tracking_trajectory_threshold'])
         self.tracking_force_threshold = np.array(self.trajectory_config['tracking_force_threshold'])
         # Verify the proposed impedance mode is supported
-        assert self.tracking_trajectory_method in TRACKING_METHODS, (
+        assert self.tracking_method in TRACKING_METHODS, (
             "Error: unsupported tracking method"
-            "Inputted tracking method: {}, Supported methods: {}".format(self.tracking_trajectory_method, TRACKING_METHODS)
+            "Inputted tracking method: {}, Supported methods: {}".format(self.tracking_method, TRACKING_METHODS)
         )
 
         self.controller_type = np.array(controller_configs['body_parts']['right']['type'])
@@ -384,6 +387,20 @@ class OSXGrind(ManipulationEnv):
         self.global_timestep = 0
         self.ik = None
 
+        # For SDF-based environment stiffness computation
+        self.k_env_free = 1e-6 * np.eye(6)
+        self.collision_objects = []
+        if self.spawn_mortar:
+            self.collision_objects.append({
+                'name': 'mortar',
+                'type': 'mortar',
+                'mortar_radius': self.mortar_config["radius"],
+                'stiffness': self.mortar_config["stiffness"],
+                'mortar_position': self.mortar_config["position"],
+            })
+
+        self.start_tracking = self.task_config.get("start_tracking", True)
+
         self.translated_action = OrderedDict()
         self.controller_configs = controller_configs
         super().__init__(
@@ -404,7 +421,7 @@ class OSXGrind(ManipulationEnv):
             lite_physics=lite_physics,
             horizon=horizon,
             ignore_done=ignore_done,
-            hard_reset=self.randomize_reference_trajectory or hard_reset,  # if reference trajectory is random, we need to reload the model
+            hard_reset=hard_reset,  # if reference trajectory is random, we need to reload the model
             camera_names=camera_names,
             camera_heights=camera_heights,
             camera_widths=camera_widths,
@@ -814,7 +831,29 @@ class OSXGrind(ManipulationEnv):
         def previous_action(obs_cache):
             return self.previous_action
 
-        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench, relative_pose, relative_wrench, previous_action]
+        @sensor(modality=f"{pf}proprio")
+        def reference_trajectory(obs_cache):
+            if self.task_config["mpc_horizon"] > 0:
+                return get_windowed_subset(self.reference_trajectory, self.current_waypoint_index, self.task_config["mpc_horizon"]).flatten()
+            else:
+                return None
+
+        @sensor(modality=f"{pf}proprio")
+        def reference_force(obs_cache):
+            if self.task_config["mpc_horizon"] > 0:
+                return get_windowed_subset(self.reference_force, self.current_waypoint_index, self.task_config["mpc_horizon"]).flatten()
+            else:
+                return None
+
+        @sensor(modality=f"{pf}proprio")
+        def k_env(obs_cache):
+            k_env, _ = SDFUtils.get_sdf_stiffness_and_normal(self.eef_pose, self.collision_objects, self.k_env_free)
+            return np.diag(k_env)
+
+        sensors = [eef_pos, eef_rot_ortho6d, eef_wrench, base_wrench, world_wrench,
+                   relative_pose, relative_wrench, previous_action,
+                   reference_trajectory, reference_force, k_env
+                   ]
         names = [s.__name__ for s in sensors]
 
         # Create observables
@@ -951,14 +990,19 @@ class OSXGrind(ManipulationEnv):
 
         self.cumulative_reward += reward
         if done:
-            print(f"done {self.timestep} reason: {reason} duration: {self.duration} target force: {self.target_force} ")
+            print(f"done {self.timestep} reason: {reason} duration: {self.duration} d_force: {self.target_force} d_height: {self.desired_height:.4f}")
             self.cumulative_reward = 0.0
 
         return reward, done, info
 
     def _update_waypoint_index(self, action):
         # Only update waypoint if we haven't reached the end of trajectory
-        if self.current_waypoint_index < self.num_waypoints - 1:
+        if not self.start_tracking:
+            if self.tracking_error < self.pose_error_threshold \
+                    and self.tracking_force_error < self.force_error_threshold:
+                self.start_tracking = True
+
+        if self.start_tracking and self.current_waypoint_index < self.num_waypoints - 1:
             time_diff = np.round(self.sim.data._data.time - self.last_step_time, 3)
             if time_diff >= self.step_duration:
                 self.global_timestep += 1
@@ -966,10 +1010,10 @@ class OSXGrind(ManipulationEnv):
                 self.current_action = action.copy()
                 self.last_step_time = np.round(self.sim.data._data.time, 3)
 
-                if self.tracking_trajectory_method == 'per_step':  # equivalent to DURATION mode
+                if self.tracking_method == 'per_step':  # equivalent to DURATION mode
                     self.current_waypoint_index += 1
 
-                elif self.tracking_trajectory_method == 'per_error_threshold':  # equivalent to TRACKING_ERROR mode
+                elif self.tracking_method == 'per_error_threshold':  # equivalent to TRACKING_ERROR mode
                     if self.tracking_error < self.pose_error_threshold \
                             and self.tracking_force_error < self.force_error_threshold:
                         # Check future waypoints to see if they also satisfy the threshold condition
@@ -1168,6 +1212,7 @@ class OSXGrind(ManipulationEnv):
             circumferential_offset = self.trajectory_config["circumferential_offset"]
         # print(f"control_freq: {control_freq}, duration: {self.duration}, num_waypoints: {self.num_waypoints}, target_force: {self.target_force} desired_height: {desired_height}")
 
+        self.desired_height = desired_height
         self.reference_force = np.zeros((self.num_waypoints, 6))
         self.reference_force = np.array([[0.0, 0.0, self.target_force, 0.0, 0.0, 0.0]] * self.num_waypoints)
 
@@ -1182,6 +1227,9 @@ class OSXGrind(ManipulationEnv):
             pestle_radius=self.mortar_config["pestle_radius"],
             circumferential_offset=circumferential_offset
         )
+        if np.random.uniform(low=0.0, high=1.0) < 0.5:
+            # Reverse the reference trajectory so that the motion starts from the end and proceeds backward.
+            reference_trajectory = reference_trajectory[::-1]
         reference_trajectory[:, :3] += initial_position
         self.current_waypoint_index = 0  # initialize the waypoint index to 0
 
