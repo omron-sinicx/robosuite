@@ -29,6 +29,7 @@ DEFAULT_WIPE_CONFIG = {
     "two_clusters": False,  # if the dirt to wipe is one continuous line or two
     "coverage_factor": 0.6,  # how much of the table surface we cover
     "num_markers": 100,  # How many particles of dirt to generate in the environment
+    "marker_pressure_threshold": 30.0,  # maximum force allowed (N)
     # settings for thresholds
     "contact_threshold": 1.0,  # Minimum eef force to qualify as contact [N]
     "pressure_threshold": 0.5,  # force threshold (N) to overcome to get increased contact wiping reward
@@ -242,6 +243,7 @@ class Wipe(ManipulationEnv):
         self.two_clusters = self.task_config["two_clusters"]
         self.coverage_factor = self.task_config["coverage_factor"]
         self.num_markers = self.task_config["num_markers"]
+        self.marker_pressure_threshold = self.task_config["marker_pressure_threshold"]
 
         # settings for thresholds
         self.contact_threshold = self.task_config["contact_threshold"]
@@ -312,7 +314,7 @@ class Wipe(ManipulationEnv):
             action = raw_action
         return super().step(action)
 
-    def _get_active_markers(self, c_geoms):
+    def _get_active_markers(self, c_geoms, total_force_ee):
         """
         Get the markers that are currently being wiped by the tool
 
@@ -386,7 +388,8 @@ class Wipe(ManipulationEnv):
                         )
                         # Check if marker is within the tool center:
                         if PointInRectangle(pp[0], pp[1], pp[2], pp[3], pp_2):
-                            active_markers.append(marker)
+                            if total_force_ee > self.marker_pressure_threshold:
+                                active_markers.append(marker)
         return active_markers
 
     def reward(self, action=None):
@@ -451,7 +454,7 @@ class Wipe(ManipulationEnv):
             # Current 3D location of the corners of the wiping tool in world frame
             for arm in self.robots[0].arms:
                 c_geoms = self.robots[0].gripper[arm].important_geoms["corners"]
-                active_markers += self._get_active_markers(c_geoms)
+                active_markers += self._get_active_markers(c_geoms, total_force_ee)
 
             # Obtain the list of currently active (wiped) markers that where not wiped before
             # These are the markers we are wiping at this step
