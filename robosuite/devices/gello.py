@@ -349,8 +349,8 @@ class GELLO(Device):
         print("GELLO Keyboard Controls:")
         print("  j key: Toggle stiffness (equivalent to gamepad X button)")
         print("  y key: Stop recording (equivalent to gamepad Y button)")
-        print("  k key: Save episode (equivalent to gamepad A button)")
-        print("  p key: Reserved (equivalent to gamepad B button)")
+        print("  o key: Save episode (equivalent to gamepad A button)")
+        print("  m key: Reserved (equivalent to gamepad B button)")
         print("  o key: Reset simulation")
         print("")
 

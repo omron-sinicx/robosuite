@@ -28,6 +28,7 @@ class Keyboard(Device):
         self._reset_state = 0
         self._enabled = False
         self._pos_step = 0.05
+        self._btn_state = [0, 0, 0, 0]  # Reset button states
 
         self.pos_sensitivity = pos_sensitivity
         self.rot_sensitivity = rot_sensitivity
@@ -60,6 +61,10 @@ class Keyboard(Device):
         print_command("b", "toggle arm/base mode (if applicable)")
         print_command("s", "switch active arm (if multi-armed robot)")
         print_command("=", "switch active robot (if multi-robot environment)")
+        print_command("-", "Stop recording")
+        print_command("^", "Toggle stiffness")
+        print_command("]", "Skip without saving episode")
+        print_command(":", "Reserved")
         print("")
 
     def _reset_internal_state(self):
@@ -73,6 +78,7 @@ class Keyboard(Device):
         self.last_drotation = np.zeros(3)
         self.pos = np.zeros(3)  # (x, y, z)
         self.last_pos = np.zeros(3)
+        self._btn_state = [0, 0, 0, 0]
 
     def start_control(self):
         """
@@ -103,6 +109,7 @@ class Keyboard(Device):
             grasp=int(self.grasp),
             reset=self._reset_state,
             base_mode=int(self.base_mode),
+            buttons_state=self._btn_state,
         )
 
     def on_press(self, key):
@@ -152,7 +159,14 @@ class Keyboard(Device):
                 drot = rotation_matrix(angle=-0.1 * self.rot_sensitivity, direction=[0.0, 0.0, 1.0])[:3, :3]
                 self.rotation = self.rotation.dot(drot)  # rotates z
                 self.raw_drotation[2] -= 0.1 * self.rot_sensitivity
-
+            elif key.char == '^':
+                self._btn_state[0] = 1  # X button equivalent
+            elif key.char == '-':
+                self._btn_state[1] = 1  # Y button equivalent
+            elif key.char == ']':
+                self._btn_state[2] = 1  # A button equivalent
+            elif key.char == ':':
+                self._btn_state[3] = 1  # B button equivalent
         except AttributeError as e:
             pass
 

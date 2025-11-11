@@ -31,6 +31,7 @@ class WipeArena(TableArena):
         table_friction_std=0,
         line_width=0.02,
         two_clusters=False,
+        dirt_texture="Dirt",
     ):
         # Tactile table-specific features
         self.table_friction_std = table_friction_std
@@ -39,6 +40,7 @@ class WipeArena(TableArena):
         self.coverage_factor = coverage_factor
         self.num_markers = num_markers
         self.two_clusters = two_clusters
+        self.dirt_texture = dirt_texture
 
         # Attribute to hold current direction of sampled dirt path
         self.direction = None
@@ -68,7 +70,7 @@ class WipeArena(TableArena):
             "shininess": "0.0",
         }
         dirt = CustomMaterial(
-            texture="Dirt",
+            texture=self.dirt_texture,
             tex_name="dirt",
             mat_name="dirt_mat",
             tex_attrib=tex_attrib,

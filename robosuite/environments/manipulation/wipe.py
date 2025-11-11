@@ -29,7 +29,8 @@ DEFAULT_WIPE_CONFIG = {
     "two_clusters": False,  # if the dirt to wipe is one continuous line or two
     "coverage_factor": 0.6,  # how much of the table surface we cover
     "num_markers": 100,  # How many particles of dirt to generate in the environment
-    "marker_pressure_threshold": 30.0,  # maximum force allowed (N)
+    "marker_pressure_threshold": 0.0,  # maximum force allowed (N)
+    "randomize_dirt_threshold": False,  # whether to randomize the dirt threshold
     # settings for thresholds
     "contact_threshold": 1.0,  # Minimum eef force to qualify as contact [N]
     "pressure_threshold": 0.5,  # force threshold (N) to overcome to get increased contact wiping reward
@@ -244,6 +245,7 @@ class Wipe(ManipulationEnv):
         self.coverage_factor = self.task_config["coverage_factor"]
         self.num_markers = self.task_config["num_markers"]
         self.marker_pressure_threshold = self.task_config["marker_pressure_threshold"]
+        self.randomize_dirt_threshold = self.task_config["randomize_dirt_threshold"]
 
         # settings for thresholds
         self.contact_threshold = self.task_config["contact_threshold"]
@@ -273,6 +275,11 @@ class Wipe(ManipulationEnv):
         # whether to include and use ground-truth object states
         self.use_object_obs = use_object_obs
 
+        if not self.randomize_dirt_threshold or self.marker_pressure_threshold == 0.0:
+            self.marker_texture = "Dirt"
+        elif self.randomize_dirt_threshold:
+            self.randomize_dirt()
+
         super().__init__(
             robots=robots,
             env_configuration=env_configuration,
@@ -291,7 +298,7 @@ class Wipe(ManipulationEnv):
             lite_physics=lite_physics,
             horizon=horizon,
             ignore_done=ignore_done,
-            hard_reset=hard_reset,
+            hard_reset=True,
             camera_names=camera_names,
             camera_heights=camera_heights,
             camera_widths=camera_widths,
@@ -554,6 +561,7 @@ class Wipe(ManipulationEnv):
             num_markers=self.num_markers,
             line_width=self.line_width,
             two_clusters=self.two_clusters,
+            dirt_texture=self.marker_texture,
         )
 
         # Arena always gets set to zero origin
@@ -686,6 +694,7 @@ class Wipe(ManipulationEnv):
         return sensors, names
 
     def _reset_internal(self):
+        self.randomize_dirt()
         super()._reset_internal()
 
         # inherited class should reset positions of objects (only if we're not using a deterministic reset)
@@ -816,6 +825,22 @@ class Wipe(ManipulationEnv):
             np.array: End effector(x,y,z)
         """
         return np.array(self.sim.data.site_xpos[self.robots[0].eef_site_id[arm]])
+
+    def randomize_dirt(self):
+        self.marker_pressure_threshold = np.random.uniform(0.0, self.pressure_threshold_max)
+        if self.marker_pressure_threshold < 10:
+            self.marker_texture = "PlasterYellow"
+        elif self.marker_pressure_threshold < 20:
+            self.marker_texture = "WoodLight"
+        elif self.marker_pressure_threshold < 30:
+            self.marker_texture = "Brass"
+        elif self.marker_pressure_threshold < 40:
+            self.marker_texture = "Bread"
+        elif self.marker_pressure_threshold < 50:
+            self.marker_texture = "Dirt"
+        else:
+            self.marker_texture = "WoodDark"
+        print(f"marker_texture: {self.marker_texture} {self.marker_pressure_threshold}")
 
     @property
     def _has_gripper_contact(self):
