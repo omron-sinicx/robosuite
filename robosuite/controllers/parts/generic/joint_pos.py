@@ -357,7 +357,11 @@ class JointPositionController(Controller):
 
         if not ik_result.success:
             print("Inverse kinematics failed")
-            return self.joint_pos, np.zeros_like(self.joint_pos)
+            return {
+                "joint_abs": self.joint_pos,
+                "joint_delta": np.zeros_like(self.joint_pos),
+                "cartesian_abs": np.concatenate([abs_pos, T.quat2axisangle(T.mat2quat(abs_ori))]),
+            }
 
         self.goal_pos = abs_pos
         self.goal_ori = abs_ori
