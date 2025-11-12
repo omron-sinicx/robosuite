@@ -18,7 +18,6 @@ try:
 except ImportError:
     IKSolver = None
 
-
 # Supported impedance modes
 COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_p_gains", "variable_stiffness_full", "variable_stiffness_diag_only"}
 

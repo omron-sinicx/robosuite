@@ -129,3 +129,6 @@ robosuite/models/assets/demonstrations_private
 **/outputs/
 
 robosuite/models/assets/objects/custom-peg/
+
+# microsoft packages
+packages.microsoft.gpg
