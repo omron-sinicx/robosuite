@@ -198,11 +198,22 @@ class ComplianceController(Controller):
         self.derr_buf = RingBuffer(dim=6, length=2)
         self.last_joint_vel = np.zeros(6)
 
+        # # This was added recently to overcome NaN issue ---------
+        # Numerical safety clamps (configurable via controller config; harmless defaults if unset)
+        # Max L2-norm for derivative term (units of error per second)
+        self.max_derivative_norm = float(kwargs.get("max_derivative_norm", 100.0))
+        # Max L2-norm for controller output passed to inner controller
+        self.max_output_norm = float(kwargs.get("max_output_norm", 100.0))
+        # Minimum integration period to avoid division blow-ups
+        self.min_period = float(kwargs.get("min_period", 1e-3))
+        # # ------------------------------------------------------
+
         # limits
         self.position_limits = np.array(position_limits) if position_limits is not None else position_limits
         self.orientation_limits = np.array(orientation_limits) if orientation_limits is not None else orientation_limits
 
-        # control frequency
+
+# control frequency
         self.control_freq = policy_freq
         self.period = self.model_timestep
 
@@ -406,9 +417,32 @@ class ComplianceController(Controller):
         return self.run_inner_controller(desired_wrench)
 
     def compute_spatial_controller(self, error, period):
-        error = self.kp * error + self.kd * (error - self.last_err) / period
+        """
+        Spatial PD with numeric guards to prevent overflow / NaNs.
+        - Floors the period to avoid division blow-up
+        - Clips derivative term by L2 norm
+        - Clips final output by L2 norm
+        """
+        # Guard extremely small period
+        period = max(float(period), self.min_period)
+
+        # Derivative term with clipping
+        derr = (error - self.last_err) / period
+        derr_norm = np.linalg.norm(derr)
+        if derr_norm > 0.0 and derr_norm > self.max_derivative_norm:
+            derr = derr * (self.max_derivative_norm / derr_norm)
+
+        # PD combination
+        out = self.kp * error + self.kd * derr
+
+        # Clip final output to avoid blowing up downstream math
+        out_norm = np.linalg.norm(out)
+        if out_norm > 0.0 and out_norm > self.max_output_norm:
+            out = out * (self.max_output_norm / out_norm)
+
+        # Persist last error for next step derivative
         self.last_err = error
-        return error
+        return out
 
     def compute_motion_error(self):
         desired_pos = None

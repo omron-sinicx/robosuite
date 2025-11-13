@@ -31,7 +31,7 @@ def is_part_controller_config(config: Dict):
         bool: True if the config is in the for the arm-only, False otherwise
     """
 
-    PART_CONTROLLER_TYPES = ["JOINT_VELOCITY", "JOINT_TORQUE", "JOINT_POSITION", "OSC_POSITION", "OSC_POSE", "IK_POSE"]
+    PART_CONTROLLER_TYPES = ["JOINT_VELOCITY", "JOINT_TORQUE", "JOINT_POSITION", "OSC_POSITION", "OSC_POSE", "IK_POSE", "COMPLIANCE"]
     if "body_parts" not in config and "type" in config:
         return config["type"] in PART_CONTROLLER_TYPES
     return False
