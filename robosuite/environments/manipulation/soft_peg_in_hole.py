@@ -782,7 +782,12 @@ class SoftPegInHole(ManipulationEnv):
         if self.robots[0].composite_controller is None or self.hard_reset:
             # instantiate controllers, only once
             super()._reset_internal()
-            self.gripper_inertial_properties = self.sim.get_body_inertial_properties(f"gripper0_right_right_gripper")
+            # Get gripper inertial properties for soft gripper (rigid grippers don't have right_gripper body)
+            try:
+                self.gripper_inertial_properties = self.sim.get_body_inertial_properties(f"gripper0_right_right_gripper")
+            except ValueError:
+                # Rigid gripper doesn't have the right_gripper body, set to None
+                self.gripper_inertial_properties = None
 
         init_qpos_guess = np.array(
             [1.36314954, -1.21917949, 1.32688743, -1.67850362, -1.57077604, -1.77846293]
