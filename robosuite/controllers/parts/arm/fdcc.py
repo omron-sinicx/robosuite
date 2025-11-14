@@ -412,8 +412,24 @@ class ForwardDynamicsComplianceController(Controller):
         Returns:
             np.array: Control output combining proportional and derivative terms
         """
-        control_error = self.kp * error + self.kd * (error - self.last_err) / period
-        self.last_err = np.copy(control_error)
+        # Sanitize error to avoid NaNs / Infs propagating through the controller
+        if not np.all(np.isfinite(error)):
+            error = np.nan_to_num(error, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # Clip pose / wrench error to reasonable range to avoid explosive responses
+        error = np.clip(error, -1.0, 1.0)
+
+        # Compute derivative term using the previous ERROR (not previous control output)
+        safe_period = max(float(period), 1e-3)
+        deriv = (error - self.last_err) / safe_period
+
+        control_error = self.kp * error + self.kd * deriv
+
+        # Clip controller output to avoid generating unreasonably large inner-controller commands
+        control_error = np.clip(control_error, -10.0, 10.0)
+
+        # Store the last ERROR for next iteration
+        self.last_err = np.copy(error)
         return control_error
 
     def compute_motion_error(self):
@@ -608,3 +624,8 @@ class ForwardDynamicsComplianceController(Controller):
     @property
     def name(self):
         return "COMPLIANCE"
+
+    @property
+    def input_type(self):
+        """Returns the input type for this controller (delta or absolute)"""
+        return "delta" if self.use_delta else "absolute"

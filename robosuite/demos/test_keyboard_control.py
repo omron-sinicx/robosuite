@@ -118,11 +118,10 @@ def main(args):
     gripper_types = args.gripper
 
     # Load the desired controller
-    arm_controller_config = suite.load_part_controller_config(default_controller="OSC_POSE")
+    arm_controller_config = suite.load_part_controller_config(default_controller=args.control)
     controller_configs = refactor_composite_controller_config(
         arm_controller_config, 'ur5e', ["right"]
     )
-    print(controller_configs)
 
     obs_keys = [
         'robot0_non_priv_proprio-state',
@@ -200,6 +199,14 @@ def main(args):
 
     env.set_curriculum(args.curriculum)
     env.reset()
+    
+    # For FDCC/COMPLIANCE controllers, explicitly reset goal to current pose to prevent auto-movement
+    active_robot = env.robots[0]
+    for arm in active_robot.arms:
+        controller = active_robot.part_controllers[arm]
+        if hasattr(controller, 'reset_goal'):
+            controller.reset_goal()
+    
     # env.viewer.set_camera(camera_id=0)
     # env.sim._render_context_offscreen.vopt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = False
 
@@ -210,6 +217,14 @@ def main(args):
     env.viewer.add_keypress_callback(device.on_press)
 
     device.start_control()
+
+    # Start with gripper CLOSED by default (prevents dropping the peg)
+    # Users can toggle with spacebar per the on-screen help
+    for r_idx, robot in enumerate(env.robots):
+        for a_idx, arm in enumerate(robot.arms):
+            # Only set if the gripper is controllable (dof > 0)
+            if robot.gripper[arm].dof > 0:
+                device.grasp_states[r_idx][a_idx] = True
 
     assert len(env.robots) == 1
 
@@ -238,6 +253,7 @@ def main(args):
         # set arm actions
         for arm in active_robot.arms:
             controller_input_type = active_robot.part_controllers[arm].input_type
+            controller = active_robot.part_controllers[arm]
 
             if controller_input_type == "delta":
                 action_dict[arm] = input_ac_dict[f"{arm}_delta"]
@@ -245,8 +261,21 @@ def main(args):
                 action_dict[arm] = input_ac_dict[f"{arm}_abs"]
             else:
                 raise ValueError
+            
+            # For compliance controllers (FDCC, COMPLIANCE), append zero wrench to the 6D pose delta
+            # Keyboard input only provides position/orientation commands, not force/torque
+            if controller.name in ["FDCC", "COMPLIANCE"]:
+                action_dict[arm] = np.concatenate([action_dict[arm], np.zeros(6)])
 
         # Maintain gripper state for each robot but only update the active robot with action
+        # Optionally zero yaw (az) rotation command for fairness testing (operate on per-arm action before vectorizing)
+        if args.zero_az:
+            for arm in active_robot.arms:
+                if arm in action_dict and action_dict[arm] is not None and len(action_dict[arm]) >= 6:
+                    action_dict[arm][5] = 0.0
+
+        # (debug prints removed)
+
         env_action = [robot.create_action_vector(all_prev_gripper_actions[i]) for i, robot in enumerate(env.robots)]
         env_action[device.active_robot] = active_robot.create_action_vector(action_dict)
         env_action = np.concatenate(env_action)
@@ -338,6 +367,15 @@ def main(args):
             # input()
             obs, info = env.reset()
             active_robot = env.robots[0]
+            # Re-initialize FDCC / compliance controller goals and keep gripper closed after reset
+            for arm in active_robot.arms:
+                controller = active_robot.part_controllers[arm]
+                if hasattr(controller, 'reset_goal'):
+                    controller.reset_goal()
+            for r_idx, robot in enumerate(env.robots):
+                for a_idx, arm in enumerate(robot.arms):
+                    if robot.gripper[arm].dof > 0:
+                        device.grasp_states[r_idx][a_idx] = True
 
         # print(env.eef_pos, env.eef_quat)
         peg_pos = env.sim.data.site_xpos[env.sim.model.site_name2id('gripper0_right_gripper_eef_site')]
@@ -361,13 +399,19 @@ def main(args):
 
 
 if __name__ == "__main__":
+    # Map short CLI tokens to actual gripper classes (soft vs rigid)
     peg_dict = {
-        '85': 'Robotiq85GripperSoft',
-        'hande': 'RobotiqHandEGripperSoft',
+        '85-soft': 'Robotiq85GripperSoft',
+        '85-rigid': 'Robotiq85Gripper',
+        'hande-soft': 'RobotiqHandEGripperSoft',
+        'hande-rigid': 'RobotiqHandEGripper',
     }
 
     parser = ArgumentParser()
-    parser.add_argument('-g', '--gripper', default=list(peg_dict.keys())[0], choices=peg_dict.keys())
+    parser.add_argument('-g', '--gripper', default='85-soft', choices=peg_dict.keys(),
+                        help='Select gripper type: 85-soft/85-rigid/hande-soft/hande-rigid')
+    parser.add_argument('-c', '--control', default='OSC_POSE', choices=['OSC_POSE', 'FDCC', 'COMPLIANCE'],
+                        help='Controller to use for the arm')
     parser.add_argument('-s', '--shape', default=None)
     parser.add_argument('-st', '--shape_type', default='basic')
     parser.add_argument('-bps', '--use_peg_bps', action='store_true', help='use peg basis point set features')
@@ -385,6 +429,7 @@ if __name__ == "__main__":
     parser.add_argument('-viz', '--visualize', action='store_true', help='visualize camera obs')
     parser.add_argument('-cl', '--curriculum', type=float, default=1.0, help='curriculum coefficient')
     parser.add_argument('-tb', '--tensorboard', action='store_true', help='log to tensorboard')
+    parser.add_argument('--zero-az', action='store_true', help='Zero yaw (az) rotation command for fairness testing')
     parser.add_argument('-log', '--log_level', type=str, default='debug')
     args = parser.parse_args()
     args.gripper = peg_dict[args.gripper]

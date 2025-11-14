@@ -8,6 +8,7 @@ PART_CONTROLLER_INFO = {
     "JOINT_TORQUE": "Joint Torque",
     "JOINT_POSITION": "Joint Position",
     "COMPLIANCE": "Operational Space Control with Compliance",
+    "FDCC": "Forward Dynamics Compliance Control",
     "OSC_POSITION": "Operational Space Control (Position Only)",
     "OSC_POSE": "Operational Space Control (Position + Orientation)",
     "OSC_POSITION_FT": "Operational Space Control with force reference (Position Only)",
