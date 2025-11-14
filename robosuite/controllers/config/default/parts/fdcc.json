@@ -16,7 +16,8 @@
     "uncouple_pos_ori": true,
     "control_delta": true,
     "interpolation": null,
-    "ramp_ratio": 0.2
+    "ramp_ratio": 0.2,
+    "input_ref_frame": "world"
   },
   "iterations": 1,
   "error_scale": 1.0,

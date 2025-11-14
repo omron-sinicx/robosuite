@@ -182,13 +182,13 @@ class Device(metaclass=abc.ABCMeta):
         ac_dict["state"] = state
         return ac_dict
 
-    def get_arm_action(self, robot, arm, norm_delta, goal_update_mode="target"):
+    def get_arm_action(self, robot, arm, norm_delta, goal_update_mode="achieved"):
         assert np.all(norm_delta <= 1.0) and np.all(norm_delta >= -1.0)
 
         assert goal_update_mode in [
             "achieved",
-            "target",
-        ]  # update next target either based on achieved pose or current target pose
+            "desired",
+        ]  # update next target either based on achieved pose or desired goal pose
 
         from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
         from robosuite.controllers.parts.arm.compliance import ComplianceController
