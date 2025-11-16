@@ -214,7 +214,54 @@ def main(args):
     from robosuite.devices import Keyboard
 
     device = Keyboard(env, pos_sensitivity=0.1, rot_sensitivity=0.0)
-    env.viewer.add_keypress_callback(device.on_press)
+
+    # Wrap the keyboard on_press to capture initial pose at key press for debugging
+    _orig_on_press = device.on_press
+    device._debug_initial_pose = None  # (pos, quat)
+    device._debug_last_key = None
+
+    # Small helper to pretty-print keys from pynput (Key / KeyCode)
+    def _key_to_str(key):
+        try:
+            # KeyCode with printable char
+            if hasattr(key, 'char') and key.char is not None:
+                return key.char
+            # Special keys like Key.up / Key.left ...
+            if hasattr(key, 'name') and key.name is not None:
+                return key.name
+            return str(key)
+        except Exception:
+            return str(key)
+
+    def _debug_on_press(key):
+        try:
+            # Use the same controlled frame as the controller (grip_site), not gripper_eef_site (which has an offset)
+            site_id = env.sim.model.site_name2id('gripper0_right_grip_site')
+            init_pos = env.sim.data.site_xpos[site_id].copy()
+            init_quat = mat2quat(env.sim.data.site_xmat[site_id].reshape(3, 3))
+        except Exception:
+            init_pos, init_quat = None, None
+        device._debug_initial_pose = (init_pos, init_quat)
+        device._debug_last_key = key
+        # Immediate print at key press
+        print(f"[KB DEBUG] press key={_key_to_str(key)} init_pos={init_pos} init_quat={init_quat}", flush=True)
+        # Delegate to original handler
+        _orig_on_press(key)
+
+    # Rewire the pynput listener to use our debug on_press wrapper, so prints always show
+    try:
+        # Stop existing listener if running
+        if hasattr(device, "listener") and device.listener is not None:
+            try:
+                device.listener.stop()
+            except Exception:
+                pass
+        from pynput.keyboard import Listener
+        device.listener = Listener(on_press=_debug_on_press, on_release=device.on_release)
+        device.listener.start()
+        print("[KB DEBUG] Rewired keyboard listener with debug on_press handler", flush=True)
+    except Exception as e:
+        print(f"[KB DEBUG] Failed to rewire listener: {e}", flush=True)
 
     device.start_control()
 
@@ -283,6 +330,32 @@ def main(args):
             all_prev_gripper_actions[device.active_robot][gripper_ac] = action_dict[gripper_ac]
 
         obs, rew, terminated, truncated, info = env.step(env_action)
+
+        # If a key was pressed this iteration, print initial and final EEF pose for debugging
+        if getattr(device, "_debug_last_key", None) is not None:
+            try:
+                # Use the same controlled frame as the controller (grip_site), not gripper_eef_site (which has an offset)
+                site_id = env.sim.model.site_name2id('gripper0_right_grip_site')
+                final_pos = env.sim.data.site_xpos[site_id].copy()
+                final_quat = mat2quat(env.sim.data.site_xmat[site_id].reshape(3, 3))
+            except Exception:
+                final_pos, final_quat = None, None
+
+            init_pos, init_quat = (None, None)
+            if getattr(device, "_debug_initial_pose", None) is not None:
+                init_pos, init_quat = device._debug_initial_pose
+
+            # Compute deltas when possible
+            delta_pos = None
+            if init_pos is not None and final_pos is not None:
+                delta_pos = final_pos - init_pos
+
+            print(f"[KB DEBUG] step key={_key_to_str(device._debug_last_key)} final_pos={final_pos} delta_pos={delta_pos}", flush=True)
+            print(f"             final_quat={final_quat}", flush=True)
+
+            # reset debug flags
+            device._debug_last_key = None
+            device._debug_initial_pose = None
         env.render()
 
         if not np.all(np.isclose(active_robot._joint_positions, prev_jpos, rtol=1e-5)):
@@ -378,9 +451,9 @@ def main(args):
                         device.grasp_states[r_idx][a_idx] = True
 
         # print(env.eef_pos, env.eef_quat)
-        peg_pos = env.sim.data.site_xpos[env.sim.model.site_name2id('gripper0_right_gripper_eef_site')]
+        peg_pos = env.sim.data.site_xpos[env.sim.model.site_name2id('gripper0_right_grip_site')]
         peg_quat = mat2quat(env.sim.data.site_xmat[env.sim.model.site_name2id(
-            'gripper0_right_gripper_eef_site')].reshape(3, 3))
+            'gripper0_right_grip_site')].reshape(3, 3))
         eef_quat = env.eef_quat
         # print(peg_quat, eef_quat, quat_multiply(eef_quat, quat_inverse(peg_quat)))
         # print(f"{env.peg_pos_error} {peg_pos=}")
