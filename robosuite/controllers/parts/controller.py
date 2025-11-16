@@ -54,7 +54,12 @@ class Controller(object, metaclass=abc.ABCMeta):
         self.wrench_in_world_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
         self.gripper_inertial_properties = None
         if gripper_body_name:
-            self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{gripper_body_name}")
+            body_name = f"{self.ft_prefix}_{gripper_body_name}"
+            print(f"[DEBUG] ref_name: {ref_name}, part_name: {part_name}, gripper_body_name: {gripper_body_name}")
+            print(f"[DEBUG] self.ft_prefix: {self.ft_prefix}")
+            print(f"[DEBUG] Looking for body: {body_name}")
+            print(f"[DEBUG] Available bodies: {getattr(sim.model, 'body_names', 'N/A')}")
+            self.gripper_inertial_properties = sim.get_body_inertial_properties(body_name)
 
         # Actuator range
         self.actuator_min = actuator_range[0]
