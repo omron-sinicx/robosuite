@@ -784,7 +784,7 @@ class SoftPegInHole(ManipulationEnv):
             super()._reset_internal()
             # Get gripper inertial properties for soft gripper (rigid grippers don't have right_gripper body)
             try:
-                self.gripper_inertial_properties = self.sim.get_body_inertial_properties(f"gripper0_right_right_gripper")
+                self.gripper_inertial_properties = self.sim.get_body_inertial_properties(f"gripper0_right_gripper_base")
             except ValueError:
                 # Rigid gripper doesn't have the right_gripper body, set to None
                 self.gripper_inertial_properties = None

@@ -483,7 +483,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-g', '--gripper', default='85-soft', choices=peg_dict.keys(),
                         help='Select gripper type: 85-soft/85-rigid/hande-soft/hande-rigid')
-    parser.add_argument('-c', '--control', default='OSC_POSE', choices=['OSC_POSE', 'FDCC', 'COMPLIANCE'],
+    parser.add_argument('-c', '--control', default='OSC_POSE', choices=['OSC_POSITION', 'FDCC', 'COMPLIANCE', 'OSC_POSITION_CB'],
                         help='Controller to use for the arm')
     parser.add_argument('-s', '--shape', default=None)
     parser.add_argument('-st', '--shape_type', default='basic')
