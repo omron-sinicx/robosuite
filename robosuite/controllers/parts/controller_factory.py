@@ -114,6 +114,12 @@ def arm_controller_factory(name, params):
         params["control_ori"] = False
         return arm_controllers.OperationalSpaceController(interpolator_pos=interpolator, **params)
 
+    if name == "OSC_POSITION_CB":
+        if interpolator is not None:
+            interpolator.set_states(dim=3)  # EE control uses dim 3 for pos
+        params["control_ori"] = False
+        return arm_controllers.OperationalSpaceControllerCB(interpolator_pos=interpolator, **params)
+
     if name == "COMPLIANCE":
         if interpolator is not None:
             interpolator.set_states(dim=3)  # EE control uses dim 3 for pos

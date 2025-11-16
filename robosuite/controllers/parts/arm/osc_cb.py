@@ -12,7 +12,7 @@ IMPEDANCE_MODES = {"fixed", "variable", "variable_kp", "variable_full_kp"}
 # TODO: Maybe better naming scheme to differentiate between input / output min / max and pos/ori limits, etc.
 
 
-class OperationalSpaceController(Controller):
+class OperationalSpaceControllerCB(Controller):
     """
     Controller for controlling robot arm via operational space control. Allows position and / or orientation control
     of the robot's end effector. For detailed information as to the mathematical foundation for this controller, please
