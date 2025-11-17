@@ -4,11 +4,9 @@ import numpy as np
 from scipy.spatial.transform import Rotation
 
 from robosuite.environments.base import MjSim
-from robosuite.utils.buffers import RingBuffer
-from robosuite.utils.sim_utils import compensate_ft_reading
-import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
+import robosuite.utils.transform_utils as T
 
 # Supported impedance modes
 IMPEDANCE_MODES = {"fixed", "variable", "variable_kp"}
@@ -140,16 +138,10 @@ class OperationalSpaceController(Controller):
         uncouple_pos_ori=True,
         lite_physics=True,
         default_orientation=None,
+        ft_buffer_size=25,
+        gripper_body_name="gripper_base",
         ** kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
-        ft_buffer_size = 25
-        self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
-        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
-        self.gripper_body_name = "gripper_base"
-        if self.gripper_body_name:
-            self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{self.gripper_body_name}")
-
         self.default_orientation = default_orientation
 
         super().__init__(
@@ -160,11 +152,13 @@ class OperationalSpaceController(Controller):
             lite_physics=lite_physics,
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
+            ft_buffer_size=ft_buffer_size,
+            gripper_body_name=gripper_body_name,
         )
-        
+
         self.fixed_ref_pos = self.ref_pos.copy()
         self.fixed_ref_ori = self.ref_ori_mat.copy()
-        
+
         # Determine whether this is pos ori or just pos
         self.use_ori = control_ori
         # Determine whether we want to use delta or absolute values as inputs
@@ -239,10 +233,6 @@ class OperationalSpaceController(Controller):
         self.origin_pos = None
         self.origin_ori = None
 
-    def update(self):
-        super().update()
-        self.transform_wrench_to_base_frame()
-
     def set_goal(self, action):
         """
         Sets goal based on input @action. If self.impedance_mode is not "fixed", then the input will be parsed into the
@@ -280,7 +270,6 @@ class OperationalSpaceController(Controller):
         # If we're using deltas, interpret actions as such
         if self.input_type == "delta":
             scaled_delta = self.scale_action(delta)
-            print(f"scaled_delta: {scaled_delta}")
             self.goal_pos = self.compute_goal_pos(scaled_delta[0:3])
             if self.default_orientation is not None:
                 ori_error = orientation_error(self.default_orientation, self.ref_ori_mat)
@@ -309,21 +298,6 @@ class OperationalSpaceController(Controller):
                 orientation_error(self.goal_ori, self.ori_ref)
             )  # goal is the total orientation error
             self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
-
-    def world_to_origin_frame(self, vec):
-        """
-        transform vector from world to reference coordinate frame
-        """
-
-        # world rotation matrix is just identity
-        world_frame = np.eye(4)
-        world_frame[:3, 3] = vec
-
-        origin_frame = T.make_pose(self.origin_pos, self.origin_ori)
-        origin_frame_inv = T.pose_inv(origin_frame)
-        vec_origin_pose = T.pose_in_A_to_pose_in_B(world_frame, origin_frame_inv)
-        vec_origin_pos, _ = T.mat2pose(vec_origin_pose)
-        return vec_origin_pos
 
     def goal_origin_to_eef_pose(self):
         origin_pose = T.make_pose(self.origin_pos, self.origin_ori)
@@ -600,11 +574,10 @@ class OperationalSpaceController(Controller):
             low, high = self.input_min, self.input_max
         return low, high
 
-    def delta_to_abs_action(self, delta_ac, goal_update_mode):
+    def delta_to_abs_action(self, delta_ac, goal_update_mode=None):
         """
         helper function that converts delta action into absolute action
         """
-        print(f"delta_ac: {delta_ac}")
         abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
         abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
         abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
@@ -614,94 +587,6 @@ class OperationalSpaceController(Controller):
     @property
     def name(self):
         return "OSC_" + self.name_suffix
-
-    def get_wrench(self):
-        return np.concatenate([
-            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
-            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
-        ])
-
-    def get_sensor_measurement(self, sensor_name):
-        """
-        Grabs relevant sensor data from the sim object
-
-        Args:
-            sensor_name (str): name of the sensor
-
-        Returns:
-            np.array: sensor values
-        """
-        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
-        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
-
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
-
-    def get_force_torque(self):
-        wrench_force = np.concatenate((self.robots[0].ee_force['right'], self.robots[0].ee_torque['right']))
-        # peg_force = self.robots[0].get_sensor_measurement(self.robots[0].gripper['right'].important_sensors["force_peg"])
-
-        if self.gripper_inertial_properties is not None:
-            # offset payload (weight of the peg and gripper)
-            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
-                                                 self.gripper_inertial_properties['mass'],
-                                                 self.gripper_inertial_properties['local_com'],
-                                                 self.gripper_inertial_properties['world_rot_mat'],
-                                                 self.sim.model._model.opt.gravity)
-        return wrench_force
-
-    def transform_wrench_to_base_frame(self):
-        # Compute force/torque
-        # get sensor f/t measurements from gripper site, transform to world frame
-        gripper_in_robot_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")
-        wFtS = T.force_frame_transform(gripper_in_robot_base)
-
-        wrench_force = self.get_wrench()
-
-        if self.gripper_body_name:
-            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
-                                                 self.gripper_inertial_properties['mass'],
-                                                 self.gripper_inertial_properties['local_com'],
-                                                 self.gripper_inertial_properties['world_rot_mat'],
-                                                 self.sim.model._model.opt.gravity)
-
-        current_wrench = np.dot(wFtS, wrench_force)  # compute force/torque reading in base_frame
-
-        self.wrench_in_base_frame_buf.push(current_wrench)
-        self.wrench_in_eef_frame_buf.push(wrench_force)
-
-    def pose_in_base_from_name(self, name):
-        """
-        A helper function that takes in a named data field and returns the pose
-        of that object in the base frame.
-
-        Args:
-            name (str): Name of body in sim to grab pose
-
-        Returns:
-            np.array: (4,4) array corresponding to the pose of @name in the base frame
-        """
-
-        pos_in_world = self.sim.data.get_body_xpos(name)
-        rot_in_world = self.sim.data.get_body_xmat(name).reshape((3, 3))
-        pose_in_world = T.make_pose(pos_in_world, rot_in_world)
-
-        base_pos_in_world = self.sim.data.get_body_xpos(f"{self.naming_prefix}base")
-        base_rot_in_world = self.sim.data.get_body_xmat(f"{self.naming_prefix}base").reshape((3, 3))
-        base_pose_in_world = T.make_pose(base_pos_in_world, base_rot_in_world)
-        world_pose_in_base = T.pose_inv(base_pose_in_world)
-
-        pose_in_base = T.pose_in_A_to_pose_in_B(pose_in_world, world_pose_in_base)
-        return pose_in_base
-
-    def pose_in_A_to_pose_in_B_by_site_name(self, A, B):
-        pos_in_A = self.sim.data.site_xpos[self.sim.model.site_name2id(A)]
-        rot_in_A = self.sim.data.site_xmat[self.sim.model.site_name2id(A)].reshape([3, 3])
-        pose_in_A = T.make_pose(pos_in_A, rot_in_A)
-
-        pos_in_B = self.sim.data.site_xpos[self.sim.model.site_name2id(B)]
-        rot_in_B = self.sim.data.site_xmat[self.sim.model.site_name2id(B)].reshape([3, 3])
-        pose_in_B = T.make_pose(pos_in_B, rot_in_B)
-        return T.pose_in_A_to_pose_in_B(pose_in_A, pose_in_B)
 
     @property
     def current_wrench(self):
