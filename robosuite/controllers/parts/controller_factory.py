@@ -58,14 +58,20 @@ def load_part_controller_config(custom_fpath=None, default_controller=None):
     assert custom_fpath is not None, "Error: Either custom_fpath or default_controller must be specified!"
 
     # Attempt to load the controller
+
+    # ANSI color codes
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    RESET = '\033[0m'
+
     try:
         with open(custom_fpath) as f:
+            print(f"{GREEN}Successfully loaded controller config: {custom_fpath}{RESET}")
             controller_config = json.load(f)
     except FileNotFoundError:
-        print("Error opening controller filepath at: {}. " "Please check filepath and try again.".format(custom_fpath))
+        print(f"{RED}Error opening controller filepath at: {custom_fpath}. Please check filepath and try again.{RESET}")
         raise FileNotFoundError
-
-    # Return the loaded controller
     return controller_config
 
 

@@ -932,4 +932,18 @@ class SoftPegInHole(ManipulationEnv):
         return self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3)
 
     def get_force_torque(self):
-        return self.robots[0].composite_controller.part_controllers['right'].current_wrench
+        ctrl = self.robots[0].composite_controller.part_controllers['right']
+        wrench_props = ["current_wrench", "base_wrench", "eef_wrench", "world_wrench"]
+        for prop in wrench_props:
+            if hasattr(ctrl, prop):
+                attr = getattr(ctrl, prop)
+                try:
+                    wrench = attr() if callable(attr) else attr
+                    if wrench is not None:
+                        # Check for correct type and shape (should be array-like, length 6)
+                        arr = np.asarray(wrench)
+                        if arr.shape == (6,):
+                            return arr
+                except Exception:
+                    continue
+        raise AttributeError("Controller does not provide a valid 6D wrench property (current_wrench, base_wrench, eef_wrench, or world_wrench)")

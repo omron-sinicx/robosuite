@@ -6,7 +6,9 @@ import numpy as np
 from robosuite.controllers.parts.generic.joint_pos import JointPositionController
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
-
+from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
+from robosuite.controllers.parts.arm.compliance import ComplianceController
+from robosuite.controllers.parts.arm.osc_cb import OperationalSpaceControllerCB
 
 class Device(metaclass=abc.ABCMeta):
     """
@@ -118,7 +120,7 @@ class Device(metaclass=abc.ABCMeta):
 
         # FDCC and COMPLIANCE controllers use the same 6D pose delta format as OSC_POSE
         # They just add force/torque dimensions which default to zero from keyboard input
-        assert controller.name in ["OSC_POSE", "JOINT_POSITION", "FDCC", "COMPLIANCE"], \
+        assert controller.name in ["OSC_POSITION", "OSC_POSITION_CB", "JOINT_POSITION", "FDCC", "COMPLIANCE"], \
             f"only supporting OSC_POSE, FDCC, COMPLIANCE and JOINT_POSITION for now, got {controller.name}"
 
         # process raw device inputs
@@ -133,14 +135,24 @@ class Device(metaclass=abc.ABCMeta):
         ac_dict = {}
         # populate delta actions for the arms
         for arm in robot.arms:
-            # OSC keys
             arm_action = self.get_arm_action(
                 robot,
                 arm,
                 norm_delta=np.zeros(6),
             )
-            ac_dict[f"{arm}_abs"] = arm_action["abs"]
-            ac_dict[f"{arm}_delta"] = arm_action["delta"]
+            if isinstance(arm_action, dict):
+                # Use keys if present, else fallback
+                if "abs" in arm_action and "delta" in arm_action:
+                    ac_dict[f"{arm}_abs"] = arm_action["abs"]
+                    ac_dict[f"{arm}_delta"] = arm_action["delta"]
+                else:
+                    # Fallback: store the whole dict or main action under a generic key
+                    ac_dict[f"{arm}_action"] = arm_action
+            else:
+                # Not a dict: store as generic action
+                ac_dict[f"{arm}_action"] = arm_action
+
+            # Gripper action (safe fallback)
             ac_dict[f"{arm}_gripper"] = np.zeros(robot.gripper[arm].dof)
 
         if robot.is_mobile:
@@ -161,11 +173,16 @@ class Device(metaclass=abc.ABCMeta):
             arm_norm_delta = np.concatenate([dpos, drotation])
 
         # populate action dict items for arm and grippers
+        print(f"[DEBUG] ac_dict:", active_arm)
+        print(f"[DEBUG] robot:", robot)
+        print(f"[DEBUG] arm_norm:", arm_norm_delta)
         arm_action = self.get_arm_action(
             robot,
             active_arm,
             norm_delta=arm_norm_delta,
         )
+        print("[DEBUG] ac_dict:", ac_dict)
+        print(f"[DEBUG] arm_action: {arm_action}")
         ac_dict[f"{active_arm}_abs"] = arm_action["abs"]
         ac_dict[f"{active_arm}_delta"] = arm_action["delta"]
 
@@ -190,10 +207,7 @@ class Device(metaclass=abc.ABCMeta):
             "desired",
         ]  # update next target either based on achieved pose or desired goal pose
 
-        from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
-        from robosuite.controllers.parts.arm.compliance import ComplianceController
-        
-        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, JointPositionController, 
+        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, OperationalSpaceControllerCB, JointPositionController, 
                                                      ForwardDynamicsComplianceController, ComplianceController)):
             return get_arm_action_simple(robot, arm, norm_delta)
         elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK", "HYBRID_WHOLE_BODY_MINK_IK"]:
@@ -278,16 +292,33 @@ def get_arm_action_simple(robot, arm, norm_delta):
     from robosuite.controllers.parts.arm.compliance import ComplianceController
     
     if isinstance(robot.part_controllers[arm], (OperationalSpaceController, 
+                                                OperationalSpaceControllerCB,
                                                  ForwardDynamicsComplianceController, 
                                                  ComplianceController)):
         arm_controller = robot.part_controllers[arm]
+        # Determine if controller expects 3D (position only) or 6D (pose)
+        # Use input_min shape as indicator
+        if hasattr(arm_controller, 'input_min') and hasattr(arm_controller, 'input_max'):
+            input_min = np.array(getattr(arm_controller, 'input_min'))
+            input_max = np.array(getattr(arm_controller, 'input_max'))
+            if not np.allclose(norm_delta, 0):
+                print(f"[DEBUG] get_arm_action_simple: norm_delta shape: {norm_delta.shape}, input_min shape: {input_min.shape}, input_max shape: {input_max.shape}")
+                print(f"[DEBUG] get_arm_action_simple: norm_delta: {norm_delta}, input_min: {input_min}, input_max: {input_max}")
+            # If controller expects 3D, only pass first 3 elements
+            if input_min.shape == (3,) and norm_delta.shape[0] >= 3:
+                norm_delta = norm_delta[:3]
+                if not np.allclose(norm_delta, 0):
+                    print(f"[DEBUG] get_arm_action_simple: Truncated norm_delta to 3D: {norm_delta}")
+        else:
+            if not np.allclose(norm_delta, 0):
+                print(f"[DEBUG] get_arm_action_simple: norm_delta shape: {norm_delta.shape}, arm_controller has no input_min/input_max")
+                print(f"[DEBUG] get_arm_action_simple: norm_delta: {norm_delta}")
         delta_action = arm_controller.scale_action(norm_delta.copy())
         abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None) if hasattr(arm_controller, 'delta_to_abs_action') else None
-        
         # For compliance controllers, the keyboard device expects 6D delta in the return dict
         # The wrench will be appended as zeros when creating the final action vector
         return {
-            "delta": norm_delta,  # Keep as 6D for consistency with keyboard demo
+            "delta": norm_delta,  # Now may be 3D or 6D depending on controller
             "abs": abs_action,
             f"{arm}_delta": norm_delta,
             f"{arm}_abs": abs_action,

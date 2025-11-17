@@ -666,6 +666,7 @@ class OperationalSpaceControllerCB(Controller):
     def eef_wrench(self):
         return self.wrench_in_eef_frame_buf.average
 
+    # DONE: dirty fix, need to edit soft_peg_in_hole env to use base_wrench instead of current_wrench
     @property
     def base_wrench(self):
         return self.wrench_in_base_frame_buf.average
