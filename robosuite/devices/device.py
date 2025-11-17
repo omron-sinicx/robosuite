@@ -3,7 +3,6 @@ from typing import Dict, List, Optional  # for abstract base class definitions
 
 import numpy as np
 
-from robosuite.controllers.parts.generic.joint_pos import JointPositionController
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
@@ -115,7 +114,6 @@ class Device(metaclass=abc.ABCMeta):
 
         # Get controller reference
         controller = robot.part_controllers[active_arm]
-        gripper = robot.gripper[active_arm]
         gripper_dof = robot.gripper[active_arm].dof
 
         # FDCC and COMPLIANCE controllers use the same 6D pose delta format as OSC_POSE
@@ -185,29 +183,27 @@ class Device(metaclass=abc.ABCMeta):
         print(f"[DEBUG] arm_action: {arm_action}")
         ac_dict[f"{active_arm}_abs"] = arm_action["abs"]
         ac_dict[f"{active_arm}_delta"] = arm_action["delta"]
-
-        if hasattr(gripper, "grasp_qpos"):
-            ac_dict[f"{active_arm}_gripper"] = getattr(gripper, "grasp_qpos")[grasp]
-        else:
-            ac_dict[f"{active_arm}_gripper"] = np.array([grasp] * gripper_dof)
+        ac_dict[f"{active_arm}_gripper"] = np.array([grasp] * gripper_dof)
 
         # clip actions between -1 and 1
         for (k, v) in ac_dict.items():
-            if "abs" not in k and "gripper" not in k:
+            if "abs" not in k:
                 ac_dict[k] = np.clip(v, -1, 1)
 
-        ac_dict["state"] = state
         return ac_dict
 
-    def get_arm_action(self, robot, arm, norm_delta, goal_update_mode="achieved"):
+    def get_arm_action(self, robot, arm, norm_delta, goal_update_mode="target"):
         assert np.all(norm_delta <= 1.0) and np.all(norm_delta >= -1.0)
 
         assert goal_update_mode in [
             "achieved",
-            "desired",
-        ]  # update next target either based on achieved pose or desired goal pose
+            "target",
+        ]  # update next target either based on achieved pose or current target pose
 
-        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, OperationalSpaceControllerCB, JointPositionController, 
+        from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
+        from robosuite.controllers.parts.arm.compliance import ComplianceController
+        
+        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, OperationalSpaceControllerCB, 
                                                      ForwardDynamicsComplianceController, ComplianceController)):
             return get_arm_action_simple(robot, arm, norm_delta)
         elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK", "HYBRID_WHOLE_BODY_MINK_IK"]:

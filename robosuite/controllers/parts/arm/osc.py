@@ -140,10 +140,16 @@ class OperationalSpaceController(Controller):
         uncouple_pos_ori=True,
         lite_physics=True,
         default_orientation=None,
-        gripper_body_name=None,
-        ft_buffer_size=25,
         ** kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
+        ft_buffer_size = 25
+        self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
+        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
+        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
+        self.gripper_body_name = "gripper_base"
+        if self.gripper_body_name:
+            self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{self.gripper_body_name}")
+
         self.default_orientation = default_orientation
 
         super().__init__(
@@ -154,9 +160,11 @@ class OperationalSpaceController(Controller):
             lite_physics=lite_physics,
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
-            gripper_body_name=gripper_body_name,
-            ft_buffer_size=ft_buffer_size,
         )
+        
+        self.fixed_ref_pos = self.ref_pos.copy()
+        self.fixed_ref_ori = self.ref_ori_mat.copy()
+        
         # Determine whether this is pos ori or just pos
         self.use_ori = control_ori
         # Determine whether we want to use delta or absolute values as inputs
@@ -272,14 +280,15 @@ class OperationalSpaceController(Controller):
         # If we're using deltas, interpret actions as such
         if self.input_type == "delta":
             scaled_delta = self.scale_action(delta)
+            print(f"scaled_delta: {scaled_delta}")
             self.goal_pos = self.compute_goal_pos(scaled_delta[0:3])
-            if self.default_orientation is not None:
-                ori_error = orientation_error(self.default_orientation, self.ref_ori_mat)
-                if self.control_dim == 3:
-                    scaled_delta = np.concatenate([scaled_delta, np.zeros(3)])
-                    scaled_delta[3:6] = self.scale_action(scaled_delta[3:6])
-                else:
-                    scaled_delta = self.scale_action(np.concatenate([delta[:3], ori_error]))
+            # if self.default_orientation is not None:
+            #     ori_error = orientation_error(self.default_orientation, self.ref_ori_mat)
+            #     if self.control_dim == 3:
+            #         scaled_delta = np.concatenate([scaled_delta, np.zeros(3)])
+            #         scaled_delta[3:6] = self.scale_action(scaled_delta[3:6])
+            #     else:
+            #         scaled_delta = self.scale_action(np.concatenate([delta[:3], ori_error]))
             self.goal_ori = self.compute_goal_ori(scaled_delta[3:6])
         # Else, interpret actions as absolute values
         elif self.input_type == "absolute":
@@ -287,6 +296,9 @@ class OperationalSpaceController(Controller):
             self.goal_ori = Rotation.from_rotvec(action[3:6]).as_matrix()
         else:
             raise ValueError(f"Unsupport input_type {self.input_type}")
+
+        self.fixed_ref_pos = self.goal_pos
+        self.fixed_ref_ori = self.goal_ori
 
         if self.interpolator_pos is not None:
             self.interpolator_pos.set_goal(self.goal_pos)
@@ -315,7 +327,7 @@ class OperationalSpaceController(Controller):
 
     def goal_origin_to_eef_pose(self):
         origin_pose = T.make_pose(self.origin_pos, self.origin_ori)
-        ee_pose = T.make_pose(self.ref_pos, self.ref_ori_mat)
+        ee_pose = T.make_pose(self.fixed_ref_pos, self.fixed_ref_ori)
         origin_pose_inv = T.pose_inv(origin_pose)
         return T.pose_in_A_to_pose_in_B(ee_pose, origin_pose_inv)
 
@@ -340,9 +352,9 @@ class OperationalSpaceController(Controller):
         if self.goal_pos is None:
             # if goal is not already set, set it to current position (in controller ref frame)
             if self.input_ref_frame == "base":
-                self.goal_pos = self.world_to_origin_frame(self.ref_pos)
+                self.goal_pos = self.world_to_origin_frame(self.fixed_ref_pos)
             elif self.input_ref_frame == "world":
-                self.goal_pos = self.ref_pos
+                self.goal_pos = self.fixed_ref_pos
             else:
                 raise ValueError
 
@@ -352,9 +364,9 @@ class OperationalSpaceController(Controller):
         elif goal_update_mode == "achieved":
             # update new goal wrt current achieved position
             if self.input_ref_frame == "base":
-                goal_pos = self.world_to_origin_frame(self.ref_pos) + delta
+                goal_pos = self.world_to_origin_frame(self.fixed_ref_pos) + delta
             elif self.input_ref_frame == "world":
-                goal_pos = self.ref_pos + delta
+                goal_pos = self.fixed_ref_pos + delta
             else:
                 raise ValueError
 
@@ -403,7 +415,7 @@ class OperationalSpaceController(Controller):
             if self.input_ref_frame == "base":
                 curr_goal_ori = self.goal_origin_to_eef_pose()[:3, :3]
             elif self.input_ref_frame == "world":
-                curr_goal_ori = self.ref_ori_mat
+                curr_goal_ori = self.fixed_ref_ori
             else:
                 raise ValueError
             goal_ori = np.dot(rotation_mat_error, curr_goal_ori)
@@ -592,6 +604,7 @@ class OperationalSpaceController(Controller):
         """
         helper function that converts delta action into absolute action
         """
+        print(f"delta_ac: {delta_ac}")
         abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
         abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
         abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
@@ -601,6 +614,60 @@ class OperationalSpaceController(Controller):
     @property
     def name(self):
         return "OSC_" + self.name_suffix
+
+    def get_wrench(self):
+        return np.concatenate([
+            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
+            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
+        ])
+
+    def get_sensor_measurement(self, sensor_name):
+        """
+        Grabs relevant sensor data from the sim object
+
+        Args:
+            sensor_name (str): name of the sensor
+
+        Returns:
+            np.array: sensor values
+        """
+        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
+        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
+
+        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
+
+    def get_force_torque(self):
+        wrench_force = np.concatenate((self.robots[0].ee_force['right'], self.robots[0].ee_torque['right']))
+        # peg_force = self.robots[0].get_sensor_measurement(self.robots[0].gripper['right'].important_sensors["force_peg"])
+
+        if self.gripper_inertial_properties is not None:
+            # offset payload (weight of the peg and gripper)
+            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
+                                                 self.gripper_inertial_properties['mass'],
+                                                 self.gripper_inertial_properties['local_com'],
+                                                 self.gripper_inertial_properties['world_rot_mat'],
+                                                 self.sim.model._model.opt.gravity)
+        return wrench_force
+
+    def transform_wrench_to_base_frame(self):
+        # Compute force/torque
+        # get sensor f/t measurements from gripper site, transform to world frame
+        gripper_in_robot_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")
+        wFtS = T.force_frame_transform(gripper_in_robot_base)
+
+        wrench_force = self.get_wrench()
+
+        if self.gripper_body_name:
+            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
+                                                 self.gripper_inertial_properties['mass'],
+                                                 self.gripper_inertial_properties['local_com'],
+                                                 self.gripper_inertial_properties['world_rot_mat'],
+                                                 self.sim.model._model.opt.gravity)
+
+        current_wrench = np.dot(wFtS, wrench_force)  # compute force/torque reading in base_frame
+
+        self.wrench_in_base_frame_buf.push(current_wrench)
+        self.wrench_in_eef_frame_buf.push(wrench_force)
 
     def pose_in_base_from_name(self, name):
         """
@@ -639,3 +706,7 @@ class OperationalSpaceController(Controller):
     @property
     def current_wrench(self):
         return self.wrench_in_base_frame_buf.average
+
+    @property
+    def eef_wrench(self):
+        return self.wrench_in_eef_frame_buf.average

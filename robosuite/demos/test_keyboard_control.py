@@ -145,7 +145,7 @@ def main(args):
         gripper_types=gripper_types,
         initialization_noise=None,
         has_renderer=True,
-        # ignore_done=True,
+        ignore_done=True,
         has_offscreen_renderer=use_depth,
         camera_names="cam_view",
         use_camera_obs=use_depth,
@@ -168,7 +168,7 @@ def main(args):
         control_freq=20,
         deterministic_reset=False,
         success_reward=100,
-        initial_pose=np.array([0.038, 0.665, 0.27, 1.0, 0.0, 0.0, 0.0]),
+        initial_pose=np.array([0.038, 0.665, 0.29, 1.0, 0.0, 0.0, 0.0]),
         shape=args.shape,
         shape_type=args.shape_type,
         hole_pos_var=args.hole_pos_var,
@@ -213,7 +213,7 @@ def main(args):
     # initialize device
     from robosuite.devices import Keyboard
 
-    device = Keyboard(env, pos_sensitivity=0.1, rot_sensitivity=0.0)
+    device = Keyboard(env, pos_sensitivity=0.1, rot_sensitivity=1.0)
 
     # Wrap the keyboard on_press to capture initial pose at key press for debugging
     _orig_on_press = device.on_press
