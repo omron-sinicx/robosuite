@@ -625,7 +625,7 @@ class ForwardDynamicsComplianceController(Controller):
 
     @property
     def name(self):
-        return "COMPLIANCE"
+        return "FDCC"
 
     @property
     def input_type(self):
