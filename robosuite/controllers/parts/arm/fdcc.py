@@ -116,8 +116,8 @@ class ForwardDynamicsComplianceController(Controller):
         iterations=1,
         error_scale=1.0,
         stiffness=500,
-    kp=150.0,
-    kd=None,
+        kp=0.1,
+        kd=0.0,
         compliance_mode="fixed",
         policy_freq=20,
         force_limits=(-50.0, 50.0),
@@ -222,11 +222,7 @@ class ForwardDynamicsComplianceController(Controller):
             self.control_dim += 12
 
         self.kp = self.nums2array(kp, 6)
-        # If kd is None, set to 2*sqrt(kp) for critical damping
-        if kd is None:
-            self.kd = 2 * np.sqrt(self.kp) * 1.0  # damping_ratio=1.0
-        else:
-            self.kd = self.nums2array(kd, 6)
+        self.kd = self.nums2array(kd, 6)
         # kp and kd limits
         self.kp_limits = np.array(kp_limits)
         self.kp_min = self.nums2array(kp_limits[0], 6)
@@ -239,11 +235,9 @@ class ForwardDynamicsComplianceController(Controller):
         self.virtual_force_min = self.nums2array(virtual_force_limits[0], 6)
         self.virtual_force_max = self.nums2array(virtual_force_limits[1], 6)
 
+        self.error_scale = error_scale
 
         self.last_err = np.zeros(6)
-
-        # error_scale for scaling the controller output (matches cb-devel default)
-        self.error_scale = 1.0
 
         # limits
         self.position_limits = np.array(position_limits) if position_limits is not None else position_limits
@@ -380,7 +374,6 @@ class ForwardDynamicsComplianceController(Controller):
         period = 0.02
         for i in range(self.iterations):
             net_force, eef_to_base = self.compute_compliance_error()
-            print(f"[FDCC DEBUG] net_force: {net_force}")
 
             # Add virtual force to net force
             net_force += self.virtual_force
@@ -395,28 +388,23 @@ class ForwardDynamicsComplianceController(Controller):
 
             if self.use_kdl:
                 m_simulated_joint_positions = self.kdl_solver.get_joint_control_cmds(period, cartesian_input)
-                print(f"[FDCC DEBUG] m_simulated_joint_positions: {m_simulated_joint_positions}")
                 if self.inner_controller_type == "JOINT_POSITION":
                     # Inner controller expects relative joint positions
                     self.inner_controller.set_goal(m_simulated_joint_positions - self.joint_pos)
                 elif self.inner_controller_type == "OSC_POSE":
                     self.kdl_solver.update_kinematics()
                     m_simulated_pose = self.kdl_solver.get_end_effector_pose()
-                    print(f"[FDCC DEBUG] m_simulated_pose: {m_simulated_pose}")
                     self.inner_controller.set_goal(action=m_simulated_pose)
                 else:
                     raise ValueError(f"Invalid inner controller type: {self.inner_controller_type}")
             else:
                 self.inner_controller.set_goal(action=cartesian_input)
-                print(f"[FDCC DEBUG] set_goal(cartesian_input): {cartesian_input}")
 
         # Always run superclass call for any cleanups at the end
         super().run_controller()
 
         # Always run superclass call to compute actual torques from desired positions
-        joint_cmds = self.inner_controller.run_controller()
-        print(f"[FDCC DEBUG] joint_cmds: {joint_cmds}")
-        return joint_cmds
+        return self.inner_controller.run_controller()
 
     def compute_spatial_controller(self, error, period):
         """
@@ -446,7 +434,7 @@ class ForwardDynamicsComplianceController(Controller):
         control_error = np.clip(control_error, -10.0, 10.0)
 
         # Store the last ERROR for next iteration
-        self.last_err = error
+        self.last_err = np.copy(error)
         return control_error
 
     def compute_motion_error(self):
