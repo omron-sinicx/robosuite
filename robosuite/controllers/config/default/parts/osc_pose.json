@@ -2,8 +2,8 @@
   "type": "OSC_POSE",
   "input_max": 1,
   "input_min": -1,
-  "output_max": 0.0022,
-  "output_min": -0.0022,
+  "output_max": [0.0022,0.0022,0.0022,0.05,0.05,0.05],
+  "output_min": [-0.0022,-0.0022,-0.0022,-0.05,-0.05,-0.05],
   "kp": 500,
   "damping_ratio": 1,
   "impedance_mode": "fixed",
@@ -15,5 +15,7 @@
   "control_delta": true,
   "interpolation": null,
   "ramp_ratio": 0.2,
-  "input_ref_frame": "world"
+  "input_ref_frame": "world",
+  "default_orientation": [0, 0, 0, 1],
+  "ft_buffer_size": 25
 }
