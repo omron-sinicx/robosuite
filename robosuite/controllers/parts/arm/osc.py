@@ -282,13 +282,13 @@ class OperationalSpaceController(Controller):
             scaled_delta = self.scale_action(delta)
             print(f"scaled_delta: {scaled_delta}")
             self.goal_pos = self.compute_goal_pos(scaled_delta[0:3])
-            # if self.default_orientation is not None:
-            #     ori_error = orientation_error(self.default_orientation, self.ref_ori_mat)
-            #     if self.control_dim == 3:
-            #         scaled_delta = np.concatenate([scaled_delta, np.zeros(3)])
-            #         scaled_delta[3:6] = self.scale_action(scaled_delta[3:6])
-            #     else:
-            #         scaled_delta = self.scale_action(np.concatenate([delta[:3], ori_error]))
+            if self.default_orientation is not None:
+                ori_error = orientation_error(self.default_orientation, self.ref_ori_mat)
+                if self.control_dim == 3:
+                    scaled_delta = np.concatenate([scaled_delta, np.zeros(3)])
+                    scaled_delta[3:6] = self.scale_action(scaled_delta[3:6])
+                else:
+                    scaled_delta = self.scale_action(np.concatenate([delta[:3], ori_error]))
             self.goal_ori = self.compute_goal_ori(scaled_delta[3:6])
         # Else, interpret actions as absolute values
         elif self.input_type == "absolute":
