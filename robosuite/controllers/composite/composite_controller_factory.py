@@ -34,8 +34,7 @@ def is_part_controller_config(config: Dict):
     PART_CONTROLLER_TYPES = [
         "JOINT_VELOCITY", "JOINT_TORQUE", "JOINT_POSITION", 
         "OSC_POSITION", "OSC_POSE", "IK_POSE",
-        'OSC_POSITION_CB',
-        "COMPLIANCE", "FDCC"
+        "FDCC"
     ]
     if "body_parts" not in config and "type" in config:
         return config["type"] in PART_CONTROLLER_TYPES
