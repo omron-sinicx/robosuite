@@ -168,7 +168,7 @@ def main(args):
         control_freq=20,
         deterministic_reset=False,
         success_reward=100,
-        initial_pose=np.array([0.038, 0.665, 0.27, 1.0, 0.0, 0.0, 0.0]),
+        initial_pose=np.array([0.038, 0.665, 0.29, 1.0, 0.0, 0.0, 0.0]),
         shape=args.shape,
         shape_type=args.shape_type,
         hole_pos_var=args.hole_pos_var,

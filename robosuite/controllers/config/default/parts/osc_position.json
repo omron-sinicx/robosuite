@@ -13,6 +13,6 @@
   "control_delta": true,
   "interpolation": null,
   "ramp_ratio": 0.2,
-  "gripper_body_name": "right_gripper",
-  "ft_buffer_size": 25
+  "ft_buffer_size": 25,
+  "default_orientation": [0, 0, 0, 1]
 }
