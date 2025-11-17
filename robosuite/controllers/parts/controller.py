@@ -441,6 +441,39 @@ class Controller(object, metaclass=abc.ABCMeta):
         """
         return self.input_min, self.input_max
 
+
+    def pose_in_base_from_name(self, name):
+        """
+        A helper function that takes in a named data field and returns the pose
+        of that object in the base frame.
+
+        Args:
+            name (str): Name of body in sim to grab pose
+
+        Returns:
+            np.array: (4,4) array corresponding to the pose of @name in the base frame
+        """
+        import robosuite.utils.transform_utils as T
+        pos_in_world = self.sim.data.get_body_xpos(name)
+        rot_in_world = self.sim.data.get_body_xmat(name).reshape((3, 3))
+        pose_in_world = T.make_pose(pos_in_world, rot_in_world)
+
+        # Try to get the base body name from the robot model if available, else fallback to naming_prefix+"base"
+        base_body_name = None
+        if hasattr(self, 'robot_model') and hasattr(self.robot_model, 'root_body'):
+            base_body_name = self.robot_model.root_body
+        elif hasattr(self, 'naming_prefix') and self.naming_prefix is not None:
+            base_body_name = f"{self.naming_prefix}base"
+        else:
+            base_body_name = "base"
+
+        base_pos_in_world = self.sim.data.get_body_xpos(base_body_name)
+        base_rot_in_world = self.sim.data.get_body_xmat(base_body_name).reshape((3, 3))
+        base_pose_in_world = T.make_pose(base_pos_in_world, base_rot_in_world)
+        world_pose_in_base = T.pose_inv(base_pose_in_world)
+        pose_in_base = T.pose_in_A_to_pose_in_B(pose_in_world, world_pose_in_base)
+        return pose_in_base
+
     @property
     def name(self):
         """
