@@ -3,11 +3,13 @@ from typing import Dict, List, Optional  # for abstract base class definitions
 
 import numpy as np
 
+
 import robosuite.utils.transform_utils as T
 from robosuite.controllers.parts.arm.osc import OperationalSpaceController
 from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
 from robosuite.controllers.parts.arm.compliance import ComplianceController
 from robosuite.controllers.parts.arm.osc_cb import OperationalSpaceControllerCB
+from robosuite.controllers.parts.generic.joint_pos import JointPositionController
 
 class Device(metaclass=abc.ABCMeta):
     """
@@ -197,18 +199,18 @@ class Device(metaclass=abc.ABCMeta):
             "target",
         ]  # update next target either based on achieved pose or current target pose
 
-        # TODO: the logic between OSC and while body based ik is fragmented right now. Unify
-        if isinstance(robot.part_controllers[arm], OperationalSpaceController):
+        # Unified handling for OSC, FDCC, Compliance controllers
+        from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
+        from robosuite.controllers.parts.arm.compliance import ComplianceController
+        from robosuite.controllers.parts.arm.osc_cb import OperationalSpaceControllerCB
+        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, OperationalSpaceControllerCB, ForwardDynamicsComplianceController, ComplianceController)):
             arm_controller = robot.part_controllers[arm]
-            # Always pass only the first 3 elements for OSC_POSITION
-            if hasattr(arm_controller, 'name') and arm_controller.name == 'OSC_POSITION' and norm_delta.shape[0] >= 3:
-                norm_delta = norm_delta[:3]
-            delta_action = arm_controller.scale_action(norm_delta.copy())
-            abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None)
-            return {
-                "delta": norm_delta,
-                "abs": abs_action,
-            }
+            # If controller expects 3D (position only), use first three elements
+            if hasattr(arm_controller, 'input_min'):
+                input_min = np.array(getattr(arm_controller, 'input_min'))
+                if input_min.shape == (3,) and norm_delta.shape[0] >= 3:
+                    norm_delta = norm_delta[:3]
+            return get_arm_action_simple(robot, arm, norm_delta)
         elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK"]:
             ref_frame = self.env.robots[0].composite_controller.composite_controller_specific_config.get(
                 "ik_input_ref_frame", "world"
