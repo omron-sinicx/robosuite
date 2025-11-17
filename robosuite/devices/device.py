@@ -116,10 +116,7 @@ class Device(metaclass=abc.ABCMeta):
         controller = robot.part_controllers[active_arm]
         gripper_dof = robot.gripper[active_arm].dof
 
-        # FDCC and COMPLIANCE controllers use the same 6D pose delta format as OSC_POSE
-        # They just add force/torque dimensions which default to zero from keyboard input
-        assert controller.name in ["OSC_POSITION", "OSC_POSITION_CB", "JOINT_POSITION", "FDCC", "COMPLIANCE"], \
-            f"only supporting OSC_POSE, FDCC, COMPLIANCE and JOINT_POSITION for now, got {controller.name}"
+        assert controller.name in ["OSC_POSE", "OSC_POSITION", "JOINT_POSITION"], "only supporting OSC_POSE and JOINT_POSITION for now"
 
         # process raw device inputs
         drotation = raw_drotation[[1, 0, 2]]
@@ -200,13 +197,19 @@ class Device(metaclass=abc.ABCMeta):
             "target",
         ]  # update next target either based on achieved pose or current target pose
 
-        from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController
-        from robosuite.controllers.parts.arm.compliance import ComplianceController
-        
-        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, OperationalSpaceControllerCB, 
-                                                     ForwardDynamicsComplianceController, ComplianceController)):
-            return get_arm_action_simple(robot, arm, norm_delta)
-        elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK", "HYBRID_WHOLE_BODY_MINK_IK"]:
+        # TODO: the logic between OSC and while body based ik is fragmented right now. Unify
+        if isinstance(robot.part_controllers[arm], OperationalSpaceController):
+            arm_controller = robot.part_controllers[arm]
+            # Always pass only the first 3 elements for OSC_POSITION
+            if hasattr(arm_controller, 'name') and arm_controller.name == 'OSC_POSITION' and norm_delta.shape[0] >= 3:
+                norm_delta = norm_delta[:3]
+            delta_action = arm_controller.scale_action(norm_delta.copy())
+            abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None)
+            return {
+                "delta": norm_delta,
+                "abs": abs_action,
+            }
+        elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK"]:
             ref_frame = self.env.robots[0].composite_controller.composite_controller_specific_config.get(
                 "ik_input_ref_frame", "world"
             )

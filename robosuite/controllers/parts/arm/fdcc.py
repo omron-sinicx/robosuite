@@ -143,20 +143,22 @@ class ForwardDynamicsComplianceController(Controller):
         self.use_kdl = use_kdl
         self.iterations = iterations
         self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)
+        # Initialize force/torque buffers as in cb-dev branch
+        from robosuite.utils.buffers import RingBuffer
+        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
+        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
         self.frame_of_reference = frame_of_reference
         self.selection_matrix = selection_matrix
         self.virtual_force = np.zeros(6)
 
         super().__init__(
             sim,
-            ref_name=ref_name,
             joint_indexes=joint_indexes,
             actuator_range=actuator_range,
-            lite_physics=lite_physics,
+            ref_name=ref_name,
             part_name=kwargs.get("part_name", None),
             naming_prefix=kwargs.get("naming_prefix", None),
-            ft_buffer_size=ft_buffer_size,
-            gripper_body_name=gripper_body_name,
+            lite_physics=lite_physics,
         )
 
         # Instantiate the inner position/velocity controller
