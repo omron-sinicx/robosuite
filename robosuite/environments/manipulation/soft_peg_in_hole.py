@@ -8,6 +8,7 @@ import numpy as np
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import TableArena
 from robosuite.models.tasks import ManipulationTask
+from robosuite.controllers.parts.arm import fdcc, osc
 from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.observables import Observable, create_gaussian_noise_corrupter, create_uniform_sampled_delayer
 from robosuite.utils.placement_samplers import CurriculumUniformRandomSampler
@@ -87,6 +88,7 @@ class SoftPegInHole(ManipulationEnv):
         obs_pose_scale=1.0,
         obs_force_scale=1.0,
         obs_torque_scale=1.0,
+        translation_control_only=True,
         peg_and_hole_color=None,
     ):
         self.gripper_inertial_properties = None
@@ -118,8 +120,12 @@ class SoftPegInHole(ManipulationEnv):
         self.initial_pos = initial_pose[:3]
         self.initial_quat = initial_pose[3:]
         self.initial_rot = quat2mat(self.initial_quat)
+
         # Set default orientation for controller
-        controller_configs['body_parts']['right']['default_orientation'] = self.initial_rot
+        if translation_control_only:
+            controller_configs['body_parts']['right']['default_orientation'] = self.initial_rot
+        else:
+            controller_configs['body_parts']['right']['default_orientation'] = None
 
         # goal settings
         INSERT_Z_OFFSET = -0.035
@@ -874,6 +880,10 @@ class SoftPegInHole(ManipulationEnv):
         self.total_rewards = 0.0
 
         controller = self.robots[0].composite_controller.part_controllers['right']
+        if isinstance(controller, osc.OperationalSpaceController):
+            pass
+        elif isinstance(controller, fdcc.ForwardDynamicsComplianceController):
+            controller = controller.inner_controller
         controller.kp = np.ones(6) * 10.0 ** np.random.uniform(4.0, 4.5)
         controller.kd = np.sqrt(controller.kp) * np.random.uniform(0.5, 1.5)
 

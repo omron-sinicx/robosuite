@@ -188,6 +188,7 @@ def main(args):
             hole_default=[0.5, 0.5, 0.5],
             interp=0.2,
         ),
+        translation_control_only=False,
         # force_termination_threshold=None,
         render_camera=None,
         renderer='mjviewer',

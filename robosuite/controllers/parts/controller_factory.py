@@ -132,10 +132,7 @@ def arm_controller_factory(name, params):
         return arm_controllers.ComplianceController(interpolator_pos=interpolator, **params)
 
     if name == "FDCC":
-        # Remove ft_buffer_size if present, since FDCC does not accept it
-        fdcc_params = dict(params)
-        fdcc_params.pop("ft_buffer_size", None)
-        return arm_controllers.ForwardDynamicsComplianceController(interpolator_pos=interpolator, **fdcc_params)
+        return arm_controllers.ForwardDynamicsComplianceController(interpolator_pos=interpolator, **params)
 
     if name == "IK_POSE":
         ori_interpolator = None

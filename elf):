@@ -1,0 +1,60 @@
+[1mdiff --git a/robosuite/controllers/parts/arm/c b/robosuite/controllers/parts/arm/c[m
+[1mnew file mode 100644[m
+[1mindex 00000000..e69de29b[m
+[1mdiff --git a/robosuite/controllers/parts/arm/fdcc.py b/robosuite/controllers/parts/arm/fdcc.py[m
+[1mindex a96a5d20..75e513f4 100644[m
+[1m--- a/robosuite/controllers/parts/arm/fdcc.py[m
+[1m+++ b/robosuite/controllers/parts/arm/fdcc.py[m
+[36m@@ -145,6 +145,10 @@[m [mclass ForwardDynamicsComplianceController(Controller):[m
+         self.use_kdl = use_kdl[m
+         self.iterations = iterations[m
+         self.ft_prefix = ref_name.split('_')[0] + '_' + kwargs.get("part_name", None)[m
+[32m+[m[32m        # Initialize force/torque buffers as in cb-dev branch[m
+[32m+[m[32m        from robosuite.utils.buffers import RingBuffer[m
+[32m+[m[32m        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)[m
+[32m+[m[32m        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)[m
+         self.frame_of_reference = frame_of_reference[m
+         self.selection_matrix = selection_matrix[m
+         self.virtual_force = np.zeros(6)[m
+[36m@@ -153,14 +157,12 @@[m [mclass ForwardDynamicsComplianceController(Controller):[m
+ [m
+         super().__init__([m
+             sim,[m
+[31m-            ref_name=ref_name,[m
+             joint_indexes=joint_indexes,[m
+             actuator_range=actuator_range,[m
+[31m-            lite_physics=lite_physics,[m
+[32m+[m[32m            ref_name=ref_name,[m
+             part_name=kwargs.get("part_name", None),[m
+             naming_prefix=kwargs.get("naming_prefix", None),[m
+[31m-            ft_buffer_size=ft_buffer_size,[m
+[31m-            gripper_body_name=gripper_body_name,[m
+[32m+[m[32m            lite_physics=lite_physics,[m
+         )[m
+ [m
+         # Instantiate the inner position/velocity controller[m
+[36m@@ -626,7 +628,7 @@[m [mclass ForwardDynamicsComplianceController(Controller):[m
+ [m
+     @property[m
+     def name(self):[m
+[31m-        return "COMPLIANCE"[m
+[32m+[m[32m        return "FDCC"[m
+ [m
+     @property[m
+     def input_type(self):[m
+[1mdiff --git a/robosuite/controllers/parts/controller_factory.py b/robosuite/controllers/parts/controller_factory.py[m
+[1mindex a3ccd86c..e935c374 100644[m
+[1m--- a/robosuite/controllers/parts/controller_factory.py[m
+[1m+++ b/robosuite/controllers/parts/controller_factory.py[m
+[36m@@ -132,7 +132,10 @@[m [mdef arm_controller_factory(name, params):[m
+         return arm_controllers.ComplianceController(interpolator_pos=interpolator, **params)[m
+ [m
+     if name == "FDCC":[m
+[31m-        return arm_controllers.ForwardDynamicsComplianceController(interpolator_pos=interpolator, **params)[m
+[32m+[m[32m        # Remove ft_buffer_size if present, since FDCC does not accept it[m
+[32m+[m[32m        fdcc_params = dict(params)[m
+[32m+[m[32m        fdcc_params.pop("ft_buffer_size", None)[m
+[32m+[m[32m        return arm_controllers.ForwardDynamicsComplianceController(interpolator_pos=interpolator, **fdcc_params)[m
+ [m
+     if name == "IK_POSE":[m
+         ori_interpolator = None[m

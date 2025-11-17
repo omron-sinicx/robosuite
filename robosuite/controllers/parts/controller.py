@@ -5,6 +5,10 @@ import mujoco
 import numpy as np
 
 import robosuite.macros as macros
+from robosuite.utils.binding_utils import MjSim
+from robosuite.utils.sim_utils import compensate_ft_reading
+import robosuite.utils.transform_utils as T
+from robosuite.utils.buffers import RingBuffer
 
 
 class Controller(object, metaclass=abc.ABCMeta):
@@ -41,7 +45,17 @@ class Controller(object, metaclass=abc.ABCMeta):
         part_name=None,
         naming_prefix=None,
         lite_physics=True,
+        ft_buffer_size=10,
+        gripper_body_name=None,
     ):
+        self.ft_prefix = ref_name.split('_')[0] + '_' + part_name
+        self.enable_wrench = True if ft_buffer_size > 0 else False
+        self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
+        self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
+        self.wrench_in_world_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
+        self.gripper_inertial_properties = None
+        if gripper_body_name:
+            self.gripper_inertial_properties = sim.get_body_inertial_properties(f"{self.ft_prefix}_{gripper_body_name}")
 
         # Actuator range
         self.actuator_min = actuator_range[0]
@@ -60,7 +74,7 @@ class Controller(object, metaclass=abc.ABCMeta):
         self.input_max = None
 
         # mujoco simulator state
-        self.sim = sim
+        self.sim: MjSim = sim
         self.model_timestep = macros.SIMULATION_TIMESTEP
         self.lite_physics = lite_physics
         self.ref_name = ref_name
@@ -231,6 +245,52 @@ class Controller(object, metaclass=abc.ABCMeta):
             # Clear self.new_update
             self.new_update = False
 
+            if self.enable_wrench:
+                self.transform_wrench_to_base_frame()
+
+    def transform_wrench_to_base_frame(self):
+        # Compute force/torque
+        # get sensor f/t measurements from gripper site, transform to world frame
+        gripper_in_robot_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")
+        world_pose = T.make_pose(self.ref_pos, self.ref_ori_mat)
+
+        wrench_force = self.get_wrench()
+        if self.gripper_inertial_properties:
+            wrench_force = compensate_ft_reading(wrench_force[:3], wrench_force[3:],
+                                                 self.gripper_inertial_properties['mass'],
+                                                 self.gripper_inertial_properties['local_com'],
+                                                 self.gripper_inertial_properties['world_rot_mat'],
+                                                 self.sim.model._model.opt.gravity)
+        world_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], world_pose)
+        base_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], gripper_in_robot_base)
+
+        self.wrench_in_base_frame_buf.push(np.concatenate(base_wrench_force).flat)
+        self.wrench_in_world_frame_buf.push(np.concatenate(world_wrench_force).flat)
+        self.wrench_in_eef_frame_buf.push(wrench_force)
+
+    def get_wrench(self):
+        return np.concatenate([
+            self.get_sensor_measurement(f"{self.ft_prefix}_force_ee"),
+            self.get_sensor_measurement(f"{self.ft_prefix}_torque_ee"),
+        ])
+
+    def get_sensor_measurement(self, sensor_name):
+        """
+        Grabs relevant sensor data from the sim object
+
+        Args:
+            sensor_name (str): name of the sensor
+
+        Returns:
+            np.array: sensor values
+        """
+        sensor_idx = np.sum(
+            self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
+        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(
+            sensor_name)]
+
+        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
+
     def update_origin(self, origin_pos, origin_ori):
         """
         Optional function to implement in subclass controllers that will take in @origin_pos and @origin_ori and update
@@ -278,6 +338,51 @@ class Controller(object, metaclass=abc.ABCMeta):
         Resets the goal -- usually by setting to the goal to all zeros, but in some cases may be different (e.g.: OSC)
         """
         raise NotImplementedError
+
+    def pose_in_base_from_name(self, name):
+        """
+        A helper function that takes in a named data field and returns the pose
+        of that object in the base frame.
+
+        Args:
+            name (str): Name of body in sim to grab pose
+
+        Returns:
+            np.array: (4,4) array corresponding to the pose of @name in the base frame
+        """
+
+        pos_in_world = self.sim.data.get_body_xpos(name)
+        rot_in_world = self.sim.data.get_body_xmat(name).reshape((3, 3))
+        pose_in_world = T.make_pose(pos_in_world, rot_in_world)
+
+        base_pos_in_world = self.sim.data.get_body_xpos(f"{self.naming_prefix}base")
+        base_rot_in_world = self.sim.data.get_body_xmat(f"{self.naming_prefix}base").reshape((3, 3))
+        base_pose_in_world = T.make_pose(base_pos_in_world, base_rot_in_world)
+        world_pose_in_base = T.pose_inv(base_pose_in_world)
+
+        pose_in_base = T.pose_in_A_to_pose_in_B(pose_in_world, world_pose_in_base)
+        return pose_in_base
+
+    def world_to_origin_frame(self, vec):
+        """
+        transform vector from world to reference coordinate frame
+        """
+
+        # world rotation matrix is just identity
+        world_frame = np.eye(4)
+        world_frame[:3, 3] = vec
+
+        origin_frame = T.make_pose(self.origin_pos, self.origin_ori)
+        origin_frame_inv = T.pose_inv(origin_frame)
+        vec_origin_pose = T.pose_in_A_to_pose_in_B(world_frame, origin_frame_inv)
+        vec_origin_pos, _ = T.mat2pose(vec_origin_pose)
+        return vec_origin_pos
+
+    def goal_origin_to_eef_pose(self):
+        origin_pose = T.make_pose(self.origin_pos, self.origin_ori)
+        ee_pose = T.make_pose(self.fixed_ref_pos, self.fixed_ref_ori)
+        origin_pose_inv = T.pose_inv(origin_pose)
+        return T.pose_in_A_to_pose_in_B(ee_pose, origin_pose_inv)
 
     @staticmethod
     def nums2array(nums, dim):
@@ -345,3 +450,15 @@ class Controller(object, metaclass=abc.ABCMeta):
             str: controller name
         """
         raise NotImplementedError
+
+    @property
+    def eef_wrench(self):
+        return self.wrench_in_eef_frame_buf.average
+
+    @property
+    def base_wrench(self):
+        return self.wrench_in_base_frame_buf.average
+
+    @property
+    def world_wrench(self):
+        return self.wrench_in_world_frame_buf.average
