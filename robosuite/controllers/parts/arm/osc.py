@@ -3,9 +3,10 @@ import math
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-import robosuite.utils.transform_utils as T
+from robosuite.environments.base import MjSim
 from robosuite.controllers.parts.controller import Controller
 from robosuite.utils.control_utils import *
+import robosuite.utils.transform_utils as T
 
 # Supported impedance modes
 IMPEDANCE_MODES = {"fixed", "variable", "variable_kp"}
@@ -113,7 +114,7 @@ class OperationalSpaceController(Controller):
 
     def __init__(
         self,
-        sim,
+        sim: MjSim,
         ref_name,
         joint_indexes,
         actuator_range,
@@ -136,9 +137,9 @@ class OperationalSpaceController(Controller):
         input_ref_frame="base",
         uncouple_pos_ori=True,
         lite_physics=True,
-        ft_buffer_size=10,
-        gripper_body_name=None,
-        **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
+        ft_buffer_size=25,
+        gripper_body_name="gripper_base",
+        ** kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
 
         super().__init__(
@@ -152,6 +153,7 @@ class OperationalSpaceController(Controller):
             ft_buffer_size=ft_buffer_size,
             gripper_body_name=gripper_body_name,
         )
+
         # Determine whether this is pos ori or just pos
         self.use_ori = control_ori
         # Determine whether we want to use delta or absolute values as inputs
@@ -286,21 +288,6 @@ class OperationalSpaceController(Controller):
                 orientation_error(self.goal_ori, self.ori_ref)
             )  # goal is the total orientation error
             self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
-
-    def world_to_origin_frame(self, vec):
-        """
-        transform vector from world to reference coordinate frame
-        """
-
-        # world rotation matrix is just identity
-        world_frame = np.eye(4)
-        world_frame[:3, 3] = vec
-
-        origin_frame = T.make_pose(self.origin_pos, self.origin_ori)
-        origin_frame_inv = T.pose_inv(origin_frame)
-        vec_origin_pose = T.pose_in_A_to_pose_in_B(world_frame, origin_frame_inv)
-        vec_origin_pos, _ = T.mat2pose(vec_origin_pose)
-        return vec_origin_pos
 
     def goal_origin_to_eef_pose(self):
         origin_pose = T.make_pose(self.origin_pos, self.origin_ori)
@@ -549,6 +536,9 @@ class OperationalSpaceController(Controller):
             )  # goal is the total orientation error
             self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
 
+        self.wrench_in_eef_frame_buf.clear()
+        self.wrench_in_base_frame_buf.clear()
+
     @property
     def control_limits(self):
         """
@@ -575,7 +565,7 @@ class OperationalSpaceController(Controller):
             low, high = self.input_min, self.input_max
         return low, high
 
-    def delta_to_abs_action(self, delta_ac, goal_update_mode):
+    def delta_to_abs_action(self, delta_ac, goal_update_mode=None):
         """
         helper function that converts delta action into absolute action
         """
