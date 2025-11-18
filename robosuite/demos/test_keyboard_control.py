@@ -131,7 +131,7 @@ def main(args):
         'cam_view_segmentation_class',
     ]
     if args.use_peg_bps:
-        print(f'[WARNING] peg bps is not supported, show the peg_pcd instead')
+        # print(f'[WARNING] peg bps is not supported, show the peg_pcd instead')
         # obs_keys.append('peg_bps_gt-state')
         obs_keys.append('peg_pcd-state')
     if args.shape_emb_src is not None:
@@ -245,7 +245,7 @@ def main(args):
         device._debug_initial_pose = (init_pos, init_quat)
         device._debug_last_key = key
         # Immediate print at key press
-        print(f"[KB DEBUG] press key={_key_to_str(key)} init_pos={init_pos} init_quat={init_quat}", flush=True)
+    # print(f"[KB DEBUG] press key={_key_to_str(key)} init_pos={init_pos} init_quat={init_quat}", flush=True)
         # Delegate to original handler
         _orig_on_press(key)
 
@@ -260,9 +260,10 @@ def main(args):
         from pynput.keyboard import Listener
         device.listener = Listener(on_press=_debug_on_press, on_release=device.on_release)
         device.listener.start()
-        print("[KB DEBUG] Rewired keyboard listener with debug on_press handler", flush=True)
+        # print("[KB DEBUG] Rewired keyboard listener with debug on_press handler", flush=True)
     except Exception as e:
-        print(f"[KB DEBUG] Failed to rewire listener: {e}", flush=True)
+        # print(f"[KB DEBUG] Failed to rewire listener: {e}", flush=True)
+        pass
 
     device.start_control()
 
@@ -352,8 +353,8 @@ def main(args):
             if init_pos is not None and final_pos is not None:
                 delta_pos = final_pos - init_pos
 
-            print(f"[KB DEBUG] step key={_key_to_str(device._debug_last_key)} final_pos={final_pos} delta_pos={delta_pos}", flush=True)
-            print(f"             final_quat={final_quat}", flush=True)
+            # print(f"[KB DEBUG] step key={_key_to_str(device._debug_last_key)} final_pos={final_pos} delta_pos={delta_pos}", flush=True)
+            # print(f"             final_quat={final_quat}", flush=True)
 
             # reset debug flags
             device._debug_last_key = None
