@@ -386,6 +386,11 @@ class ForwardDynamicsComplianceController(Controller):
 
             cartesian_input *= self.error_scale   # scale the entire error here
 
+            # Debug prints for force/torque tracking
+            print("[FDCC DEBUG] desired_force_torque:", self.desired_force_torque)
+            print("[FDCC DEBUG] eef_wrench:", getattr(self, 'eef_wrench', None))
+            print("[FDCC DEBUG] force_error:", self.compute_force_error())
+
             if self.use_kdl:
                 m_simulated_joint_positions = self.kdl_solver.get_joint_control_cmds(period, cartesian_input)
                 if self.inner_controller_type == "JOINT_POSITION":
@@ -552,23 +557,17 @@ class ForwardDynamicsComplianceController(Controller):
         Resets the goal to the current state of the robot
         """
         self.inner_controller.reset_goal()
-
         self.goal_ori = np.array(self.ref_ori_mat)
         self.goal_pos = np.array(self.ref_pos)
-
         self.virtual_force = np.zeros(6)
-
-        # Also reset interpolators if required
-
         if self.interpolator_pos is not None:
             self.interpolator_pos.set_goal(self.goal_pos)
-
         if self.interpolator_ori is not None:
-            self.ori_ref = np.array(self.ref_ori_mat)  # reference is the current orientation at start
+            self.ori_ref = np.array(self.ref_ori_mat)
             self.interpolator_ori.set_goal(
                 orientation_error(self.goal_ori, self.ori_ref)
-            )  # goal is the total orientation error
-            self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
+            )
+            self.relative_ori = np.zeros(3)
 
     def delta_to_abs_action(self, delta_ac, goal_update_mode=None):
         """
