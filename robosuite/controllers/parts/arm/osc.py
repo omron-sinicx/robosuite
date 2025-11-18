@@ -221,6 +221,7 @@ class OperationalSpaceController(Controller):
         # initialize orientation references
         self.relative_ori = np.zeros(3)
         self.ori_ref = None
+        self.fixed_goal_ori = None
 
         # initialize origin pos and ori
         self.origin_pos = None
@@ -264,7 +265,7 @@ class OperationalSpaceController(Controller):
             if self.use_ori is True:
                 self.goal_ori = self.compute_goal_ori(scaled_delta[3:6])
             else:
-                self.goal_ori = self.compute_goal_ori(np.zeros(3))
+                self.goal_ori = self.fixed_goal_ori
         # Else, interpret actions as absolute values
         elif self.input_type == "absolute":
             abs_action = goal_update
@@ -272,7 +273,7 @@ class OperationalSpaceController(Controller):
             if self.use_ori is True:
                 self.goal_ori = Rotation.from_rotvec(abs_action[3:6]).as_matrix()
             else:
-                self.goal_ori = self.compute_goal_ori(np.zeros(3))
+                self.goal_ori = self.fixed_goal_ori
         else:
             raise ValueError(f"Unsupport input_type {self.input_type}")
 
@@ -531,6 +532,7 @@ class OperationalSpaceController(Controller):
         """
         self.goal_ori = np.array(self.ref_ori_mat)
         self.goal_pos = np.array(self.ref_pos)
+        self.fixed_goal_ori = np.array(self.ref_ori_mat)
 
         assert goal_update_mode in ["achieved", "desired"]
         self._goal_update_mode = goal_update_mode
@@ -577,10 +579,14 @@ class OperationalSpaceController(Controller):
         """
         helper function that converts delta action into absolute action
         """
+        assert len(delta_ac) == 6 if self.use_ori else 3, f"Delta action must be 6D or 3D, got: {len(delta_ac)}"
         abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
-        abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
-        abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
-        abs_action = np.concatenate([abs_pos, abs_rot])
+        if self.use_ori:
+            abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
+            abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
+            abs_action = np.concatenate([abs_pos, abs_rot])
+        else:
+            abs_action = abs_pos
         return abs_action
 
     @property
