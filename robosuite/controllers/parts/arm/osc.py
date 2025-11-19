@@ -137,12 +137,10 @@ class OperationalSpaceController(Controller):
         input_ref_frame="base",
         uncouple_pos_ori=True,
         lite_physics=True,
-        default_orientation=None,
         ft_buffer_size=25,
         gripper_body_name="gripper_base",
         ** kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
     ):
-        self.default_orientation = default_orientation
 
         super().__init__(
             sim,
@@ -155,9 +153,6 @@ class OperationalSpaceController(Controller):
             ft_buffer_size=ft_buffer_size,
             gripper_body_name=gripper_body_name,
         )
-
-        self.fixed_ref_pos = self.ref_pos.copy()
-        self.fixed_ref_ori = self.ref_ori_mat.copy()
 
         # Determine whether this is pos ori or just pos
         self.use_ori = control_ori
@@ -228,6 +223,7 @@ class OperationalSpaceController(Controller):
         # initialize orientation references
         self.relative_ori = np.zeros(3)
         self.ori_ref = None
+        self.fixed_goal_ori = None
 
         # initialize origin pos and ori
         self.origin_pos = None
@@ -263,31 +259,27 @@ class OperationalSpaceController(Controller):
         else:  # This is case "fixed"
             delta = action
 
-        # If we're not moving, don't update the goal
-        if np.abs(delta).sum() < 1e-6:
+        if np.allclose(delta, np.zeros_like(delta)):
             return
 
         # If we're using deltas, interpret actions as such
         if self.input_type == "delta":
             scaled_delta = self.scale_action(delta)
             self.goal_pos = self.compute_goal_pos(scaled_delta[0:3])
-            if self.default_orientation is not None:
-                ori_error = orientation_error(self.default_orientation, self.ref_ori_mat)
-                if self.control_dim == 3:
-                    scaled_delta = np.concatenate([scaled_delta, np.zeros(3)])
-                    scaled_delta[3:6] = self.scale_action(scaled_delta[3:6])
-                else:
-                    scaled_delta = self.scale_action(np.concatenate([delta[:3], ori_error]))
-            self.goal_ori = self.compute_goal_ori(scaled_delta[3:6])
+            if self.use_ori is True:
+                self.goal_ori = self.compute_goal_ori(scaled_delta[3:6])
+            else:
+                self.goal_ori = self.fixed_goal_ori
         # Else, interpret actions as absolute values
         elif self.input_type == "absolute":
-            self.goal_pos = action[0:3]
-            self.goal_ori = Rotation.from_rotvec(action[3:6]).as_matrix()
+            abs_action = delta
+            self.goal_pos = abs_action[0:3]
+            if self.use_ori is True:
+                self.goal_ori = Rotation.from_rotvec(abs_action[3:6]).as_matrix()
+            else:
+                self.goal_ori = self.fixed_goal_ori
         else:
             raise ValueError(f"Unsupport input_type {self.input_type}")
-
-        self.fixed_ref_pos = self.goal_pos
-        self.fixed_ref_ori = self.goal_ori
 
         if self.interpolator_pos is not None:
             self.interpolator_pos.set_goal(self.goal_pos)
@@ -301,7 +293,7 @@ class OperationalSpaceController(Controller):
 
     def goal_origin_to_eef_pose(self):
         origin_pose = T.make_pose(self.origin_pos, self.origin_ori)
-        ee_pose = T.make_pose(self.fixed_ref_pos, self.fixed_ref_ori)
+        ee_pose = T.make_pose(self.ref_pos, self.ref_ori_mat)
         origin_pose_inv = T.pose_inv(origin_pose)
         return T.pose_in_A_to_pose_in_B(ee_pose, origin_pose_inv)
 
@@ -326,9 +318,9 @@ class OperationalSpaceController(Controller):
         if self.goal_pos is None:
             # if goal is not already set, set it to current position (in controller ref frame)
             if self.input_ref_frame == "base":
-                self.goal_pos = self.world_to_origin_frame(self.fixed_ref_pos)
+                self.goal_pos = self.world_to_origin_frame(self.ref_pos)
             elif self.input_ref_frame == "world":
-                self.goal_pos = self.fixed_ref_pos
+                self.goal_pos = self.ref_pos
             else:
                 raise ValueError
 
@@ -338,9 +330,9 @@ class OperationalSpaceController(Controller):
         elif goal_update_mode == "achieved":
             # update new goal wrt current achieved position
             if self.input_ref_frame == "base":
-                goal_pos = self.world_to_origin_frame(self.fixed_ref_pos) + delta
+                goal_pos = self.world_to_origin_frame(self.ref_pos) + delta
             elif self.input_ref_frame == "world":
-                goal_pos = self.fixed_ref_pos + delta
+                goal_pos = self.ref_pos + delta
             else:
                 raise ValueError
 
@@ -389,7 +381,7 @@ class OperationalSpaceController(Controller):
             if self.input_ref_frame == "base":
                 curr_goal_ori = self.goal_origin_to_eef_pose()[:3, :3]
             elif self.input_ref_frame == "world":
-                curr_goal_ori = self.fixed_ref_ori
+                curr_goal_ori = self.ref_ori_mat
             else:
                 raise ValueError
             goal_ori = np.dot(rotation_mat_error, curr_goal_ori)
@@ -529,6 +521,7 @@ class OperationalSpaceController(Controller):
         """
         self.goal_ori = np.array(self.ref_ori_mat)
         self.goal_pos = np.array(self.ref_pos)
+        self.fixed_goal_ori = np.array(self.ref_ori_mat)
 
         assert goal_update_mode in ["achieved", "desired"]
         self._goal_update_mode = goal_update_mode
@@ -578,20 +571,16 @@ class OperationalSpaceController(Controller):
         """
         helper function that converts delta action into absolute action
         """
+        assert len(delta_ac) == 6 if self.use_ori else 3, f"Delta action must be 6D or 3D, got: {len(delta_ac)}"
         abs_pos = self.compute_goal_pos(delta_ac[0:3], goal_update_mode=goal_update_mode)
-        abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
-        abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
-        abs_action = np.concatenate([abs_pos, abs_rot])
+        if self.use_ori:
+            abs_ori = self.compute_goal_ori(delta_ac[3:6], goal_update_mode=goal_update_mode)
+            abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
+            abs_action = np.concatenate([abs_pos, abs_rot])
+        else:
+            abs_action = abs_pos
         return abs_action
 
     @property
     def name(self):
         return "OSC_" + self.name_suffix
-
-    @property
-    def current_wrench(self):
-        return self.wrench_in_base_frame_buf.average
-
-    @property
-    def eef_wrench(self):
-        return self.wrench_in_eef_frame_buf.average

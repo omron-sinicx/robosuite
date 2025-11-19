@@ -214,7 +214,7 @@ def main(args):
     # initialize device
     from robosuite.devices import Keyboard
 
-    device = Keyboard(env, pos_sensitivity=0.1, rot_sensitivity=1.0)
+    device = Keyboard(env, pos_sensitivity=1.0, rot_sensitivity=1.0)
 
     # Wrap the keyboard on_press to capture initial pose at key press for debugging
     _orig_on_press = device.on_press
@@ -309,11 +309,14 @@ def main(args):
                 action_dict[arm] = input_ac_dict[f"{arm}_abs"]
             else:
                 raise ValueError
-            
+
             # For compliance controllers (FDCC, COMPLIANCE), append zero wrench to the 6D pose delta
             # Keyboard input only provides position/orientation commands, not force/torque
             if controller.name in ["FDCC", "COMPLIANCE"]:
-                action_dict[arm] = np.concatenate([action_dict[arm], np.zeros(6)])
+                if controller.compliance_mode in ["variable_stiffness"]:
+                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(6)*500])
+                elif controller.compliance_mode in ["virtual_force"]:
+                    action_dict[arm] = np.concatenate([action_dict[arm], np.zeros(6)])
 
         # Maintain gripper state for each robot but only update the active robot with action
         # Optionally zero yaw (az) rotation command for fairness testing (operate on per-arm action before vectorizing)

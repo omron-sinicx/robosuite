@@ -880,12 +880,11 @@ class SoftPegInHole(ManipulationEnv):
         self.total_rewards = 0.0
 
         controller = self.robots[0].composite_controller.part_controllers['right']
-        if isinstance(controller, osc.OperationalSpaceController):
-            pass
-        elif isinstance(controller, fdcc.ForwardDynamicsComplianceController):
-            controller = controller.inner_controller
-        controller.kp = np.ones(6) * 10.0 ** np.random.uniform(4.0, 4.5)
-        controller.kd = np.sqrt(controller.kp) * np.random.uniform(0.5, 1.5)
+
+        if self.gripper_name == "Robotiq85GripperSoft":
+            # Only set kp and kd for the soft gripper
+            controller.kp = np.ones(6) * 10.0 ** np.random.uniform(4.0, 4.5)
+            controller.kd = np.sqrt(controller.kp) * np.random.uniform(0.5, 1.5)
 
     def visualize(self, vis_settings):
         """
