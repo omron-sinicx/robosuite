@@ -90,9 +90,13 @@ class SoftPegInHole(ManipulationEnv):
         obs_torque_scale=1.0,
         translation_control_only=True,
         peg_and_hole_color=None,
+        going_away_from_goal_threshold=1.2,
+        out_of_playground_threshold=0.14,
     ):
         self.gripper_inertial_properties = None
         self.gripper_name = gripper_types
+        self.going_away_from_goal_threshold = going_away_from_goal_threshold
+        self.out_of_playground_threshold = out_of_playground_threshold
 
         # settings for table top
         self.table_full_size = table_full_size
@@ -909,12 +913,10 @@ class SoftPegInHole(ManipulationEnv):
         # kinematic singularity termination
         is_singularity = np.linalg.det(self.robots[0].composite_controller.part_controllers['right'].J_full) < 0.01
         # Moving in the peg in the opposite direction to the goal
-        # FIXME: hardcoded value
-        is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * 1.2  # hardcoded
+        is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * self.going_away_from_goal_threshold
         # Moving the wrist out of a safe zone even though the peg is stuck in the hole
         hole_pose = self.sim.data.body_xpos[self.hole_body_id][:2]  # ignore z
-        # FIXME: hardcoded value
-        is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > 0.14  # hardcoded
+        is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > self.out_of_playground_threshold
         # Contact force is to high, particularly between the wrist and the gripper (pushing down too hard)
         is_colliding = np.linalg.norm(self.get_force_torque()[:3]) > self.force_termination_threshold \
             if self.force_termination_threshold is not None else False
@@ -957,3 +959,4 @@ class SoftPegInHole(ManipulationEnv):
                 except Exception:
                     continue
         raise AttributeError("Controller does not provide a valid 6D wrench property (current_wrench, base_wrench, eef_wrench, or world_wrench)")
+        
