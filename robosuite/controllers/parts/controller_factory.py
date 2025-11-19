@@ -114,11 +114,6 @@ def arm_controller_factory(name, params):
         params["control_ori"] = False
         return arm_controllers.OperationalSpaceController(interpolator_pos=interpolator, **params)
 
-    if name == "COMPLIANCE":
-        if interpolator is not None:
-            interpolator.set_states(dim=3)  # EE control uses dim 3 for pos
-        return arm_controllers.ComplianceController(interpolator_pos=interpolator, **params)
-
     if name == "FDCC":
         return arm_controllers.ForwardDynamicsComplianceController(interpolator_pos=interpolator, **params)
 

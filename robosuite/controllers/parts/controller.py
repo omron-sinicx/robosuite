@@ -49,6 +49,7 @@ class Controller(object, metaclass=abc.ABCMeta):
         gripper_body_name=None,
     ):
         self.ft_prefix = ref_name.split('_')[0] + '_' + part_name
+        self.enable_wrench = True if ft_buffer_size > 0 else False
         self.wrench_in_eef_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
         self.wrench_in_base_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
         self.wrench_in_world_frame_buf = RingBuffer(dim=6, length=ft_buffer_size)
@@ -170,7 +171,6 @@ class Controller(object, metaclass=abc.ABCMeta):
         Returns:
             np.array: Re-scaled action
         """
-
         if self.action_scale is None:
             self.action_scale = abs(self.output_max - self.output_min) / abs(self.input_max - self.input_min)
             self.action_output_transform = (self.output_max + self.output_min) / 2.0
@@ -244,7 +244,8 @@ class Controller(object, metaclass=abc.ABCMeta):
             # Clear self.new_update
             self.new_update = False
 
-            self.transform_wrench_to_base_frame()
+            if self.enable_wrench:
+                self.transform_wrench_to_base_frame()
 
     def transform_wrench_to_base_frame(self):
         # Compute force/torque
@@ -259,7 +260,6 @@ class Controller(object, metaclass=abc.ABCMeta):
                                                  self.gripper_inertial_properties['local_com'],
                                                  self.gripper_inertial_properties['world_rot_mat'],
                                                  self.sim.model._model.opt.gravity)
-
         world_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], world_pose)
         base_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], gripper_in_robot_base)
 
@@ -361,6 +361,27 @@ class Controller(object, metaclass=abc.ABCMeta):
 
         pose_in_base = T.pose_in_A_to_pose_in_B(pose_in_world, world_pose_in_base)
         return pose_in_base
+
+    def world_to_origin_frame(self, vec):
+        """
+        transform vector from world to reference coordinate frame
+        """
+
+        # world rotation matrix is just identity
+        world_frame = np.eye(4)
+        world_frame[:3, 3] = vec
+
+        origin_frame = T.make_pose(self.origin_pos, self.origin_ori)
+        origin_frame_inv = T.pose_inv(origin_frame)
+        vec_origin_pose = T.pose_in_A_to_pose_in_B(world_frame, origin_frame_inv)
+        vec_origin_pos, _ = T.mat2pose(vec_origin_pose)
+        return vec_origin_pos
+
+    def goal_origin_to_eef_pose(self):
+        origin_pose = T.make_pose(self.origin_pos, self.origin_ori)
+        ee_pose = T.make_pose(self.fixed_ref_pos, self.fixed_ref_ori)
+        origin_pose_inv = T.pose_inv(origin_pose)
+        return T.pose_in_A_to_pose_in_B(ee_pose, origin_pose_inv)
 
     @staticmethod
     def nums2array(nums, dim):
