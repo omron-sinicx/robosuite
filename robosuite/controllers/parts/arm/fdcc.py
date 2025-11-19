@@ -199,21 +199,21 @@ class ForwardDynamicsComplianceController(Controller):
 
         self.use_delta = control_delta
         self.control_pose_dim = 6 if use_ori else 3  # desired position/orientation
-        self.control_dim = self.control_pose_dim
+        self.control_dim = copy(self.control_pose_dim)
         self.input_max = self.nums2array(input_max, self.control_dim)
         self.input_min = self.nums2array(input_min, self.control_dim)
         self.output_max = self.nums2array(output_max, self.control_dim)
         self.output_min = self.nums2array(output_min, self.control_dim)
 
-        self.stiffness = self.nums2array(stiffness, 6)
+        self.stiffness = self.nums2array(stiffness, self.control_pose_dim)
         self.stiffness_limits = np.array(stiffness_limits)
         # stiffness limits
-        self.stiffness_min = self.nums2array(stiffness_limits[0], 6)
-        self.stiffness_max = self.nums2array(stiffness_limits[1], 6)
+        self.stiffness_min = self.nums2array(stiffness_limits[0], self.control_pose_dim)
+        self.stiffness_max = self.nums2array(stiffness_limits[1], self.control_pose_dim)
 
         # Add to control dim based on compliance_mode
         if self.compliance_mode == "variable_stiffness":
-            self.control_dim += 6
+            self.control_dim += self.control_pose_dim
         elif self.compliance_mode == "variable_stiffness_and_p_gains":
             self.control_dim += 12
         elif self.compliance_mode == "virtual_force":
@@ -312,12 +312,17 @@ class ForwardDynamicsComplianceController(Controller):
         # If we're using deltas, interpret actions as such
         if self.use_delta:
             scaled_delta = self.scale_action(delta)
+            if self.use_ori is False:
+                set_ori = self.fixed_goal_ori
         # Else, interpret actions as absolute values
         else:
             if set_pos is None:
                 set_pos = delta[:3]
             if set_ori is None:
-                set_ori = (T.quat2mat(delta[3:7]))
+                if self.use_ori:
+                    set_ori = (T.quat2mat(delta[3:7]))
+                else:
+                    set_ori = self.fixed_goal_ori
             # No scaling of values since these are absolute values
             scaled_delta = np.zeros_like(delta)
 
@@ -330,13 +335,13 @@ class ForwardDynamicsComplianceController(Controller):
             current_pos = self.goal_pos
             current_ori = self.goal_ori
 
-        if np.sum(np.abs(delta[3:])) > 1e-6 and np.linalg.norm(orientation_error(current_ori, self.ref_ori_mat)) < 0.01:
+        if np.sum(np.abs(delta[3:])) > 1e-6:
             # We only want to update goal orientation if there is a valid delta ori value OR if we're using absolute ori
             self.goal_ori = set_goal_orientation(
                 scaled_delta[3:], current_ori, orientation_limit=self.orientation_limits, set_ori=set_ori
             )
 
-        if np.sum(np.abs(delta[:3])) > 1e-6 and np.linalg.norm(current_pos - self.ref_pos) < 0.001:
+        if np.sum(np.abs(delta[:3])) > 1e-6:
             self.goal_pos = set_goal_position(
                 scaled_delta[:3], current_pos, position_limit=self.position_limits, set_pos=set_pos
             )
@@ -480,7 +485,7 @@ class ForwardDynamicsComplianceController(Controller):
         Returns:
             np.array: 6D wrench error vector [force_error (3), torque_error (3)]
         """
-        return self.desired_force_torque - self.wrench_in_eef_frame_buf.current
+        return self.desired_force_torque - self.eef_wrench
 
     def compute_compliance_error(self):
         """
@@ -515,8 +520,13 @@ class ForwardDynamicsComplianceController(Controller):
             pose_error_sel = pose_error
             wrench_error_sel = wrench_error
 
+        if len(self.stiffness) == 6:
+            stiffness = self.stiffness
+        else:
+            stiffness = np.tile(self.stiffness, 2)[:6]
+
         # base frame error
-        net_force = self.stiffness * pose_error_sel + wrench_error_sel
+        net_force = stiffness * pose_error_sel + wrench_error_sel
 
         return net_force, eef_to_base
 
@@ -542,6 +552,7 @@ class ForwardDynamicsComplianceController(Controller):
 
         self.goal_ori = np.array(self.ref_ori_mat)
         self.goal_pos = np.array(self.ref_pos)
+        self.fixed_goal_ori = np.array(self.ref_ori_mat)
 
         self.virtual_force = np.zeros(6)
 
