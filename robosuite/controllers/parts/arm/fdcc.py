@@ -396,9 +396,9 @@ class ForwardDynamicsComplianceController(Controller):
             cartesian_input *= self.error_scale   # scale the entire error here
 
             # Debug prints for force/torque tracking
-            print("[FDCC DEBUG] desired_force_torque:", self.desired_force_torque)
-            print("[FDCC DEBUG] eef_wrench:", getattr(self, 'eef_wrench', None))
-            print("[FDCC DEBUG] force_error:", self.compute_force_error())
+            # print("[FDCC DEBUG] desired_force_torque:", self.desired_force_torque)
+            # print("[FDCC DEBUG] eef_wrench:", getattr(self, 'eef_wrench', None))
+            # print("[FDCC DEBUG] force_error:", self.compute_force_error())
 
             if self.use_kdl:
                 m_simulated_joint_positions = self.kdl_solver.get_joint_control_cmds(period, cartesian_input)
