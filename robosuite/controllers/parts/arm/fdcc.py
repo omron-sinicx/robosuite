@@ -583,8 +583,12 @@ class ForwardDynamicsComplianceController(Controller):
             abs_ori = set_goal_orientation(delta_ac[3:], self.goal_ori, orientation_limit=self.orientation_limits)
             abs_pos = set_goal_position(delta_ac[:3], self.goal_pos, position_limit=self.position_limits)
 
-        abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
-        abs_action = np.concatenate([abs_pos, abs_rot])
+        if self.use_ori:
+            abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
+            abs_action = np.concatenate([abs_pos, abs_rot])
+        else:
+            abs_action = abs_pos
+
         return abs_action
 
     @property
