@@ -146,7 +146,7 @@ def main(args):
         initialization_noise=None,
         has_renderer=True,
         ignore_done=True,
-        has_offscreen_renderer=use_depth,
+        has_offscreen_renderer=False,  # Only launch one viewer window
         camera_names="cam_view",
         use_camera_obs=use_depth,
         depth_mode=args.depth_mode,
@@ -244,8 +244,19 @@ def main(args):
             init_pos, init_quat = None, None
         device._debug_initial_pose = (init_pos, init_quat)
         device._debug_last_key = key
-        # Immediate print at key press
-    # print(f"[KB DEBUG] press key={_key_to_str(key)} init_pos={init_pos} init_quat={init_quat}", flush=True)
+        # Print camera direction if ']' key is pressed
+        if hasattr(key, 'char') and key.char == ']':
+            cam_name = None
+            # Try to get camera name from viewer if possible
+            try:
+                if hasattr(env, 'viewer') and hasattr(env.viewer, 'viewer') and hasattr(env.viewer.viewer, 'cam'):
+                    cam_id = env.viewer.viewer.cam.fixedcamid
+                    cam_name = env.sim.model.camera_id2name(cam_id)
+                elif hasattr(env, 'render_camera'):
+                    cam_name = env.render_camera
+            except Exception:
+                cam_name = None
+            print(f"[DEBUG] Camera direction: {cam_name}", flush=True)
         # Delegate to original handler
         _orig_on_press(key)
 
@@ -315,7 +326,7 @@ def main(args):
             # Keyboard input only provides position/orientation commands, not force/torque
             if controller.name in ["FDCC", "COMPLIANCE"]:
                 if controller.compliance_mode in ["variable_stiffness"]:
-                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(6)*500])
+                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(6)*1000])
                 elif controller.compliance_mode in ["virtual_force"]:
                     action_dict[arm] = np.concatenate([action_dict[arm], np.zeros(6)])
 
@@ -464,7 +475,8 @@ def main(args):
         # print(peg_quat, eef_quat, quat_multiply(eef_quat, quat_inverse(peg_quat)))
         # print(f"{env.peg_pos_error} {peg_pos=}")
 
-        # force = env.get_force_torque()
+        force = env.get_force_torque()
+        # print(f"{i=} {force[:3]}")
         # if i > 100:
         #     wrenchs.append(force)
         #     # print(f"{np.mean(wrenchs, axis=0)=}")
