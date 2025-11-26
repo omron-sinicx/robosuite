@@ -279,7 +279,7 @@ def get_arm_action_simple(robot, arm, norm_delta):
         delta_action = arm_controller.scale_action(norm_delta[:sl])
         abs_action = arm_controller.delta_to_abs_action(delta_action[:sl], goal_update_mode=None)
         return {
-            "delta": norm_delta[:sl],
+            "delta": delta_action[:sl],
             "abs": abs_action,
         }
     elif isinstance(robot.part_controllers[arm], JointPositionController):
