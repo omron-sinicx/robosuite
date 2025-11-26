@@ -46,7 +46,7 @@ class SoftPegInHole(ManipulationEnv):
         placement_initializer=None,
         has_renderer=False,
         has_offscreen_renderer=False,
-        render_camera="frontview",
+        render_camera="sideview",
         render_collision_mesh=False,
         render_visual_mesh=True,
         render_gpu_device_id=-1,
