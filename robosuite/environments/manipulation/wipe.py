@@ -275,11 +275,6 @@ class Wipe(ManipulationEnv):
         # whether to include and use ground-truth object states
         self.use_object_obs = use_object_obs
 
-        if not self.randomize_dirt_threshold or self.marker_pressure_threshold == 0.0:
-            self.marker_texture = "Dirt"
-        elif self.randomize_dirt_threshold:
-            self.randomize_dirt()
-
         super().__init__(
             robots=robots,
             env_configuration=env_configuration,
@@ -552,6 +547,11 @@ class Wipe(ManipulationEnv):
         # Get robot's contact geoms
         self.robot_contact_geoms = self.robots[0].robot_model.contact_geoms
 
+        if not self.randomize_dirt_threshold or self.marker_pressure_threshold == 0.0:
+            self.marker_texture = "Dirt"
+        elif self.randomize_dirt_threshold:
+            self.randomize_dirt()
+
         mujoco_arena = WipeArena(
             table_full_size=self.table_full_size,
             table_friction=self.table_friction,
@@ -696,8 +696,6 @@ class Wipe(ManipulationEnv):
     def _reset_internal(self):
         super()._reset_internal()
 
-        if not self.deterministic_reset:
-            self.randomize_dirt()
         # inherited class should reset positions of objects (only if we're not using a deterministic reset)
         self.model.mujoco_arena.reset_arena(self.sim, deterministic=self.deterministic_reset)
 
