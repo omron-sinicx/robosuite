@@ -827,7 +827,7 @@ class Wipe(ManipulationEnv):
 
     def randomize_dirt(self):
         rand_val = np.random.uniform(0.0, self.pressure_threshold_max)
-        self.marker_pressure_threshold = np.floor(rand_val / 10.0) * 10.0
+        self.marker_pressure_threshold = max(np.floor(rand_val / 10.0) * 10.0, 1.0)
         if self.marker_pressure_threshold < 10:
             self.marker_texture = "PlasterYellow"
         elif self.marker_pressure_threshold < 20:
