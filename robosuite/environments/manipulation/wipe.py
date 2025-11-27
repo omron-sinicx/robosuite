@@ -694,9 +694,10 @@ class Wipe(ManipulationEnv):
         return sensors, names
 
     def _reset_internal(self):
-        self.randomize_dirt()
         super()._reset_internal()
 
+        if not self.deterministic_reset:
+            self.randomize_dirt()
         # inherited class should reset positions of objects (only if we're not using a deterministic reset)
         self.model.mujoco_arena.reset_arena(self.sim, deterministic=self.deterministic_reset)
 
@@ -827,7 +828,8 @@ class Wipe(ManipulationEnv):
         return np.array(self.sim.data.site_xpos[self.robots[0].eef_site_id[arm]])
 
     def randomize_dirt(self):
-        self.marker_pressure_threshold = np.random.uniform(0.0, self.pressure_threshold_max)
+        rand_val = np.random.uniform(0.0, self.pressure_threshold_max)
+        self.marker_pressure_threshold = np.floor(rand_val / 10.0) * 10.0
         if self.marker_pressure_threshold < 10:
             self.marker_texture = "PlasterYellow"
         elif self.marker_pressure_threshold < 20:
