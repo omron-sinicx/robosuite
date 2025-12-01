@@ -313,8 +313,15 @@ class SoftPegInHole(ManipulationEnv):
             progress_reward = max(0.0, progress_reward)
             # action smoothness reward
             action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
+            # force penalty - only apply when in contact (peg_pos_error_z < 0.02m, i.e., close to hole)
+            peg_pos_error_z = self.peg_pos_error[2]  # Vertical error
+            if peg_pos_error_z < 0.02:  # Only penalize force when very close to hole (contact phase)
+                current_force = np.linalg.norm(self.get_force_torque()[:3])
+                force_penalty = -0.005 * (current_force / 50.0) ** 2  # Light penalty only during insertion
+            else:
+                force_penalty = 0.0  # No penalty during approach phase
             step_reward = -0.1  # encourage early termination
-            reward = progress_reward + action_smoothness_reward + step_reward
+            reward = progress_reward + action_smoothness_reward + force_penalty + step_reward
             self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
         else:
             raise ValueError(f'Invalid reward type {self.reward_type}')
