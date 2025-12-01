@@ -83,7 +83,7 @@ class SoftPegInHole(ManipulationEnv):
         delay_obs={},
         shape=None,
         shape_type='basic',
-        force_termination_threshold=50.,
+        force_termination_threshold=100.,
         peg_distance_weights=np.array([1.0, 1.0, 10.0]),
         obs_pose_scale=1.0,
         obs_force_scale=1.0,
@@ -307,9 +307,10 @@ class SoftPegInHole(ManipulationEnv):
         Reward function for the task.
         """
         if self.reward_type == 'baseline':
-            # progress reward
+            # progress reward: only penalize moving away (sparse reward design)
             progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
-            progress_reward = min(0.0, progress_reward)
+            # progress_reward = min(0.0, progress_reward)  # Only penalty for moving away
+            progress_reward = max(0.0, progress_reward)
             # action smoothness reward
             action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
             step_reward = -0.1  # encourage early termination
@@ -912,7 +913,8 @@ class SoftPegInHole(ManipulationEnv):
         # kinematic singularity termination
         is_singularity = np.linalg.det(self.robots[0].composite_controller.part_controllers['right'].J_full) < 0.01
         # Moving in the peg in the opposite direction to the goal
-        is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * self.going_away_from_goal_threshold
+        # is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * self.going_away_from_goal_threshold
+        is_going_away_from_goal = False
         # Moving the wrist out of a safe zone even though the peg is stuck in the hole
         hole_pose = self.sim.data.body_xpos[self.hole_body_id][:2]  # ignore z
         is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > self.out_of_playground_threshold
