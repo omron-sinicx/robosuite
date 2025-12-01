@@ -23,7 +23,8 @@ class Robotiq85GripperBase(GripperModel):
 
     @property
     def init_qpos(self):
-        return np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        # Rigid gripper now has fixed fingers (no joints) like soft variant
+        return np.array([])
 
     @property
     def _important_geoms(self):
@@ -52,18 +53,18 @@ class Robotiq85Gripper(Robotiq85GripperBase):
 
     def format_action(self, action):
         """
-        Maps continuous action into binary output
-        -1 => open, 1 => closed
+        No-op for fixed fingers (no actuation).
+        
+        Note: Gripper fingers are now fixed (no actuators), so this returns empty array.
 
         Args:
-            action (np.array): gripper-specific action
+            action (np.array): gripper-specific action (should be empty since dof=0)
 
-        Raises:
-            AssertionError: [Invalid action dimension size]
+        Returns:
+            np.array: Empty array (no actuator commands)
         """
-        assert len(action) == 1
-        self.current_action = np.clip(self.current_action + self.speed * np.sign(action), -1.0, 1.0)
-        return self.current_action
+        # Fingers are fixed - no actuator commands needed
+        return np.array([])
 
     @property
     def speed(self):
@@ -71,4 +72,4 @@ class Robotiq85Gripper(Robotiq85GripperBase):
 
     @property
     def dof(self):
-        return 1
+        return 0  # Fixed fingers - no gripper actuation

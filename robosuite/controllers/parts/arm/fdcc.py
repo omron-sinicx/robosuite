@@ -1,15 +1,15 @@
+from robosuite.utils.control_utils import *
+from robosuite.controllers.parts.arm.osc import OperationalSpaceController
+from robosuite.controllers.parts.generic.joint_vel import JointVelocityController
+from robosuite.controllers.parts.generic.joint_pos import JointPositionController
+from robosuite.controllers.parts.controller import Controller
+import robosuite.utils.transform_utils as T
+from robosuite.utils.ik_solver import MuJoCoIKSolver
+from robosuite.utils.binding_utils import MjSim
 from copy import copy
 import numpy as np
+np.set_printoptions(precision=6, suppress=True)
 
-from robosuite.utils.binding_utils import MjSim
-
-from robosuite.utils.ik_solver import MuJoCoIKSolver
-import robosuite.utils.transform_utils as T
-from robosuite.controllers.parts.controller import Controller
-from robosuite.controllers.parts.generic.joint_pos import JointPositionController
-from robosuite.controllers.parts.generic.joint_vel import JointVelocityController
-from robosuite.controllers.parts.arm.osc import OperationalSpaceController
-from robosuite.utils.control_utils import *
 
 try:
     from ur_pykdl.ik_solver import IKSolver
@@ -18,7 +18,7 @@ except ImportError:
 
 
 # Supported impedance modes
-COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_and_p_gains"}
+COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_and_p_gains", "virtual_force"}
 
 
 class ForwardDynamicsComplianceController(Controller):
@@ -129,13 +129,16 @@ class ForwardDynamicsComplianceController(Controller):
         damping_ratio_limits=(0, 100),
         virtual_force_limits=(-50.0, 50.0),
         selection_matrix=np.ones(6),
+        enable_selection_matrix=False,
         position_limits=None,
         orientation_limits=None,
         interpolator_pos=None,
         interpolator_ori=None,
         control_delta=True,
-        gripper_body_name=None,  # If none, do not compensate payload
+        use_ori=True,
+        gripper_body_name="gripper_base",  # If none, do not compensate payload
         frame_of_reference="eef",  # or "robot_base"
+        goal_update_mode="achieved",  # "desired"
         lite_physics=True,
         use_kdl=False,
         **kwargs,  # does nothing; used so no error raised when dict is passed with extra terms used previously
@@ -146,6 +149,9 @@ class ForwardDynamicsComplianceController(Controller):
         self.frame_of_reference = frame_of_reference
         self.selection_matrix = selection_matrix
         self.virtual_force = np.zeros(6)
+        self.enable_selection_matrix = enable_selection_matrix
+        self._goal_update_mode = goal_update_mode
+        self.use_ori = use_ori
 
         super().__init__(
             sim,
@@ -179,6 +185,8 @@ class ForwardDynamicsComplianceController(Controller):
             actuator_range=actuator_range,
             part_name=self.part_name,
             naming_prefix=self.naming_prefix,
+            gripper_body_name=None,
+            ft_buffer_size=0,
             **inner_controller_config,
         )
 
@@ -190,30 +198,30 @@ class ForwardDynamicsComplianceController(Controller):
         self.compliance_mode = compliance_mode
 
         self.use_delta = control_delta
-        self.control_pose_dim = 6 if control_delta else 7  # desired position/orientation
-        self.control_dim = self.control_pose_dim
+        self.control_pose_dim = 6 if use_ori else 3  # desired position/orientation
+        self.control_dim = copy(self.control_pose_dim)
         self.input_max = self.nums2array(input_max, self.control_dim)
         self.input_min = self.nums2array(input_min, self.control_dim)
         self.output_max = self.nums2array(output_max, self.control_dim)
         self.output_min = self.nums2array(output_min, self.control_dim)
 
-        self.control_dim += 6  # + force/torque
-        self.force_min = self.nums2array(force_limits[0], 3)
-        self.force_max = self.nums2array(force_limits[1], 3)
-        self.torque_min = self.nums2array(torque_limits[0], 3)
-        self.torque_max = self.nums2array(torque_limits[1], 3)
-
-        self.stiffness = self.nums2array(stiffness, 6)
+        self.stiffness = self.nums2array(stiffness, self.control_pose_dim)
         self.stiffness_limits = np.array(stiffness_limits)
         # stiffness limits
-        self.stiffness_min = self.nums2array(stiffness_limits[0], 6)
-        self.stiffness_max = self.nums2array(stiffness_limits[1], 6)
+        self.stiffness_min = self.nums2array(stiffness_limits[0], self.control_pose_dim)
+        self.stiffness_max = self.nums2array(stiffness_limits[1], self.control_pose_dim)
 
         # Add to control dim based on compliance_mode
         if self.compliance_mode == "variable_stiffness":
-            self.control_dim += 6
+            self.control_dim += self.control_pose_dim
         elif self.compliance_mode == "variable_stiffness_and_p_gains":
             self.control_dim += 12
+        elif self.compliance_mode == "virtual_force":
+            self.control_dim += 6  # + force/torque
+            self.force_min = self.nums2array(force_limits[0], 3)
+            self.force_max = self.nums2array(force_limits[1], 3)
+            self.torque_min = self.nums2array(torque_limits[0], 3)
+            self.torque_max = self.nums2array(torque_limits[1], 3)
 
         self.kp = self.nums2array(kp, 6)
         self.kd = self.nums2array(kd, 6)
@@ -254,24 +262,15 @@ class ForwardDynamicsComplianceController(Controller):
                                        base_link='base_link', ee_link='gripper_tip_link')
             self.kdl_solver.build_generic_model()
             self.mjc_ik_solver = MuJoCoIKSolver(
-                                                self.sim.model.get_xml(),
-                                                [],
-                                                ref_name,
-                                                position_threshold=0.001,
-                                                rotation_threshold=0.01,
-                                                time_limit=0.1,
-                                                joint_indexes=self.qpos_index,
-                                                base_body_name=None
-                                            )
-
-    def update(self):
-        super().update()
-
-        # Synchronize Joint Positions
-        self.current_joint_positions = self.joint_pos
-        self.last_joint_positions = copy(self.joint_pos)
-        self.current_joint_velocities = self.joint_vel
-        self.last_joint_velocities = copy(self.joint_vel)
+                self.sim.model.get_xml(),
+                [],
+                ref_name,
+                position_threshold=0.001,
+                rotation_threshold=0.01,
+                time_limit=0.1,
+                joint_indexes=self.qpos_index,
+                base_body_name=None
+            )
 
     def set_goal(self, action, set_pos=None, set_ori=None):
         """
@@ -296,38 +295,57 @@ class ForwardDynamicsComplianceController(Controller):
         self.update()
 
         if self.compliance_mode == "variable_stiffness":
-            delta, desired_ft, stiffness = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:]
+            delta, stiffness = action[:self.control_pose_dim], action[self.control_pose_dim:]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
         elif self.compliance_mode == "variable_stiffness_and_p_gains":
-            delta, desired_ft, stiffness, kp = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:18], action[18:]
+            delta, stiffness, kp = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:18]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
-        else:  # This is case "fixed"
+        elif self.compliance_mode == "virtual_force":
             delta, desired_ft = action[:self.control_pose_dim], action[self.control_pose_dim:]
-
-        desired_ft[:3] = np.clip(desired_ft[:3], self.force_min, self.force_max)
-        desired_ft[3:] = np.clip(desired_ft[3:], self.torque_min, self.torque_max)
-        self.desired_force_torque = desired_ft
+            desired_ft[:3] = np.clip(desired_ft[:3], self.force_min, self.force_max)
+            desired_ft[3:] = np.clip(desired_ft[3:], self.torque_min, self.torque_max)
+            self.desired_force_torque = desired_ft
+        else:  # This is case "fixed"
+            delta = action[:self.control_pose_dim]
 
         # If we're using deltas, interpret actions as such
         if self.use_delta:
+            # delta[:3] = [0, 0, 1.]
             scaled_delta = self.scale_action(delta)
+            if self.use_ori is False:
+                set_ori = self.fixed_goal_ori
         # Else, interpret actions as absolute values
         else:
             if set_pos is None:
                 set_pos = delta[:3]
             if set_ori is None:
-                set_ori = (T.quat2mat(delta[3:7]))
+                if self.use_ori:
+                    set_ori = (T.quat2mat(delta[3:7]))
+                else:
+                    set_ori = self.fixed_goal_ori
             # No scaling of values since these are absolute values
             scaled_delta = np.zeros_like(delta)
 
-        # We only want to update goal orientation if there is a valid delta ori value OR if we're using absolute ori
-        self.goal_ori = set_goal_orientation(
-            scaled_delta[3:], self.ref_ori_mat, orientation_limit=self.orientation_limits, set_ori=set_ori
-        )
-        self.goal_pos = set_goal_position(
-            scaled_delta[:3], self.ref_pos, position_limit=self.position_limits, set_pos=set_pos
-        )
+        if self._goal_update_mode == "achieved":
+            # Update goal based on current achieved position and orientation
+            current_pos = self.ref_pos
+            current_ori = self.ref_ori_mat
+        elif self._goal_update_mode == "desired":
+            # Update goal based on a persistent desired position and orientation
+            current_pos = self.goal_pos
+            current_ori = self.goal_ori
+
+        if np.sum(np.abs(delta[3:])) > 1e-6:
+            # We only want to update goal orientation if there is a valid delta ori value OR if we're using absolute ori
+            self.goal_ori = set_goal_orientation(
+                scaled_delta[3:], current_ori, orientation_limit=self.orientation_limits, set_ori=set_ori
+            )
+
+        if np.sum(np.abs(delta[:3])) > 1e-6:
+            self.goal_pos = set_goal_position(
+                scaled_delta[:3], current_pos, position_limit=self.position_limits, set_pos=set_pos
+            )
 
         if self.interpolator_pos is not None:
             self.interpolator_pos.set_goal(self.goal_pos)
@@ -358,15 +376,12 @@ class ForwardDynamicsComplianceController(Controller):
         """
         # 1. Update state
         self.update()
-        # if self.sim.data.time > 0.04:
-        #     exit(0)
 
         if self.use_kdl:
             self.kdl_solver.synchronize_joint_positions(self.joint_pos)
 
-        period = 0.02
+        period = 0.002
         for _ in range(self.iterations):
-
             net_force, eef_to_base = self.compute_compliance_error()
 
             # Add virtual force to net force
@@ -374,12 +389,16 @@ class ForwardDynamicsComplianceController(Controller):
 
             # Compute necessary error terms for PD controller
             cartesian_input = self.compute_spatial_controller(net_force, period)
-
             if self.frame_of_reference == "eef":
                 # convert the error back to the robot_base frame
                 cartesian_input = T.rotate_by_transformation(cartesian_input, eef_to_base)
 
             cartesian_input *= self.error_scale   # scale the entire error here
+
+            # Debug prints for force/torque tracking
+            # print("[FDCC DEBUG] desired_force_torque:", self.desired_force_torque)
+            # print("[FDCC DEBUG] eef_wrench:", getattr(self, 'eef_wrench', None))
+            # print("[FDCC DEBUG] force_error:", self.compute_force_error())
 
             if self.use_kdl:
                 m_simulated_joint_positions = self.kdl_solver.get_joint_control_cmds(period, cartesian_input)
@@ -437,6 +456,7 @@ class ForwardDynamicsComplianceController(Controller):
             desired_pos = np.array(self.goal_pos)
 
         position_error = (desired_pos - self.ref_pos)
+
         error_norm = np.linalg.norm(position_error)
         if error_norm > 1.0:
             position_error = position_error / error_norm
@@ -458,6 +478,9 @@ class ForwardDynamicsComplianceController(Controller):
 
         # Compute desired force and torque based on errors
         pose_error = np.concatenate([position_error, ori_error])
+
+        if np.abs(pose_error).sum() < 1e-6:
+            return np.zeros(6)
 
         return pose_error
 
@@ -481,6 +504,9 @@ class ForwardDynamicsComplianceController(Controller):
                 - np.array or None: Transform from eef to base frame if in eef mode
         """
         pose_error = self.compute_motion_error()
+        # print(f"[DEBUG] pose_error: {pose_error}")
+        # if self.sim.data._data.time > 0.02:
+        #     input("Press Enter to continue...")
 
         eef_to_base = None
         if self.frame_of_reference == "eef":
@@ -496,11 +522,20 @@ class ForwardDynamicsComplianceController(Controller):
             raise ValueError("Unsupported frame of reference. Only 'eef' and 'robot_base' are supported.")
 
         wrench_error = self.compute_force_error()
-        pose_error_sel = self.selection_matrix * pose_error
-        wrench_error_sel = (np.ones_like(self.selection_matrix) - self.selection_matrix) * wrench_error
+        if self.enable_selection_matrix:
+            pose_error_sel = self.selection_matrix * pose_error
+            wrench_error_sel = (np.ones_like(self.selection_matrix) - self.selection_matrix) * wrench_error
+        else:
+            pose_error_sel = pose_error
+            wrench_error_sel = wrench_error
+
+        if len(self.stiffness) == 6:
+            stiffness = self.stiffness
+        else:
+            stiffness = np.tile(self.stiffness, 2)[:6]
 
         # base frame error
-        net_force = self.stiffness * pose_error_sel + wrench_error_sel
+        net_force = stiffness * pose_error_sel + wrench_error_sel
 
         return net_force, eef_to_base
 
@@ -523,56 +558,45 @@ class ForwardDynamicsComplianceController(Controller):
         Resets the goal to the current state of the robot
         """
         self.inner_controller.reset_goal()
-
         self.goal_ori = np.array(self.ref_ori_mat)
         self.goal_pos = np.array(self.ref_pos)
+        self.fixed_goal_ori = np.array(self.ref_ori_mat)
 
         self.virtual_force = np.zeros(6)
-
-        # Also reset interpolators if required
-
         if self.interpolator_pos is not None:
             self.interpolator_pos.set_goal(self.goal_pos)
-
         if self.interpolator_ori is not None:
-            self.ori_ref = np.array(self.ref_ori_mat)  # reference is the current orientation at start
+            self.ori_ref = np.array(self.ref_ori_mat)
             self.interpolator_ori.set_goal(
                 orientation_error(self.goal_ori, self.ori_ref)
-            )  # goal is the total orientation error
-            self.relative_ori = np.zeros(3)  # relative orientation always starts at 0
+            )
+            self.relative_ori = np.zeros(3)
 
-    def get_sensor_measurement(self, sensor_name):
+    def delta_to_abs_action(self, delta_ac, goal_update_mode=None):
         """
-        Grabs relevant sensor data from the sim object
-
-        Args:
-            sensor_name (str): name of the sensor
-
-        Returns:
-            np.array: sensor values
+        helper function that converts delta action into absolute action
         """
-        sensor_idx = np.sum(self.sim.model.sensor_dim[: self.sim.model.sensor_name2id(sensor_name)])
-        sensor_dim = self.sim.model.sensor_dim[self.sim.model.sensor_name2id(sensor_name)]
+        if goal_update_mode is None:
+            goal_update_mode = self._goal_update_mode
+        assert goal_update_mode in ["achieved", "desired"]
 
-        return np.array(self.sim.data.sensordata[sensor_idx: sensor_idx + sensor_dim])
+        if goal_update_mode == "achieved":
+            abs_ori = set_goal_orientation(delta_ac[3:], self.ref_ori_mat, orientation_limit=self.orientation_limits)
+            abs_pos = set_goal_position(delta_ac[:3], self.ref_pos, position_limit=self.position_limits)
+        elif goal_update_mode == "desired":
+            abs_ori = set_goal_orientation(delta_ac[3:], self.goal_ori, orientation_limit=self.orientation_limits)
+            abs_pos = set_goal_position(delta_ac[:3], self.goal_pos, position_limit=self.position_limits)
 
-    def pose_in_A_to_pose_in_B_by_site_name(self, A, B):
-        pos_in_A = self.sim.data.site_xpos[self.sim.model.site_name2id(A)]
-        rot_in_A = self.sim.data.site_xmat[self.sim.model.site_name2id(A)].reshape([3, 3])
-        pose_in_A = T.make_pose(pos_in_A, rot_in_A)
-
-        pos_in_B = self.sim.data.site_xpos[self.sim.model.site_name2id(B)]
-        rot_in_B = self.sim.data.site_xmat[self.sim.model.site_name2id(B)].reshape([3, 3])
-        pose_in_B = T.make_pose(pos_in_B, rot_in_B)
-        return T.pose_in_A_to_pose_in_B(pose_in_A, pose_in_B)
+        if self.use_ori:
+            abs_rot = T.quat2axisangle(T.mat2quat(abs_ori))
+            abs_action = np.concatenate([abs_pos, abs_rot])
+        else:
+            abs_action = abs_pos
+        return abs_action
 
     @property
     def current_wrench(self):
         return self.wrench_in_base_frame_buf.average
-
-    @property
-    def eef_wrench(self):
-        return self.wrench_in_eef_frame_buf.average
 
     @property
     def control_limits(self):
@@ -591,20 +615,23 @@ class ForwardDynamicsComplianceController(Controller):
                 - (np.array) maximum action values
         """
         if self.compliance_mode == "variable_stiffness":
-            low = np.concatenate([self.input_min, self.force_min, self.torque_min, self.stiffness_min])
-            high = np.concatenate([self.input_max, self.force_max,  self.torque_max, self.stiffness_max])
-        elif self.compliance_mode == "variable_stiffness_p_gains":
-            low = np.concatenate([self.input_min,  self.force_min, self.torque_min, self.stiffness_min, self.kp_min])
-            high = np.concatenate([self.input_max, self.force_max, self.torque_max, self.stiffness_max, self.kp_max])
-        elif self.compliance_mode == "variable_stiffness_full" or self.compliance_mode == "variable_stiffness_diag_only":
-            low = np.concatenate([self.input_min,  self.stiffness_min])
+            low = np.concatenate([self.input_min, self.stiffness_min])
             high = np.concatenate([self.input_max, self.stiffness_max])
-        else:  # This is case "fixed"
+        elif self.compliance_mode == "variable_stiffness_p_gains":
+            low = np.concatenate([self.input_min,  self.stiffness_min, self.kp_min])
+            high = np.concatenate([self.input_max, self.stiffness_max, self.kp_max])
+        elif self.compliance_mode == "virtual_force":
             low = np.concatenate([self.input_min, self.force_min, self.torque_min])
             high = np.concatenate([self.input_max, self.force_max, self.torque_max])
-            # low, high = self.input_min, self.input_max
+        else:  # This is case "fixed"
+            low, high = self.input_min, self.input_max
         return low, high
 
     @property
     def name(self):
-        return "COMPLIANCE"
+        return "FDCC"
+
+    @property
+    def input_type(self):
+        """Returns the input type for this controller (delta or absolute)"""
+        return "delta" if self.use_delta else "absolute"

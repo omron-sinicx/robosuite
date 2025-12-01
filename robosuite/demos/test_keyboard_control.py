@@ -118,11 +118,10 @@ def main(args):
     gripper_types = args.gripper
 
     # Load the desired controller
-    arm_controller_config = suite.load_part_controller_config(default_controller="OSC_POSE")
+    arm_controller_config = suite.load_part_controller_config(default_controller=args.control)
     controller_configs = refactor_composite_controller_config(
         arm_controller_config, 'ur5e', ["right"]
     )
-    print(controller_configs)
 
     obs_keys = [
         'robot0_non_priv_proprio-state',
@@ -132,7 +131,7 @@ def main(args):
         'cam_view_segmentation_class',
     ]
     if args.use_peg_bps:
-        print(f'[WARNING] peg bps is not supported, show the peg_pcd instead')
+        # print(f'[WARNING] peg bps is not supported, show the peg_pcd instead')
         # obs_keys.append('peg_bps_gt-state')
         obs_keys.append('peg_pcd-state')
     if args.shape_emb_src is not None:
@@ -146,8 +145,8 @@ def main(args):
         gripper_types=gripper_types,
         initialization_noise=None,
         has_renderer=True,
-        # ignore_done=True,
-        has_offscreen_renderer=use_depth,
+        ignore_done=True,
+        has_offscreen_renderer=False,  # Only launch one viewer window
         camera_names="cam_view",
         use_camera_obs=use_depth,
         depth_mode=args.depth_mode,
@@ -169,7 +168,7 @@ def main(args):
         control_freq=20,
         deterministic_reset=False,
         success_reward=100,
-        initial_pose=np.array([0.038, 0.665, 0.27, 1.0, 0.0, 0.0, 0.0]),
+        initial_pose=np.array([0.038, 0.665, 0.29, 1.0, 0.0, 0.0, 0.0]),
         shape=args.shape,
         shape_type=args.shape_type,
         hole_pos_var=args.hole_pos_var,
@@ -189,6 +188,7 @@ def main(args):
             hole_default=[0.5, 0.5, 0.5],
             interp=0.2,
         ),
+        translation_control_only=False,
         # force_termination_threshold=None,
         render_camera=None,
         renderer='mjviewer',
@@ -200,16 +200,91 @@ def main(args):
 
     env.set_curriculum(args.curriculum)
     env.reset()
+    
+    # For FDCC/COMPLIANCE controllers, explicitly reset goal to current pose to prevent auto-movement
+    active_robot = env.robots[0]
+    for arm in active_robot.arms:
+        controller = active_robot.part_controllers[arm]
+        if hasattr(controller, 'reset_goal'):
+            controller.reset_goal()
+    
     # env.viewer.set_camera(camera_id=0)
     # env.sim._render_context_offscreen.vopt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = False
 
     # initialize device
     from robosuite.devices import Keyboard
 
-    device = Keyboard(env, pos_sensitivity=0.1, rot_sensitivity=0.0)
-    env.viewer.add_keypress_callback(device.on_press)
+    device = Keyboard(env, pos_sensitivity=1.0, rot_sensitivity=1.0)
+
+    # Wrap the keyboard on_press to capture initial pose at key press for debugging
+    _orig_on_press = device.on_press
+    device._debug_initial_pose = None  # (pos, quat)
+    device._debug_last_key = None
+
+    # Small helper to pretty-print keys from pynput (Key / KeyCode)
+    def _key_to_str(key):
+        try:
+            # KeyCode with printable char
+            if hasattr(key, 'char') and key.char is not None:
+                return key.char
+            # Special keys like Key.up / Key.left ...
+            if hasattr(key, 'name') and key.name is not None:
+                return key.name
+            return str(key)
+        except Exception:
+            return str(key)
+
+    def _debug_on_press(key):
+        try:
+            # Use the same controlled frame as the controller (grip_site), not gripper_eef_site (which has an offset)
+            site_id = env.sim.model.site_name2id('gripper0_right_grip_site')
+            init_pos = env.sim.data.site_xpos[site_id].copy()
+            init_quat = mat2quat(env.sim.data.site_xmat[site_id].reshape(3, 3))
+        except Exception:
+            init_pos, init_quat = None, None
+        device._debug_initial_pose = (init_pos, init_quat)
+        device._debug_last_key = key
+        # Print camera direction if ']' key is pressed
+        if hasattr(key, 'char') and key.char == ']':
+            cam_name = None
+            # Try to get camera name from viewer if possible
+            try:
+                if hasattr(env, 'viewer') and hasattr(env.viewer, 'viewer') and hasattr(env.viewer.viewer, 'cam'):
+                    cam_id = env.viewer.viewer.cam.fixedcamid
+                    cam_name = env.sim.model.camera_id2name(cam_id)
+                elif hasattr(env, 'render_camera'):
+                    cam_name = env.render_camera
+            except Exception:
+                cam_name = None
+            print(f"[DEBUG] Camera direction: {cam_name}", flush=True)
+        # Delegate to original handler
+        _orig_on_press(key)
+
+    # Rewire the pynput listener to use our debug on_press wrapper, so prints always show
+    try:
+        # Stop existing listener if running
+        if hasattr(device, "listener") and device.listener is not None:
+            try:
+                device.listener.stop()
+            except Exception:
+                pass
+        from pynput.keyboard import Listener
+        device.listener = Listener(on_press=_debug_on_press, on_release=device.on_release)
+        device.listener.start()
+        # print("[KB DEBUG] Rewired keyboard listener with debug on_press handler", flush=True)
+    except Exception as e:
+        # print(f"[KB DEBUG] Failed to rewire listener: {e}", flush=True)
+        pass
 
     device.start_control()
+
+    # Start with gripper CLOSED by default (prevents dropping the peg)
+    # Users can toggle with spacebar per the on-screen help
+    for r_idx, robot in enumerate(env.robots):
+        for a_idx, arm in enumerate(robot.arms):
+            # Only set if the gripper is controllable (dof > 0)
+            if robot.gripper[arm].dof > 0:
+                device.grasp_states[r_idx][a_idx] = True
 
     assert len(env.robots) == 1
 
@@ -238,6 +313,7 @@ def main(args):
         # set arm actions
         for arm in active_robot.arms:
             controller_input_type = active_robot.part_controllers[arm].input_type
+            controller = active_robot.part_controllers[arm]
 
             if controller_input_type == "delta":
                 action_dict[arm] = input_ac_dict[f"{arm}_delta"]
@@ -246,7 +322,23 @@ def main(args):
             else:
                 raise ValueError
 
+            # For compliance controllers (FDCC, COMPLIANCE), append zero wrench to the 6D pose delta
+            # Keyboard input only provides position/orientation commands, not force/torque
+            if controller.name in ["FDCC", "COMPLIANCE"]:
+                if controller.compliance_mode in ["variable_stiffness"]:
+                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(6)*1000])
+                elif controller.compliance_mode in ["virtual_force"]:
+                    action_dict[arm] = np.concatenate([action_dict[arm], np.zeros(6)])
+
         # Maintain gripper state for each robot but only update the active robot with action
+        # Optionally zero yaw (az) rotation command for fairness testing (operate on per-arm action before vectorizing)
+        if args.zero_az:
+            for arm in active_robot.arms:
+                if arm in action_dict and action_dict[arm] is not None and len(action_dict[arm]) >= 6:
+                    action_dict[arm][5] = 0.0
+
+        # (debug prints removed)
+
         env_action = [robot.create_action_vector(all_prev_gripper_actions[i]) for i, robot in enumerate(env.robots)]
         env_action[device.active_robot] = active_robot.create_action_vector(action_dict)
         env_action = np.concatenate(env_action)
@@ -254,6 +346,33 @@ def main(args):
             all_prev_gripper_actions[device.active_robot][gripper_ac] = action_dict[gripper_ac]
 
         obs, rew, terminated, truncated, info = env.step(env_action)
+
+
+        # If a key was pressed this iteration, print initial and final EEF pose for debugging
+        if getattr(device, "_debug_last_key", None) is not None:
+            try:
+                # Use the same controlled frame as the controller (grip_site), not gripper_eef_site (which has an offset)
+                site_id = env.sim.model.site_name2id('gripper0_right_grip_site')
+                final_pos = env.sim.data.site_xpos[site_id].copy()
+                final_quat = mat2quat(env.sim.data.site_xmat[site_id].reshape(3, 3))
+            except Exception:
+                final_pos, final_quat = None, None
+
+            init_pos, init_quat = (None, None)
+            if getattr(device, "_debug_initial_pose", None) is not None:
+                init_pos, init_quat = device._debug_initial_pose
+
+            # Compute deltas when possible
+            delta_pos = None
+            if init_pos is not None and final_pos is not None:
+                delta_pos = final_pos - init_pos
+
+            # print(f"[KB DEBUG] step key={_key_to_str(device._debug_last_key)} final_pos={final_pos} delta_pos={delta_pos}", flush=True)
+            # print(f"             final_quat={final_quat}", flush=True)
+
+            # reset debug flags
+            device._debug_last_key = None
+            device._debug_initial_pose = None
         env.render()
 
         if not np.all(np.isclose(active_robot._joint_positions, prev_jpos, rtol=1e-5)):
@@ -338,16 +457,26 @@ def main(args):
             # input()
             obs, info = env.reset()
             active_robot = env.robots[0]
+            # Re-initialize FDCC / compliance controller goals and keep gripper closed after reset
+            for arm in active_robot.arms:
+                controller = active_robot.part_controllers[arm]
+                if hasattr(controller, 'reset_goal'):
+                    controller.reset_goal()
+            for r_idx, robot in enumerate(env.robots):
+                for a_idx, arm in enumerate(robot.arms):
+                    if robot.gripper[arm].dof > 0:
+                        device.grasp_states[r_idx][a_idx] = True
 
         # print(env.eef_pos, env.eef_quat)
-        peg_pos = env.sim.data.site_xpos[env.sim.model.site_name2id('gripper0_right_gripper_eef_site')]
+        peg_pos = env.sim.data.site_xpos[env.sim.model.site_name2id('gripper0_right_grip_site')]
         peg_quat = mat2quat(env.sim.data.site_xmat[env.sim.model.site_name2id(
-            'gripper0_right_gripper_eef_site')].reshape(3, 3))
+            'gripper0_right_grip_site')].reshape(3, 3))
         eef_quat = env.eef_quat
         # print(peg_quat, eef_quat, quat_multiply(eef_quat, quat_inverse(peg_quat)))
         # print(f"{env.peg_pos_error} {peg_pos=}")
 
-        # force = env.get_force_torque()
+        force = env.get_force_torque()
+        # print(f"{i=} {force[:3]}")
         # if i > 100:
         #     wrenchs.append(force)
         #     # print(f"{np.mean(wrenchs, axis=0)=}")
@@ -360,14 +489,21 @@ def main(args):
         cv2.destroyAllWindows()
 
 
+
 if __name__ == "__main__":
+    # Map short CLI tokens to actual gripper classes (soft vs rigid)
     peg_dict = {
-        '85': 'Robotiq85GripperSoft',
-        'hande': 'RobotiqHandEGripperSoft',
+        '85-soft': 'Robotiq85GripperSoft',
+        '85-rigid': 'Robotiq85Gripper',
+        'hande-soft': 'RobotiqHandEGripperSoft',
+        'hande-rigid': 'RobotiqHandEGripper',
     }
 
     parser = ArgumentParser()
-    parser.add_argument('-g', '--gripper', default=list(peg_dict.keys())[0], choices=peg_dict.keys())
+    parser.add_argument('-g', '--gripper', default='85-soft', choices=peg_dict.keys(),
+                        help='Select gripper type: 85-soft/85-rigid/hande-soft/hande-rigid')
+    parser.add_argument('-c', '--control', default='OSC_POSE', choices=['OSC_POSITION', 'FDCC'],
+                        help='Controller to use for the arm')
     parser.add_argument('-s', '--shape', default=None)
     parser.add_argument('-st', '--shape_type', default='basic')
     parser.add_argument('-bps', '--use_peg_bps', action='store_true', help='use peg basis point set features')
@@ -385,6 +521,7 @@ if __name__ == "__main__":
     parser.add_argument('-viz', '--visualize', action='store_true', help='visualize camera obs')
     parser.add_argument('-cl', '--curriculum', type=float, default=1.0, help='curriculum coefficient')
     parser.add_argument('-tb', '--tensorboard', action='store_true', help='log to tensorboard')
+    parser.add_argument('--zero-az', action='store_true', help='Zero yaw (az) rotation command for fairness testing')
     parser.add_argument('-log', '--log_level', type=str, default='debug')
     args = parser.parse_args()
     args.gripper = peg_dict[args.gripper]

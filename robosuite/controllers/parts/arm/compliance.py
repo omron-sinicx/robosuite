@@ -19,7 +19,7 @@ except ImportError:
     IKSolver = None
 
 # Supported impedance modes
-COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_p_gains", "variable_stiffness_full", "variable_stiffness_diag_only"}
+COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_p_gains", "variable_stiffness_full", "variable_stiffness_diag_only", "FDCC"}
 
 
 class ComplianceController(Controller):
@@ -666,3 +666,8 @@ class ComplianceController(Controller):
     @property
     def name(self):
         return "COMPLIANCE"
+
+    @property
+    def input_type(self):
+        """Returns the input type for this controller (delta or absolute)"""
+        return "delta" if self.use_delta else "absolute"

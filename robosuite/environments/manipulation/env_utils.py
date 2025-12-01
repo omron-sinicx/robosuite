@@ -500,7 +500,7 @@ def get_camera_pose(view_direction, table_offset):
         cam_quat = quat_multiply(axisangle2quat([0, 0, np.pi / 2]), cam_quat)
         cam_quat = quat_multiply(axisangle2quat([0, np.pi / 2, 0]), cam_quat)
         cam_quat = quat_multiply(axisangle2quat([0, 0, -np.pi / 6]), cam_quat)
-        cam_pos = np.array([0.6, 0, 0.5]) + table_offset
+        cam_pos = np.array([0.6, 0, 0.25]) + table_offset
     elif view_direction == "right":
         # Look from side (the robot base at right)
         cam_quat = quat_multiply(axisangle2quat([0, 0, np.pi / 2]), cam_quat)

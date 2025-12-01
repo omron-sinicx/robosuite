@@ -58,14 +58,20 @@ def load_part_controller_config(custom_fpath=None, default_controller=None):
     assert custom_fpath is not None, "Error: Either custom_fpath or default_controller must be specified!"
 
     # Attempt to load the controller
+
+    # ANSI color codes
+    YELLOW = '\033[93m'
+    RED = '\033[91m'
+    GREEN = '\033[92m'
+    RESET = '\033[0m'
+
     try:
         with open(custom_fpath) as f:
+            print(f"{GREEN}Successfully loaded controller config: {custom_fpath}{RESET}")
             controller_config = json.load(f)
     except FileNotFoundError:
-        print("Error opening controller filepath at: {}. " "Please check filepath and try again.".format(custom_fpath))
+        print(f"{RED}Error opening controller filepath at: {custom_fpath}. Please check filepath and try again.{RESET}")
         raise FileNotFoundError
-
-    # Return the loaded controller
     return controller_config
 
 
@@ -113,11 +119,6 @@ def arm_controller_factory(name, params):
             interpolator.set_states(dim=3)  # EE control uses dim 3 for pos
         params["control_ori"] = False
         return arm_controllers.OperationalSpaceController(interpolator_pos=interpolator, **params)
-
-    if name == "COMPLIANCE":
-        if interpolator is not None:
-            interpolator.set_states(dim=3)  # EE control uses dim 3 for pos
-        return arm_controllers.ComplianceController(interpolator_pos=interpolator, **params)
 
     if name == "FDCC":
         return arm_controllers.ForwardDynamicsComplianceController(interpolator_pos=interpolator, **params)

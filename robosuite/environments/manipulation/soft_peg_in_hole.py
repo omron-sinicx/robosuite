@@ -8,6 +8,7 @@ import numpy as np
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import TableArena
 from robosuite.models.tasks import ManipulationTask
+from robosuite.controllers.parts.arm import fdcc, osc
 from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.observables import Observable, create_gaussian_noise_corrupter, create_uniform_sampled_delayer
 from robosuite.utils.placement_samplers import CurriculumUniformRandomSampler
@@ -45,7 +46,7 @@ class SoftPegInHole(ManipulationEnv):
         placement_initializer=None,
         has_renderer=False,
         has_offscreen_renderer=False,
-        render_camera="frontview",
+        render_camera="sideview",
         render_collision_mesh=False,
         render_visual_mesh=True,
         render_gpu_device_id=-1,
@@ -82,15 +83,20 @@ class SoftPegInHole(ManipulationEnv):
         delay_obs={},
         shape=None,
         shape_type='basic',
-        force_termination_threshold=50.,
+        force_termination_threshold=100.,
         peg_distance_weights=np.array([1.0, 1.0, 10.0]),
         obs_pose_scale=1.0,
         obs_force_scale=1.0,
         obs_torque_scale=1.0,
+        translation_control_only=True,
         peg_and_hole_color=None,
+        going_away_from_goal_threshold=1.2,
+        out_of_playground_threshold=0.14,
     ):
         self.gripper_inertial_properties = None
         self.gripper_name = gripper_types
+        self.going_away_from_goal_threshold = going_away_from_goal_threshold
+        self.out_of_playground_threshold = out_of_playground_threshold
 
         # settings for table top
         self.table_full_size = table_full_size
@@ -118,8 +124,12 @@ class SoftPegInHole(ManipulationEnv):
         self.initial_pos = initial_pose[:3]
         self.initial_quat = initial_pose[3:]
         self.initial_rot = quat2mat(self.initial_quat)
+
         # Set default orientation for controller
-        controller_configs['body_parts']['right']['default_orientation'] = self.initial_rot
+        if translation_control_only:
+            controller_configs['body_parts']['right']['default_orientation'] = self.initial_rot
+        else:
+            controller_configs['body_parts']['right']['default_orientation'] = None
 
         # goal settings
         INSERT_Z_OFFSET = -0.035
@@ -297,13 +307,21 @@ class SoftPegInHole(ManipulationEnv):
         Reward function for the task.
         """
         if self.reward_type == 'baseline':
-            # progress reward
+            # progress reward: only penalize moving away (sparse reward design)
             progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
-            progress_reward = min(0.0, progress_reward)
+            # progress_reward = min(0.0, progress_reward)  # Only penalty for moving away
+            progress_reward = max(0.0, progress_reward)
             # action smoothness reward
             action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
+            # force penalty - only apply when in contact (peg_pos_error_z < 0.02m, i.e., close to hole)
+            peg_pos_error_z = self.peg_pos_error[2]  # Vertical error
+            if peg_pos_error_z < 0.02:  # Only penalize force when very close to hole (contact phase)
+                current_force = np.linalg.norm(self.get_force_torque()[:3])
+                force_penalty = -0.005 * (current_force / 50.0) ** 2  # Light penalty only during insertion
+            else:
+                force_penalty = 0.0  # No penalty during approach phase
             step_reward = -0.1  # encourage early termination
-            reward = progress_reward + action_smoothness_reward + step_reward
+            reward = progress_reward + action_smoothness_reward + force_penalty + step_reward
             self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
         else:
             raise ValueError(f'Invalid reward type {self.reward_type}')
@@ -782,7 +800,12 @@ class SoftPegInHole(ManipulationEnv):
         if self.robots[0].composite_controller is None or self.hard_reset:
             # instantiate controllers, only once
             super()._reset_internal()
-            self.gripper_inertial_properties = self.sim.get_body_inertial_properties(f"gripper0_right_right_gripper")
+            # Get gripper inertial properties for soft gripper (rigid grippers don't have right_gripper body)
+            try:
+                self.gripper_inertial_properties = self.sim.get_body_inertial_properties(f"gripper0_right_gripper_base")
+            except ValueError:
+                # Rigid gripper doesn't have the right_gripper body, set to None
+                self.gripper_inertial_properties = None
 
         init_qpos_guess = np.array(
             [1.36314954, -1.21917949, 1.32688743, -1.67850362, -1.57077604, -1.77846293]
@@ -869,8 +892,11 @@ class SoftPegInHole(ManipulationEnv):
         self.total_rewards = 0.0
 
         controller = self.robots[0].composite_controller.part_controllers['right']
-        controller.kp = np.ones(6) * 10.0 ** np.random.uniform(4.0, 4.5)
-        controller.kd = np.sqrt(controller.kp) * np.random.uniform(0.5, 1.5)
+
+        if self.gripper_name == "Robotiq85GripperSoft":
+            # Only set kp and kd for the soft gripper
+            controller.kp = np.ones(6) * 10.0 ** np.random.uniform(4.0, 4.5)
+            controller.kd = np.sqrt(controller.kp) * np.random.uniform(0.5, 1.5)
 
     def visualize(self, vis_settings):
         """
@@ -894,12 +920,11 @@ class SoftPegInHole(ManipulationEnv):
         # kinematic singularity termination
         is_singularity = np.linalg.det(self.robots[0].composite_controller.part_controllers['right'].J_full) < 0.01
         # Moving in the peg in the opposite direction to the goal
-        # FIXME: hardcoded value
-        is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * 1.2  # hardcoded
+        # is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * self.going_away_from_goal_threshold
+        is_going_away_from_goal = False
         # Moving the wrist out of a safe zone even though the peg is stuck in the hole
         hole_pose = self.sim.data.body_xpos[self.hole_body_id][:2]  # ignore z
-        # FIXME: hardcoded value
-        is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > 0.14  # hardcoded
+        is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > self.out_of_playground_threshold
         # Contact force is to high, particularly between the wrist and the gripper (pushing down too hard)
         is_colliding = np.linalg.norm(self.get_force_torque()[:3]) > self.force_termination_threshold \
             if self.force_termination_threshold is not None else False
@@ -927,4 +952,19 @@ class SoftPegInHole(ManipulationEnv):
         return self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3)
 
     def get_force_torque(self):
-        return self.robots[0].composite_controller.part_controllers['right'].current_wrench
+        ctrl = self.robots[0].composite_controller.part_controllers['right']
+        wrench_props = ["current_wrench", "base_wrench", "eef_wrench", "world_wrench"]
+        for prop in wrench_props:
+            if hasattr(ctrl, prop):
+                attr = getattr(ctrl, prop)
+                try:
+                    wrench = attr() if callable(attr) else attr
+                    if wrench is not None:
+                        # Check for correct type and shape (should be array-like, length 6)
+                        arr = np.asarray(wrench)
+                        if arr.shape == (6,):
+                            return arr
+                except Exception:
+                    continue
+        raise AttributeError("Controller does not provide a valid 6D wrench property (current_wrench, base_wrench, eef_wrench, or world_wrench)")
+        

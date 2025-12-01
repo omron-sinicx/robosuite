@@ -1,0 +1,181 @@
+[1mdiff --git a/robosuite/controllers/parts/arm/osc_cb.py b/robosuite/controllers/parts/arm/osc_cb.py[m
+[1mindex aba2fa36..753fbed9 100644[m
+[1m--- a/robosuite/controllers/parts/arm/osc_cb.py[m
+[1m+++ b/robosuite/controllers/parts/arm/osc_cb.py[m
+[36m@@ -666,6 +666,7 @@[m [mclass OperationalSpaceControllerCB(Controller):[m
+     def eef_wrench(self):[m
+         return self.wrench_in_eef_frame_buf.average[m
+ [m
+[32m+[m[32m    # DONE: dirty fix, need to edit soft_peg_in_hole env to use base_wrench instead of current_wrench[m
+     @property[m
+     def base_wrench(self):[m
+         return self.wrench_in_base_frame_buf.average[m
+[1mdiff --git a/robosuite/controllers/parts/controller_factory.py b/robosuite/controllers/parts/controller_factory.py[m
+[1mindex 31dac2b9..a3ccd86c 100644[m
+[1m--- a/robosuite/controllers/parts/controller_factory.py[m
+[1m+++ b/robosuite/controllers/parts/controller_factory.py[m
+[36m@@ -58,14 +58,20 @@[m [mdef load_part_controller_config(custom_fpath=None, default_controller=None):[m
+     assert custom_fpath is not None, "Error: Either custom_fpath or default_controller must be specified!"[m
+ [m
+     # Attempt to load the controller[m
+[32m+[m
+[32m+[m[32m    # ANSI color codes[m
+[32m+[m[32m    YELLOW = '\033[93m'[m
+[32m+[m[32m    RED = '\033[91m'[m
+[32m+[m[32m    GREEN = '\033[92m'[m
+[32m+[m[32m    RESET = '\033[0m'[m
+[32m+[m
+     try:[m
+         with open(custom_fpath) as f:[m
+[32m+[m[32m            print(f"{GREEN}Successfully loaded controller config: {custom_fpath}{RESET}")[m
+             controller_config = json.load(f)[m
+     except FileNotFoundError:[m
+[31m-        print("Error opening controller filepath at: {}. " "Please check filepath and try again.".format(custom_fpath))[m
+[32m+[m[32m        print(f"{RED}Error opening controller filepath at: {custom_fpath}. Please check filepath and try again.{RESET}")[m
+         raise FileNotFoundError[m
+[31m-[m
+[31m-    # Return the loaded controller[m
+     return controller_config[m
+ [m
+ [m
+[1mdiff --git a/robosuite/devices/device.py b/robosuite/devices/device.py[m
+[1mindex 4c6e1598..e59d7d4b 100644[m
+[1m--- a/robosuite/devices/device.py[m
+[1m+++ b/robosuite/devices/device.py[m
+[36m@@ -6,7 +6,9 @@[m [mimport numpy as np[m
+ from robosuite.controllers.parts.generic.joint_pos import JointPositionController[m
+ import robosuite.utils.transform_utils as T[m
+ from robosuite.controllers.parts.arm.osc import OperationalSpaceController[m
+[31m-[m
+[32m+[m[32mfrom robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController[m
+[32m+[m[32mfrom robosuite.controllers.parts.arm.compliance import ComplianceController[m
+[32m+[m[32mfrom robosuite.controllers.parts.arm.osc_cb import OperationalSpaceControllerCB[m
+ [m
+ class Device(metaclass=abc.ABCMeta):[m
+     """[m
+[36m@@ -118,7 +120,7 @@[m [mclass Device(metaclass=abc.ABCMeta):[m
+ [m
+         # FDCC and COMPLIANCE controllers use the same 6D pose delta format as OSC_POSE[m
+         # They just add force/torque dimensions which default to zero from keyboard input[m
+[31m-        assert controller.name in ["OSC_POSE", "JOINT_POSITION", "FDCC", "COMPLIANCE"], \[m
+[32m+[m[32m        assert controller.name in ["OSC_POSITION", "OSC_POSITION_CB", "JOINT_POSITION", "FDCC", "COMPLIANCE"], \[m
+             f"only supporting OSC_POSE, FDCC, COMPLIANCE and JOINT_POSITION for now, got {controller.name}"[m
+ [m
+         # process raw device inputs[m
+[36m@@ -133,14 +135,24 @@[m [mclass Device(metaclass=abc.ABCMeta):[m
+         ac_dict = {}[m
+         # populate delta actions for the arms[m
+         for arm in robot.arms:[m
+[31m-            # OSC keys[m
+             arm_action = self.get_arm_action([m
+                 robot,[m
+                 arm,[m
+                 norm_delta=np.zeros(6),[m
+             )[m
+[31m-            ac_dict[f"{arm}_abs"] = arm_action["abs"][m
+[31m-            ac_dict[f"{arm}_delta"] = arm_action["delta"][m
+[32m+[m[32m            if isinstance(arm_action, dict):[m
+[32m+[m[32m                # Use keys if present, else fallback[m
+[32m+[m[32m                if "abs" in arm_action and "delta" in arm_action:[m
+[32m+[m[32m                    ac_dict[f"{arm}_abs"] = arm_action["abs"][m
+[32m+[m[32m                    ac_dict[f"{arm}_delta"] = arm_action["delta"][m
+[32m+[m[32m                else:[m
+[32m+[m[32m                    # Fallback: store the whole dict or main action under a generic key[m
+[32m+[m[32m                    ac_dict[f"{arm}_action"] = arm_action[m
+[32m+[m[32m            else:[m
+[32m+[m[32m                # Not a dict: store as generic action[m
+[32m+[m[32m                ac_dict[f"{arm}_action"] = arm_action[m
+[32m+[m
+[32m+[m[32m            # Gripper action (safe fallback)[m
+             ac_dict[f"{arm}_gripper"] = np.zeros(robot.gripper[arm].dof)[m
+ [m
+         if robot.is_mobile:[m
+[36m@@ -161,11 +173,16 @@[m [mclass Device(metaclass=abc.ABCMeta):[m
+             arm_norm_delta = np.concatenate([dpos, drotation])[m
+ [m
+         # populate action dict items for arm and grippers[m
+[32m+[m[32m        print(f"[DEBUG] ac_dict:", active_arm)[m
+[32m+[m[32m        print(f"[DEBUG] robot:", robot)[m
+[32m+[m[32m        print(f"[DEBUG] arm_norm:", arm_norm_delta)[m
+         arm_action = self.get_arm_action([m
+             robot,[m
+             active_arm,[m
+             norm_delta=arm_norm_delta,[m
+         )[m
+[32m+[m[32m        print("[DEBUG] ac_dict:", ac_dict)[m
+[32m+[m[32m        print(f"[DEBUG] arm_action: {arm_action}")[m
+         ac_dict[f"{active_arm}_abs"] = arm_action["abs"][m
+         ac_dict[f"{active_arm}_delta"] = arm_action["delta"][m
+ [m
+[36m@@ -190,10 +207,7 @@[m [mclass Device(metaclass=abc.ABCMeta):[m
+             "desired",[m
+         ]  # update next target either based on achieved pose or desired goal pose[m
+ [m
+[31m-        from robosuite.controllers.parts.arm.fdcc import ForwardDynamicsComplianceController[m
+[31m-        from robosuite.controllers.parts.arm.compliance import ComplianceController[m
+[31m-        [m
+[31m-        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, JointPositionController, [m
+[32m+[m[32m        if isinstance(robot.part_controllers[arm], (OperationalSpaceController, OperationalSpaceControllerCB, JointPositionController,[m[41m [m
+                                                      ForwardDynamicsComplianceController, ComplianceController)):[m
+             return get_arm_action_simple(robot, arm, norm_delta)[m
+         elif robot.composite_controller_config["type"] in ["WHOLE_BODY_MINK_IK", "HYBRID_WHOLE_BODY_MINK_IK"]:[m
+[36m@@ -278,16 +292,33 @@[m [mdef get_arm_action_simple(robot, arm, norm_delta):[m
+     from robosuite.controllers.parts.arm.compliance import ComplianceController[m
+     [m
+     if isinstance(robot.part_controllers[arm], (OperationalSpaceController, [m
+[32m+[m[32m                                                OperationalSpaceControllerCB,[m
+                                                  ForwardDynamicsComplianceController, [m
+                                                  ComplianceController)):[m
+         arm_controller = robot.part_controllers[arm][m
+[32m+[m[32m        # Determine if controller expects 3D (position only) or 6D (pose)[m
+[32m+[m[32m        # Use input_min shape as indicator[m
+[32m+[m[32m        if hasattr(arm_controller, 'input_min') and hasattr(arm_controller, 'input_max'):[m
+[32m+[m[32m            input_min = np.array(getattr(arm_controller, 'input_min'))[m
+[32m+[m[32m            input_max = np.array(getattr(arm_controller, 'input_max'))[m
+[32m+[m[32m            if not np.allclose(norm_delta, 0):[m
+[32m+[m[32m                print(f"[DEBUG] get_arm_action_simple: norm_delta shape: {norm_delta.shape}, input_min shape: {input_min.shape}, input_max shape: {input_max.shape}")[m
+[32m+[m[32m                print(f"[DEBUG] get_arm_action_simple: norm_delta: {norm_delta}, input_min: {input_min}, input_max: {input_max}")[m
+[32m+[m[32m            # If controller expects 3D, only pass first 3 elements[m
+[32m+[m[32m            if input_min.shape == (3,) and norm_delta.shape[0] >= 3:[m
+[32m+[m[32m                norm_delta = norm_delta[:3][m
+[32m+[m[32m                if not np.allclose(norm_delta, 0):[m
+[32m+[m[32m                    print(f"[DEBUG] get_arm_action_simple: Truncated norm_delta to 3D: {norm_delta}")[m
+[32m+[m[32m        else:[m
+[32m+[m[32m            if not np.allclose(norm_delta, 0):[m
+[32m+[m[32m                print(f"[DEBUG] get_arm_action_simple: norm_delta shape: {norm_delta.shape}, arm_controller has no input_min/input_max")[m
+[32m+[m[32m                print(f"[DEBUG] get_arm_action_simple: norm_delta: {norm_delta}")[m
+         delta_action = arm_controller.scale_action(norm_delta.copy())[m
+         abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None) if hasattr(arm_controller, 'delta_to_abs_action') else None[m
+[31m-        [m
+         # For compliance controllers, the keyboard device expects 6D delta in the return dict[m
+         # The wrench will be appended as zeros when creating the final action vector[m
+         return {[m
+[31m-            "delta": norm_delta,  # Keep as 6D for consistency with keyboard demo[m
+[32m+[m[32m            "delta": norm_delta,  # Now may be 3D or 6D depending on controller[m
+             "abs": abs_action,[m
+             f"{arm}_delta": norm_delta,[m
+             f"{arm}_abs": abs_action,[m
+[1mdiff --git a/robosuite/environments/manipulation/soft_peg_in_hole.py b/robosuite/environments/manipulation/soft_peg_in_hole.py[m
+[1mindex f3b541f9..bb27178d 100644[m
+[1m--- a/robosuite/environments/manipulation/soft_peg_in_hole.py[m
+[1m+++ b/robosuite/environments/manipulation/soft_peg_in_hole.py[m
+[36m@@ -932,4 +932,18 @@[m [mclass SoftPegInHole(ManipulationEnv):[m
+         return self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3)[m
+ [m
+     def get_force_torque(self):[m
+[31m-        return self.robots[0].composite_controller.part_controllers['right'].current_wrench[m
+[32m+[m[32m        ctrl = self.robots[0].composite_controller.part_controllers['right'][m
+[32m+[m[32m        wrench_props = ["current_wrench", "base_wrench", "eef_wrench", "world_wrench"][m
+[32m+[m[32m        for prop in wrench_props:[m
+[32m+[m[32m            if hasattr(ctrl, prop):[m
+[32m+[m[32m                attr = getattr(ctrl, prop)[m
+[32m+[m[32m                try:[m
+[32m+[m[32m                    wrench = attr() if callable(attr) else attr[m
+[32m+[m[32m                    if wrench is not None:[m
+[32m+[m[32m                        # Check for correct type and shape (should be array-like, length 6)[m
+[32m+[m[32m                        arr = np.asarray(wrench)[m
+[32m+[m[32m                        if arr.shape == (6,):[m
+[32m+[m[32m                            return arr[m
+[32m+[m[32m                except Exception:[m
+[32m+[m[32m                    continue[m
+[32m+[m[32m        raise AttributeError("Controller does not provide a valid 6D wrench property (current_wrench, base_wrench, eef_wrench, or world_wrench)")[m
