@@ -44,7 +44,8 @@
     </body>
     <light pos="1.0 1.0 1.5" dir="-0.2 -0.2 -1" specular="0.3 0.3 0.3" directional="true" castshadow="false"/>
     <!-- front view -->
-    <camera mode="fixed" name="frontview" pos="1.6 0 0.75" quat="0.56 0.43 0.43 0.56"/>
+    <!-- <camera mode="fixed" name="frontview" pos="1.6 0 0.75" quat="0.56 0.43 0.43 0.56"/> -->
+    <camera mode="fixed" name="frontview" pos="1.6 0 1.45" quat="0.56 0.43 0.43 0.56"/>
     <!-- close view -->
     <camera mode="fixed" name="closeview" pos="1.0 0.5 0.65" quat="0.56 0.43 0.43 0.56"/>
     <!-- bird view -->

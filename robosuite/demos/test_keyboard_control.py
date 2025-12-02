@@ -146,7 +146,7 @@ def main(args):
         initialization_noise=None,
         has_renderer=True,
         ignore_done=True,
-        has_offscreen_renderer=False,  # Only launch one viewer window
+        has_offscreen_renderer=True,  # Required for camera / depth observations
         camera_names="cam_view",
         use_camera_obs=use_depth,
         depth_mode=args.depth_mode,
