@@ -94,6 +94,13 @@ class SoftPegInHole(ManipulationEnv):
         out_of_playground_threshold=0.14,
         failure_penalty=100,
         smoothness_penalty_weight=1.0,
+        progress_divisor=0.001,
+        force_penalty_coef=50.0,
+        force_ref_norm=50.0,
+        singularity_threshold=0.01,
+        singularity_penalty_coef=0.1,
+        step_penalty=-0.1,
+        success_curriculum_offset=0.75,
     ):
         self.gripper_inertial_properties = None
         self.gripper_name = gripper_types
@@ -116,6 +123,13 @@ class SoftPegInHole(ManipulationEnv):
         self.total_rewards = 0.0
         self.success_reward = success_reward
         self.smoothness_penalty_weight = smoothness_penalty_weight
+        self.progress_divisor = progress_divisor
+        self.force_penalty_coef = force_penalty_coef
+        self.force_ref_norm = force_ref_norm
+        self.singularity_threshold = singularity_threshold
+        self.singularity_penalty_coef = singularity_penalty_coef
+        self.step_penalty = step_penalty
+        self.success_curriculum_offset = success_curriculum_offset
         
         # Track reward components for debugging
         self.reward_components = {
@@ -334,20 +348,17 @@ class SoftPegInHole(ManipulationEnv):
         """
         if self.reward_type == 'baseline':
             # progress reward: only penalize moving away (sparse reward design)
-            progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
+            progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / self.progress_divisor
             # progress_reward = min(0.0, progress_reward)  # Only penalty for moving away
             progress_reward = max(0.0, progress_reward)
             # action smoothness reward
             action_smoothness_reward = -self.smoothness_penalty_weight * np.linalg.norm(action - self.action_prev) ** 2.0
             # force penalty - penalize high forces when misaligned to prevent crashes
-            peg_pos_error_x = self.peg_pos_error[0]  # Horizontal X error
-            peg_pos_error_y = self.peg_pos_error[1]  # Horizontal Y error
+            # peg_pos_error_x = self.peg_pos_error[0]  # Horizontal X error
+            # peg_pos_error_y = self.peg_pos_error[1]  # Horizontal Y error
             # Penalize force when peg is MISALIGNED (far from hole center in X or Y)
-            if abs(peg_pos_error_x) > 0.05 or abs(peg_pos_error_y) > 0.05:
-                current_force = np.linalg.norm(self.get_force_torque()[:3])
-                force_penalty = -1 * (current_force / 50.0) ** 2  # Penalize crashes during misaligned approach
-            else:
-                force_penalty = 0.0  # Allow contact forces when aligned for insertion
+            current_force = np.linalg.norm(self.get_force_torque()[:3])
+            force_penalty = -self.force_penalty_coef * (current_force / self.force_ref_norm) ** 2
             # singularity penalty - stronger than force penalty to avoid unstable postures
             # Use determinant of full Jacobian from controller; penalize when below threshold
             try:
@@ -355,19 +366,18 @@ class SoftPegInHole(ManipulationEnv):
                 detJ = np.linalg.det(J_full)
             except Exception:
                 detJ = 1.0
-            singularity_threshold = 0.05
             # Penalize more aggressively when detJ drops below threshold
             # Scales linearly with how far below threshold we are
-            singularity_penalty = -2 * max(0.0, singularity_threshold - detJ) / singularity_threshold
-            step_reward = -10  # encourage early termination
+            singularity_penalty = -self.singularity_penalty_coef * max(0.0, self.singularity_threshold - detJ) / self.singularity_threshold
+            step_reward = self.step_penalty
             reward = progress_reward + action_smoothness_reward + force_penalty + singularity_penalty + step_reward
             
-            # Track components for debugging (cumulative)
-            self.reward_components['progress'] += progress_reward
-            self.reward_components['smoothness'] += action_smoothness_reward
-            self.reward_components['force_penalty'] += force_penalty
-            self.reward_components['singularity'] += singularity_penalty
-            self.reward_components['step_penalty'] += step_reward
+            # Track components for debugging
+            self.reward_components['progress'] = progress_reward
+            self.reward_components['smoothness'] = action_smoothness_reward
+            self.reward_components['force_penalty'] = force_penalty
+            self.reward_components['singularity'] = singularity_penalty
+            self.reward_components['step_penalty'] = step_reward
             
             self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
         else:
@@ -376,12 +386,13 @@ class SoftPegInHole(ManipulationEnv):
         terminal_reward = 0.0
         if self._check_success():
             # scale down the reward when using curriculum from 75% to 100%
-            terminal_reward = self.success_reward * min(self.curriculum_coef + 0.75, 1.0)
+            terminal_reward = self.success_reward * min(self.curriculum_coef + self.success_curriculum_offset, 1.0)
             reward += terminal_reward
             # reward += self.success_reward
         elif self._check_failure():
-            terminal_reward = -self.failure_penalty
-            reward -= self.failure_penalty
+            # Failure penalty = negative success reward (symmetric terminal value)
+            terminal_reward = -self.success_reward
+            reward += terminal_reward
         
         self.reward_components['terminal'] = terminal_reward
         self.total_rewards += reward
@@ -960,16 +971,6 @@ class SoftPegInHole(ManipulationEnv):
         self.peg_vel_prev = np.zeros(3)
 
         self.total_rewards = 0.0
-        
-        # Reset reward components for new episode
-        self.reward_components = {
-            'progress': 0.0,
-            'smoothness': 0.0,
-            'force_penalty': 0.0,
-            'singularity': 0.0,
-            'step_penalty': 0.0,
-            'terminal': 0.0,
-        }
 
         controller = self.robots[0].composite_controller.part_controllers['right']
 
