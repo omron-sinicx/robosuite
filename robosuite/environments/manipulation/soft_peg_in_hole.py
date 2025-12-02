@@ -349,8 +349,8 @@ class SoftPegInHole(ManipulationEnv):
         if self.reward_type == 'baseline':
             # progress reward: only penalize moving away (sparse reward design)
             progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / self.progress_divisor
-            # progress_reward = min(0.0, progress_reward)  # Only penalty for moving away
-            progress_reward = max(0.0, progress_reward)
+            progress_reward = min(0.0, progress_reward)  # Only penalty for moving away
+            # progress_reward = max(0.0, progress_reward)
             # action smoothness reward
             # action_smoothness_reward = -self.smoothness_penalty_weight * np.linalg.norm(action - self.action_prev) ** 2.0
             action_smoothness_reward = -0
@@ -927,8 +927,13 @@ class SoftPegInHole(ManipulationEnv):
             self.init_peg_pos = peg_wrapper_body.pos.copy()
 
         self.peg_pos_offset = self.peg_pos_var * 0.001 * np.random.uniform(-1.0, 1.0, 3) * self.curriculum_variance_coef
-        self.peg_angle = (self.peg_angle_var * np.pi / 180.0) * \
-            (np.random.uniform(-1.0, 1.0) * self.curriculum_variance_coef)
+        # Only variance in Z direction for now
+        # z_offset = self.peg_pos_var * 0.001 * np.random.uniform(-1.0, 1.0) * self.curriculum_variance_coef
+        # self.peg_pos_offset = np.array([0.0, 0.0, z_offset])
+        # self.peg_angle = (self.peg_angle_var * np.pi / 180.0) * \
+        #             (np.random.uniform(-1.0, 1.0) * self.curriculum_variance_coef)
+        # Disable peg angle variance - keep peg aligned
+        self.peg_angle = 0.0
         peg_quat_xyzw = axisangle2quat(np.array([0, self.peg_angle, 0]))
         peg_quat_wxyz = convert_quat(peg_quat_xyzw, to="wxyz")
         # mujoco use the wxyz quaternion, so initialize the rotation with (1,0,0,0)
