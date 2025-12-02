@@ -326,21 +326,21 @@ class SoftPegInHole(ManipulationEnv):
         # Phase 1 (0.0-0.33): 150N - Learn delta movements with lenient force limits
         # Phase 2 (0.33-0.66): 100N - Refine movements with moderate force limits
         # Phase 3 (0.66-1.0): 50N - Master stiffness control with strict force limits
-        self.force_termination_threshold = np.interp(
-            x, [0.0, 0.33, 0.66, 1.0], [100.0, 100.0, 75.0, 50.0]
-        )
+        # self.force_termination_threshold = np.interp(
+        #     x, [0.0, 0.33, 0.66, 1.0], [100.0, 100.0, 75.0, 50.0]
+        # )
 
-        # if x < 0.5:
-        #     self.curriculum_variance_coef = 0.0  # No variations until the first phase of the curriculum is complete
-        #     self.curriculum_height_coef = min(x * 2.0, 1.0)  # from 0 to 0.5 increase height
-        #     self.initial_pos[2] = self.initial_z_height + \
-        #         (self.hole_edge_z_height - self.initial_z_height) * self.curriculum_height_coef
-        # else:
-        #     # only after the peg is out of the hole, increase the variance of the hole pose and peg angle
-        #     # interpolate the variance coef from 0.5 to 1.0
-        #     self.curriculum_variance_coef = np.interp(x, (0.5, 1.0), (0.0, 1.0))
-        #     self.initial_pos[2] = np.random.uniform(low=self.hole_edge_z_height,
-        #                                             high=self.max_z_height)
+        if x < 0.5:
+            self.curriculum_variance_coef = 0.0  # No variations until the first phase of the curriculum is complete
+            self.curriculum_height_coef = min(x * 2.0, 1.0)  # from 0 to 0.5 increase height
+            self.initial_pos[2] = self.initial_z_height + \
+                (self.hole_edge_z_height - self.initial_z_height) * self.curriculum_height_coef
+        else:
+            # only after the peg is out of the hole, increase the variance of the hole pose and peg angle
+            # interpolate the variance coef from 0.5 to 1.0
+            self.curriculum_variance_coef = np.interp(x, (0.5, 1.0), (0.0, 1.0))
+            self.initial_pos[2] = np.random.uniform(low=self.hole_edge_z_height,
+                                                    high=self.max_z_height)
 
     def reward(self, action=None):
         """
@@ -352,23 +352,28 @@ class SoftPegInHole(ManipulationEnv):
             # progress_reward = min(0.0, progress_reward)  # Only penalty for moving away
             progress_reward = max(0.0, progress_reward)
             # action smoothness reward
-            action_smoothness_reward = -self.smoothness_penalty_weight * np.linalg.norm(action - self.action_prev) ** 2.0
+            # action_smoothness_reward = -self.smoothness_penalty_weight * np.linalg.norm(action - self.action_prev) ** 2.0
+            action_smoothness_reward = -0
             # force penalty - penalize high forces when misaligned to prevent crashes
             # peg_pos_error_x = self.peg_pos_error[0]  # Horizontal X error
             # peg_pos_error_y = self.peg_pos_error[1]  # Horizontal Y error
             # Penalize force when peg is MISALIGNED (far from hole center in X or Y)
-            current_force = np.linalg.norm(self.get_force_torque()[:3])
-            force_penalty = -self.force_penalty_coef * (current_force / self.force_ref_norm) ** 2
+            # current_force = np.linalg.norm(self.get_force_torque()[:3])
+            # force_penalty = -self.force_penalty_coef * (current_force / self.force_ref_norm) ** 2
+            force_penalty = 0.0
+
             # singularity penalty - stronger than force penalty to avoid unstable postures
             # Use determinant of full Jacobian from controller; penalize when below threshold
-            try:
-                J_full = self.robots[0].composite_controller.part_controllers['right'].J_full
-                detJ = np.linalg.det(J_full)
-            except Exception:
-                detJ = 1.0
+            # try:
+            #     J_full = self.robots[0].composite_controller.part_controllers['right'].J_full
+            #     detJ = np.linalg.det(J_full)
+            # except Exception:
+            #     detJ = 1.0
+            singularity_penalty = 0.0
+
             # Penalize more aggressively when detJ drops below threshold
             # Scales linearly with how far below threshold we are
-            singularity_penalty = -self.singularity_penalty_coef * max(0.0, self.singularity_threshold - detJ) / self.singularity_threshold
+            # singularity_penalty = -self.singularity_penalty_coef * max(0.0, self.singularity_threshold - detJ) / self.singularity_threshold
             step_reward = self.step_penalty
             reward = progress_reward + action_smoothness_reward + force_penalty + singularity_penalty + step_reward
             
