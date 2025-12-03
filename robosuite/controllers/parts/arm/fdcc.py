@@ -296,10 +296,10 @@ class ForwardDynamicsComplianceController(Controller):
 
         if self.compliance_mode == "variable_stiffness":
             delta, stiffness = action[:self.control_pose_dim], action[self.control_pose_dim:]
-            self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
+            self.stiffness = self.stiffness_min + ((stiffness - self.input_min) / (self.input_max - self.input_min)) * (self.stiffness_max - self.stiffness_min)
         elif self.compliance_mode == "variable_stiffness_and_p_gains":
             delta, stiffness, kp = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:18]
-            self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
+            self.stiffness = self.stiffness_min + ((stiffness - self.input_min) / (self.input_max - self.input_min)) * (self.stiffness_max - self.stiffness_min)
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
         elif self.compliance_mode == "virtual_force":
             delta, desired_ft = action[:self.control_pose_dim], action[self.control_pose_dim:]
@@ -615,8 +615,8 @@ class ForwardDynamicsComplianceController(Controller):
                 - (np.array) maximum action values
         """
         if self.compliance_mode == "variable_stiffness":
-            low = np.concatenate([self.input_min, self.stiffness_min])
-            high = np.concatenate([self.input_max, self.stiffness_max])
+            low = np.concatenate([self.input_min, self.input_min])
+            high = np.concatenate([self.input_max, self.input_max])
         elif self.compliance_mode == "variable_stiffness_p_gains":
             low = np.concatenate([self.input_min,  self.stiffness_min, self.kp_min])
             high = np.concatenate([self.input_max, self.stiffness_max, self.kp_max])

@@ -311,9 +311,10 @@ class SoftPegInHole(ManipulationEnv):
         if self.reward_type == 'baseline':
             # progress reward
             progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
-            progress_reward = min(0.0, progress_reward)
+            progress_reward = max(0.0, progress_reward)
             # action smoothness reward
-            action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
+            action_smoothness_reward = np.linalg.norm(action - self.action_prev) ** 2.0
+            action_smoothness_reward = - min(1.0, action_smoothness_reward)
             step_reward = -0.1  # encourage early termination
             reward = progress_reward + action_smoothness_reward + step_reward
             self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
@@ -358,6 +359,8 @@ class SoftPegInHole(ManipulationEnv):
             print("Success")
         if failed_reason is not None:
             print("Failed", failed_reason)
+        if self.done:
+            print("Total rewards", self.total_rewards)
 
         info = {
             'is_success': is_success,
