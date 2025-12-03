@@ -275,12 +275,14 @@ class MujocoEnv(metaclass=EnvMeta):
         # TODO(yukez): investigate black screen of death
         # Use hard reset if requested
 
-        if self.renderer == "mjviewer":
-            self._destroy_viewer()
-
         if self.hard_reset and not self.deterministic_reset:
+            if self.renderer == "mjviewer":
+                self._destroy_viewer()
+
             self._load_model()
             self._initialize_sim()
+            if self.viewer is not None and self.renderer == "mujoco":
+                self.viewer.sim = self.sim
         # Else, we only reset the sim internally
         else:
             self.sim.reset()
