@@ -214,7 +214,7 @@ def main(args):
     # initialize device
     from robosuite.devices import Keyboard
 
-    device = Keyboard(env, pos_sensitivity=1.0, rot_sensitivity=1.0)
+    device = Keyboard(env, pos_sensitivity=0.01, rot_sensitivity=1.0)
 
     # Wrap the keyboard on_press to capture initial pose at key press for debugging
     _orig_on_press = device.on_press
