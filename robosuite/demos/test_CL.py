@@ -11,13 +11,13 @@ if __name__ == "__main__":
     control_freq = 20
 
     # Load the desired controller
-    arm_controller_config = suite.load_part_controller_config(default_controller="OSC_POSITION")
+    arm_controller_config = suite.load_part_controller_config(default_controller="FDCC")
     controller_configs = refactor_composite_controller_config(
         arm_controller_config, 'ur5e', ["right"]
     )
 
     use_depth = False
-    peg_shape = 'rectangle'
+    peg_shape = 'triangle'
     randomize_camera = False
 
     # initialize the task
@@ -26,8 +26,9 @@ if __name__ == "__main__":
             env_name="SoftPegInHole",
             robots="UR5e",
             controller_configs=controller_configs,
-            gripper_types='Robotiq85GripperSoft',
+            gripper_types='Robotiq85Gripper',
             has_renderer=True,
+            initialization_noise=None,
             hard_reset=peg_shape == 'random',
             # ignore_done=True,
             has_offscreen_renderer=use_depth,
@@ -52,14 +53,20 @@ if __name__ == "__main__":
             deterministic_reset=False,
             success_reward=100,
             initial_pose=np.array([0.0, 0.65, 0.27, -np.pi / 4, -np.pi / 4, 0.0, 0.0]),
-            peg_shape=peg_shape,
-            hole_pos_var=50,
-            peg_angle_var=10,
+            peg_and_hole_color=dict(
+                peg_default=[1.0, 1.0, 1.0],
+                hole_default=[0.5, 0.5, 0.5],
+                interp=0.2,
+            ),
+            shape=peg_shape,
+            peg_pos_var=0.0,
+            hole_pos_var=0,
+            peg_angle_var=0,
             peg_friction_range=[1.0, 1.0],
             reward_type='baseline',
             camera_view_direction='real_calib',
             force_termination_threshold=30,
-            renderer="mujoco" if peg_shape == 'random' else 'mjviewer',
+            renderer="mujoco",  # if peg_shape == 'random' else 'mjviewer',
             renderer_config={'cam_config': {"lookat": [0.3, 0.5, 0.38],
                                             "distance": 1.0, "azimuth": 180, "elevation": -25, }}
         ),
@@ -79,11 +86,11 @@ if __name__ == "__main__":
     # neutral = np.array([0, 0, -1])
     tic = time.time()
     diffs = []
-    cl_coef = 0.5
+    cl_coef = 0.3
     for i in range(10000):
         sec = i * 1.0 / control_freq
 
-        action = neutral.copy()
+        action = np.zeros(action_dim)
 
         obs, rew, terminated, truncated, info = env.step(action)
         env.render()
@@ -104,7 +111,8 @@ if __name__ == "__main__":
         if (i + 1) % 100 == 0:
             cl_coef += 0.02
             cl_coef = min(1.0, cl_coef)
-            print(f"Curriculum coefficient: {cl_coef:0.02f}")
+
+        print(f"Curriculum coefficient: {cl_coef:0.02f}")
 
     diff = np.mean(diffs, axis=0)
     print(f"{diff=}")

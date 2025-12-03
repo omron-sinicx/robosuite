@@ -46,7 +46,7 @@ class SoftPegInHole(ManipulationEnv):
         placement_initializer=None,
         has_renderer=False,
         has_offscreen_renderer=False,
-        render_camera="sideview",
+        render_camera="closeview",
         render_collision_mesh=False,
         render_visual_mesh=True,
         render_gpu_device_id=-1,
@@ -83,7 +83,7 @@ class SoftPegInHole(ManipulationEnv):
         delay_obs={},
         shape=None,
         shape_type='basic',
-        force_termination_threshold=50.0,
+        force_termination_threshold=50.,
         peg_distance_weights=np.array([1.0, 1.0, 10.0]),
         obs_pose_scale=1.0,
         obs_force_scale=1.0,
@@ -92,15 +92,6 @@ class SoftPegInHole(ManipulationEnv):
         peg_and_hole_color=None,
         going_away_from_goal_threshold=1.2,
         out_of_playground_threshold=0.14,
-        failure_penalty=100,
-        smoothness_penalty_weight=1.0,
-        progress_divisor=0.001,
-        force_penalty_coef=50.0,
-        force_ref_norm=50.0,
-        singularity_threshold=0.01,
-        singularity_penalty_coef=0.1,
-        step_penalty=-0.1,
-        success_curriculum_offset=0.75,
     ):
         self.gripper_inertial_properties = None
         self.gripper_name = gripper_types
@@ -122,25 +113,6 @@ class SoftPegInHole(ManipulationEnv):
 
         self.total_rewards = 0.0
         self.success_reward = success_reward
-        self.smoothness_penalty_weight = smoothness_penalty_weight
-        self.progress_divisor = progress_divisor
-        self.force_penalty_coef = force_penalty_coef
-        self.force_ref_norm = force_ref_norm
-        self.singularity_threshold = singularity_threshold
-        self.singularity_penalty_coef = singularity_penalty_coef
-        self.step_penalty = step_penalty
-        self.success_curriculum_offset = success_curriculum_offset
-        
-        # Track reward components for debugging
-        self.reward_components = {
-            'progress': 0.0,
-            'smoothness': 0.0,
-            'force_penalty': 0.0,
-            'singularity': 0.0,
-            'step_penalty': 0.0,
-            'terminal': 0.0,
-        }
-        self.failure_penalty = failure_penalty
 
         # peg & hole shape
         assert shape_type, 'Must provide shape_type'
@@ -192,10 +164,6 @@ class SoftPegInHole(ManipulationEnv):
         self.peg_size_range = np.array(peg_size_range)
         self.peg_mass_range = np.array(peg_mass_range)
         self.peg_and_hole_color = peg_and_hole_color
-        
-        # Force termination curriculum
-        self.initial_force_termination_threshold = force_termination_threshold
-        self.force_termination_threshold = force_termination_threshold
 
         # observation
         assert use_proprio_names is not None and type(use_proprio_names) == list, \
@@ -285,6 +253,8 @@ class SoftPegInHole(ManipulationEnv):
         # TODO: do not hard code the condition
         if self.user_defined_shape is None or self.peg_size_range[0] != self.peg_size_range[1]:
             hard_reset = True
+        else:
+            hard_reset = False
 
         super().__init__(
             robots=robots,
@@ -322,14 +292,6 @@ class SoftPegInHole(ManipulationEnv):
         assert 0 <= x <= 1, "Curriculum must be between 0 and 1"
         self.curriculum_coef = x
 
-        # Force termination curriculum: 150N -> 100N -> 50N
-        # Phase 1 (0.0-0.33): 150N - Learn delta movements with lenient force limits
-        # Phase 2 (0.33-0.66): 100N - Refine movements with moderate force limits
-        # Phase 3 (0.66-1.0): 50N - Master stiffness control with strict force limits
-        # self.force_termination_threshold = np.interp(
-        #     x, [0.0, 0.33, 0.66, 1.0], [100.0, 100.0, 75.0, 50.0]
-        # )
-
         if x < 0.5:
             self.curriculum_variance_coef = 0.0  # No variations until the first phase of the curriculum is complete
             self.curriculum_height_coef = min(x * 2.0, 1.0)  # from 0 to 0.5 increase height
@@ -347,59 +309,24 @@ class SoftPegInHole(ManipulationEnv):
         Reward function for the task.
         """
         if self.reward_type == 'baseline':
-            # progress reward: only penalize moving away (sparse reward design)
-            progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / self.progress_divisor
-            progress_reward = min(0.0, progress_reward)  # Only penalty for moving away
-            # progress_reward = max(0.0, progress_reward)
+            # progress reward
+            progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
+            progress_reward = min(0.0, progress_reward)
             # action smoothness reward
-            # action_smoothness_reward = -self.smoothness_penalty_weight * np.linalg.norm(action - self.action_prev) ** 2.0
-            action_smoothness_reward = -0
-            # force penalty - penalize high forces when misaligned to prevent crashes
-            # peg_pos_error_x = self.peg_pos_error[0]  # Horizontal X error
-            # peg_pos_error_y = self.peg_pos_error[1]  # Horizontal Y error
-            # Penalize force when peg is MISALIGNED (far from hole center in X or Y)
-            # current_force = np.linalg.norm(self.get_force_torque()[:3])
-            # force_penalty = -self.force_penalty_coef * (current_force / self.force_ref_norm) ** 2
-            force_penalty = 0.0
-
-            # singularity penalty - stronger than force penalty to avoid unstable postures
-            # Use determinant of full Jacobian from controller; penalize when below threshold
-            # try:
-            #     J_full = self.robots[0].composite_controller.part_controllers['right'].J_full
-            #     detJ = np.linalg.det(J_full)
-            # except Exception:
-            #     detJ = 1.0
-            singularity_penalty = 0.0
-
-            # Penalize more aggressively when detJ drops below threshold
-            # Scales linearly with how far below threshold we are
-            # singularity_penalty = -self.singularity_penalty_coef * max(0.0, self.singularity_threshold - detJ) / self.singularity_threshold
-            step_reward = self.step_penalty
-            reward = progress_reward + action_smoothness_reward + force_penalty + singularity_penalty + step_reward
-            
-            # Track components for debugging
-            self.reward_components['progress'] = progress_reward
-            self.reward_components['smoothness'] = action_smoothness_reward
-            self.reward_components['force_penalty'] = force_penalty
-            self.reward_components['singularity'] = singularity_penalty
-            self.reward_components['step_penalty'] = step_reward
-            
+            action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
+            step_reward = -0.1  # encourage early termination
+            reward = progress_reward + action_smoothness_reward + step_reward
             self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
         else:
             raise ValueError(f'Invalid reward type {self.reward_type}')
 
-        terminal_reward = 0.0
         if self._check_success():
             # scale down the reward when using curriculum from 75% to 100%
-            terminal_reward = self.success_reward * min(self.curriculum_coef + self.success_curriculum_offset, 1.0)
-            reward += terminal_reward
-            # reward += self.success_reward
+            # reward += self.success_reward * min(self.curriculum_coef + 0.75, 1.0)
+            reward += self.success_reward
         elif self._check_failure():
-            # Failure penalty = negative success reward (symmetric terminal value)
-            terminal_reward = -self.success_reward
-            reward += terminal_reward
-        
-        self.reward_components['terminal'] = terminal_reward
+            reward += -self.success_reward
+
         self.total_rewards += reward
 
         return reward
@@ -427,6 +354,10 @@ class SoftPegInHole(ManipulationEnv):
             self.done = False
 
         self.action_prev = action.copy()
+        if is_success:
+            print("Success")
+        if failed_reason is not None:
+            print("Failed", failed_reason)
 
         info = {
             'is_success': is_success,
@@ -435,7 +366,6 @@ class SoftPegInHole(ManipulationEnv):
             'early_termination_reason': failed_reason,
             'total_rewards': self.total_rewards,
             'timestep': self.timestep,
-            'reward_components': self.reward_components.copy(),
         }
         return reward, self.done, info
 
@@ -595,22 +525,6 @@ class SoftPegInHole(ManipulationEnv):
         aligned = np.linalg.norm(peg_error[:2]) < PEG_ALIGNMENT_THRESHOLD
         return aligned.astype(np.float32)
 
-    def current_stiffness(self, obs_cache):
-        """
-        Current stiffness values being used by FDCC controller.
-        For variable_stiffness mode, returns 6D stiffness normalized to [0, 1].
-        """
-        controller = self.robots[0].composite_controller.part_controllers['right']
-        if hasattr(controller, 'stiffness'):
-            # Get current stiffness (6D for variable_stiffness mode)
-            stiffness = controller.stiffness
-            # Normalize by stiffness_limits from config [50, 200]
-            # This makes stiffness values comparable to other observations
-            normalized = (stiffness - 50.0) / (200.0 - 50.0)
-            return normalized.astype(np.float32)
-        # Fallback if controller doesn't have stiffness (e.g., OSC_POSE)
-        return np.zeros(6, dtype=np.float32)
-
     def peg_vel(self, obs_cache):
         return self.sim.data.get_site_xvelp("gripper0_right_peg_ft_frame").copy().astype(np.float32)
 
@@ -697,7 +611,6 @@ class SoftPegInHole(ManipulationEnv):
         wrist_pos_rel = self.wrist_pos_rel
         wrist_force = self.wrist_force
         wrist_torque = self.wrist_torque
-        current_stiffness = self.current_stiffness
         # privileged modality
         peg_pos_rel = self.peg_pos_rel
         peg_rot6d = self.peg_rot6d
@@ -786,7 +699,6 @@ class SoftPegInHole(ManipulationEnv):
             [f"wrist_pos_rel", wrist_pos_rel, non_priv_modality],
             [f"wrist_force", wrist_force, non_priv_modality],
             [f"wrist_torque", wrist_torque, non_priv_modality],
-            [f"current_stiffness", current_stiffness, non_priv_modality],
             [f"peg_pos_rel", peg_pos_rel, priv_modality],
             [f"peg_rot6d", peg_rot6d, priv_modality],
             [f"peg_alignment", peg_alignment, priv_modality],
@@ -927,13 +839,8 @@ class SoftPegInHole(ManipulationEnv):
             self.init_peg_pos = peg_wrapper_body.pos.copy()
 
         self.peg_pos_offset = self.peg_pos_var * 0.001 * np.random.uniform(-1.0, 1.0, 3) * self.curriculum_variance_coef
-        # Only variance in Z direction for now
-        # z_offset = self.peg_pos_var * 0.001 * np.random.uniform(-1.0, 1.0) * self.curriculum_variance_coef
-        # self.peg_pos_offset = np.array([0.0, 0.0, z_offset])
-        # self.peg_angle = (self.peg_angle_var * np.pi / 180.0) * \
-        #             (np.random.uniform(-1.0, 1.0) * self.curriculum_variance_coef)
-        # Disable peg angle variance - keep peg aligned
-        self.peg_angle = 0.0
+        self.peg_angle = (self.peg_angle_var * np.pi / 180.0) * \
+            (np.random.uniform(-1.0, 1.0) * self.curriculum_variance_coef)
         peg_quat_xyzw = axisangle2quat(np.array([0, self.peg_angle, 0]))
         peg_quat_wxyz = convert_quat(peg_quat_xyzw, to="wxyz")
         # mujoco use the wxyz quaternion, so initialize the rotation with (1,0,0,0)
@@ -1011,14 +918,15 @@ class SoftPegInHole(ManipulationEnv):
         # kinematic singularity termination
         is_singularity = np.linalg.det(self.robots[0].composite_controller.part_controllers['right'].J_full) < 0.01
         # Moving in the peg in the opposite direction to the goal
-        # is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * self.going_away_from_goal_threshold
-        is_going_away_from_goal = False
+        is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * self.going_away_from_goal_threshold
         # Moving the wrist out of a safe zone even though the peg is stuck in the hole
         hole_pose = self.sim.data.body_xpos[self.hole_body_id][:2]  # ignore z
         is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > self.out_of_playground_threshold
         # Contact force is to high, particularly between the wrist and the gripper (pushing down too hard)
         is_colliding = np.linalg.norm(self.get_force_torque()[:3]) > self.force_termination_threshold \
             if self.force_termination_threshold is not None else False
+        if is_colliding:
+            print("force", np.linalg.norm(self.get_force_torque(), self.force_termination_threshold))
 
         if is_singularity:
             return "singularity"
@@ -1058,4 +966,3 @@ class SoftPegInHole(ManipulationEnv):
                 except Exception:
                     continue
         raise AttributeError("Controller does not provide a valid 6D wrench property (current_wrench, base_wrench, eef_wrench, or world_wrench)")
-        

@@ -1,4 +1,13 @@
 # the third script written to test simulation, control via keyboard
+import robosuite as suite
+from robosuite.utils.input_utils import *
+from robosuite.demos.demo_control import refactor_composite_controller_config
+from robosuite.wrappers import GymWrapper
+from robosuite.utils.transform_utils import *
+import mujoco
+import matplotlib.pyplot as plt
+from torch.utils.tensorboard import SummaryWriter
+import cv2
 from argparse import ArgumentParser
 import logging
 import time
@@ -7,16 +16,6 @@ from copy import deepcopy
 
 import numpy as np
 np.set_printoptions(suppress=True)
-import cv2
-from torch.utils.tensorboard import SummaryWriter
-import matplotlib.pyplot as plt
-
-import mujoco
-from robosuite.utils.transform_utils import *
-from robosuite.wrappers import GymWrapper
-from robosuite.demos.demo_control import refactor_composite_controller_config
-from robosuite.utils.input_utils import *
-import robosuite as suite
 
 
 def colorize_depth(depth, d_min=50, d_max=2000, d_scale=1000):
@@ -191,23 +190,23 @@ def main(args):
         translation_control_only=False,
         # force_termination_threshold=None,
         render_camera=None,
-        renderer='mjviewer',
-        renderer_config={'cam_config': {"lookat": [0.3, 0.5, 0.2],
-                                        "distance": 0.2, "azimuth": 180, "elevation": -0, }}
+        renderer='mujoco',
+        # renderer_config={'cam_config': {"lookat": [0.3, 0.5, 0.2],
+        #                                 "distance": 0.2, "azimuth": 180, "elevation": -0, }}
     )
     env = add_domain_randomize(env, camera=args.randomize_camera, color=args.randomize_color, lighting=False)
     env = GymWrapper(env, flatten_obs=False, keys=obs_keys)
 
     env.set_curriculum(args.curriculum)
     env.reset()
-    
+
     # For FDCC/COMPLIANCE controllers, explicitly reset goal to current pose to prevent auto-movement
     active_robot = env.robots[0]
     for arm in active_robot.arms:
         controller = active_robot.part_controllers[arm]
         if hasattr(controller, 'reset_goal'):
             controller.reset_goal()
-    
+
     # env.viewer.set_camera(camera_id=0)
     # env.sim._render_context_offscreen.vopt.flags[mujoco.mjtVisFlag.mjVIS_TRANSPARENT] = False
 
@@ -326,7 +325,7 @@ def main(args):
             # Keyboard input only provides position/orientation commands, not force/torque
             if controller.name in ["FDCC", "COMPLIANCE"]:
                 if controller.compliance_mode in ["variable_stiffness"]:
-                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(6)*1000])
+                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(len(action_dict[arm]))*1000])
                 elif controller.compliance_mode in ["virtual_force"]:
                     action_dict[arm] = np.concatenate([action_dict[arm], np.zeros(6)])
 
@@ -346,7 +345,6 @@ def main(args):
             all_prev_gripper_actions[device.active_robot][gripper_ac] = action_dict[gripper_ac]
 
         obs, rew, terminated, truncated, info = env.step(env_action)
-
 
         # If a key was pressed this iteration, print initial and final EEF pose for debugging
         if getattr(device, "_debug_last_key", None) is not None:
@@ -374,26 +372,6 @@ def main(args):
             device._debug_last_key = None
             device._debug_initial_pose = None
         env.render()
-
-        if not np.all(np.isclose(active_robot._joint_positions, prev_jpos, rtol=1e-5)):
-            # print('joint position', active_robot._joint_positions)
-            # print('hand position', active_robot._hand_pos)
-            # non_priv_obs = obs["robot0_non_priv_proprio-state"]
-            # priv_obs = obs["robot0_priv_proprio-state"]
-            # print('non_priv')
-            # for i, v in enumerate(non_priv_obs):
-            #     print(f'\t{i}: {v:.6f}')
-            # print('priv')
-            # for i, v in enumerate(priv_obs):
-            #     print(f'\t{i}: {v:.6f}')
-            # print(f'{non_priv_obs.shape=} {non_priv_obs[:10]=}')
-            # print(f'{non_priv_obs[:9]=}')
-            # print(f'{non_priv_obs[9:9+5]=}')
-            # if args.use_peg_bps:
-            # print('peg_bps-state', obs['peg_bps-state'].shape)
-            # print()
-            pass
-        prev_jpos = active_robot._joint_positions
 
         if args.visualize:
             img = obs['cam_view_image']
@@ -476,7 +454,7 @@ def main(args):
         # print(f"{env.peg_pos_error} {peg_pos=}")
 
         force = env.get_force_torque()
-        # print(f"{i=} {force[:3]}")
+        # print(f"{i=} {force}")
         # if i > 100:
         #     wrenchs.append(force)
         #     # print(f"{np.mean(wrenchs, axis=0)=}")
@@ -487,7 +465,6 @@ def main(args):
     env.close()
     if args.visualize:
         cv2.destroyAllWindows()
-
 
 
 if __name__ == "__main__":
