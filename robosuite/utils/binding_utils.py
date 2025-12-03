@@ -73,26 +73,13 @@ class MjRenderContext:
                 from robosuite.renderers.context.glfw_context import GLFWGLContext as GLContext
 
         assert offscreen, "only offscreen supported for now"
-        self.sim = sim
+        # self.sim = sim
         self.offscreen = offscreen
         self.device_id = device_id
 
         # setup GL context with defaults for now
         self.gl_ctx = GLContext(max_width=max_width, max_height=max_height, device_id=self.device_id)
         self.gl_ctx.make_current()
-
-        # Ensure the model data has been updated so that there
-        # is something to render
-        sim.forward()
-        # make sure sim has this context
-        sim.add_render_context(self)
-
-        self.model = sim.model
-        self.data = sim.data
-
-        # create default scene
-        # set maxgeom to 10k to support large-scale scenes
-        self.scn = mujoco.MjvScene(sim.model._model, maxgeom=10000)
 
         # camera
         self.cam = mujoco.MjvCamera()
@@ -110,6 +97,19 @@ class MjRenderContext:
         # self._markers = []
         # self._overlay = {}
 
+    def set_sim(self, sim):
+        # Ensure the model data has been updated so that there
+        # is something to render
+        sim.forward()
+        # make sure sim has this context
+        sim.add_render_context(self)
+
+        self.model = sim.model
+        self.data = sim.data
+
+        # create default scene
+        # set maxgeom to 10k to support large-scale scenes
+        self.scn = mujoco.MjvScene(sim.model._model, maxgeom=10000)
         self._set_mujoco_context_and_buffers()
 
     def _set_mujoco_context_and_buffers(self):

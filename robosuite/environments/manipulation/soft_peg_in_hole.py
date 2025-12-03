@@ -359,8 +359,6 @@ class SoftPegInHole(ManipulationEnv):
             print("Success")
         if failed_reason is not None:
             print("Failed", failed_reason)
-        if self.done:
-            print("Total rewards", self.total_rewards)
 
         info = {
             'is_success': is_success,
