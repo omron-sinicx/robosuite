@@ -325,7 +325,7 @@ def main(args):
             # Keyboard input only provides position/orientation commands, not force/torque
             if controller.name in ["FDCC", "COMPLIANCE"]:
                 if controller.compliance_mode in ["variable_stiffness"]:
-                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(len(action_dict[arm]))*1000])
+                    action_dict[arm] = np.concatenate([action_dict[arm], np.ones(len(action_dict[arm]))])
                 elif controller.compliance_mode in ["virtual_force"]:
                     action_dict[arm] = np.concatenate([action_dict[arm], np.zeros(6)])
 
@@ -340,7 +340,7 @@ def main(args):
 
         env_action = [robot.create_action_vector(all_prev_gripper_actions[i]) for i, robot in enumerate(env.robots)]
         env_action[device.active_robot] = active_robot.create_action_vector(action_dict)
-        env_action = np.concatenate(env_action)
+        env_action = np.concatenate(env_action) * 10
         for gripper_ac in all_prev_gripper_actions[device.active_robot]:
             all_prev_gripper_actions[device.active_robot][gripper_ac] = action_dict[gripper_ac]
 
