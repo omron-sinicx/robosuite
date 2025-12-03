@@ -257,11 +257,6 @@ class MujocoEnv(metaclass=EnvMeta):
         for processor in self._xml_processors:
             xml = processor(xml)
 
-        if hasattr(self, 'sim') and self.sim is not None:
-            # NOTE: Delete the _render_context_offscreen is necessary to prevent memory leaks
-            del self.sim._render_context_offscreen
-            gc.collect()
-
         # Create the simulation instance
         self.sim = MjSim.from_xml_string(xml)
 
@@ -334,6 +329,7 @@ class MujocoEnv(metaclass=EnvMeta):
                 self.viewer = OpenCVViewer(self.sim)
 
                 # Set the camera angle for viewing
+                print(self.render_camera)
                 if self.render_camera is not None:
                     camera_ids = []
                     for cam in self.render_camera:
