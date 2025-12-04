@@ -41,7 +41,7 @@
   "position_limits": null,
   "orientation_limits": null,
   "control_delta": true,
-  "use_ori": false,
+  "use_ori": true,
   "frame_of_reference": "eef",
   "input_ref_frame": "base",
   "interpolation": null,
