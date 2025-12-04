@@ -189,8 +189,8 @@ def main(args):
         ),
         translation_control_only=False,
         # force_termination_threshold=None,
-        render_camera=None,
-        renderer='mujoco',
+        render_camera="closeview",
+        renderer='mjviewer',
         # renderer_config={'cam_config': {"lookat": [0.3, 0.5, 0.2],
         #                                 "distance": 0.2, "azimuth": 180, "elevation": -0, }}
     )
@@ -213,7 +213,7 @@ def main(args):
     # initialize device
     from robosuite.devices import Keyboard
 
-    device = Keyboard(env, pos_sensitivity=0.01, rot_sensitivity=1.0)
+    device = Keyboard(env, pos_sensitivity=10.0, rot_sensitivity=1.0)
 
     # Wrap the keyboard on_press to capture initial pose at key press for debugging
     _orig_on_press = device.on_press

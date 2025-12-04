@@ -63,6 +63,7 @@ class SoftPegInHole(ManipulationEnv):
         renderer_config=None,
         lite_physics=True,
         deterministic_reset=False,
+        hard_reset_every_n_episodes=10,
         # TODO: refactor custom environment config
         hole_pos_var=None,
         peg_pos_var=None,
@@ -252,6 +253,7 @@ class SoftPegInHole(ManipulationEnv):
 
         # TODO: do not hard code the condition
         self.reset_counter = 0
+        self.hard_reset_every_n_episodes = hard_reset_every_n_episodes
         if self.user_defined_shape is None or self.peg_size_range[0] != self.peg_size_range[1]:
             hard_reset = True
             self.env_hard_reset = True
@@ -791,7 +793,7 @@ class SoftPegInHole(ManipulationEnv):
         """
 
         # Only hard reset every N episodes to avoid resetting the environment too often
-        if self.env_hard_reset and self.reset_counter % 10 == 0:
+        if self.env_hard_reset and self.reset_counter % self.hard_reset_every_n_episodes == 0:
             self.hard_reset = True
         else:
             self.hard_reset = False
