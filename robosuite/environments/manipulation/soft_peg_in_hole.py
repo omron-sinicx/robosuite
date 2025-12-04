@@ -251,10 +251,13 @@ class SoftPegInHole(ManipulationEnv):
         self.peg_distance_weights = peg_distance_weights
 
         # TODO: do not hard code the condition
+        self.reset_counter = 0
         if self.user_defined_shape is None or self.peg_size_range[0] != self.peg_size_range[1]:
             hard_reset = True
+            self.env_hard_reset = True
         else:
             hard_reset = False
+            self.env_hard_reset = False
 
         super().__init__(
             robots=robots,
@@ -355,10 +358,6 @@ class SoftPegInHole(ManipulationEnv):
             self.done = False
 
         self.action_prev = action.copy()
-        if is_success:
-            print("Success")
-        if failed_reason is not None:
-            print("Failed", failed_reason)
 
         info = {
             'is_success': is_success,
@@ -791,6 +790,12 @@ class SoftPegInHole(ManipulationEnv):
         Resets simulation internal configurations.
         """
 
+        # Only hard reset every N episodes to avoid resetting the environment too often
+        if self.env_hard_reset and self.reset_counter % 10 == 0:
+            self.hard_reset = True
+        else:
+            self.hard_reset = False
+
         # hole position variance is equivalent to wrist position variance, also prevent misleading visualization
         init_wrist_pos = self.initial_pos.copy()
         init_wrist_pos[:2] += np.random.uniform(-self.hole_pos_var, self.hole_pos_var,
@@ -897,6 +902,8 @@ class SoftPegInHole(ManipulationEnv):
             controller.kp = np.ones(6) * 10.0 ** np.random.uniform(4.0, 4.5)
             controller.kd = np.sqrt(controller.kp) * np.random.uniform(0.5, 1.5)
 
+        self.reset_counter += 1
+
     def visualize(self, vis_settings):
         """
         TODO
@@ -926,8 +933,6 @@ class SoftPegInHole(ManipulationEnv):
         # Contact force is to high, particularly between the wrist and the gripper (pushing down too hard)
         is_colliding = np.linalg.norm(self.get_force_torque()[:3]) > self.force_termination_threshold \
             if self.force_termination_threshold is not None else False
-        if is_colliding:
-            print("force", np.linalg.norm(self.get_force_torque(), self.force_termination_threshold))
 
         if is_singularity:
             return "singularity"

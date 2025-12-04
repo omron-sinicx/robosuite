@@ -122,7 +122,7 @@ def load_composite_controller_config(controller: Optional[str] = None, robot: Op
     try:
         with open(controller_fpath) as f:
             composite_controller_config = json.load(f)
-        ROBOSUITE_DEFAULT_LOGGER.info(f"Loading controller configuration from: {controller_fpath}")
+        ROBOSUITE_DEFAULT_LOGGER.debug(f"Loading controller configuration from: {controller_fpath}")
     except FileNotFoundError:
         ROBOSUITE_DEFAULT_LOGGER.error(
             f"Error opening controller filepath at: {controller_fpath}. Please check filepath and try again."
