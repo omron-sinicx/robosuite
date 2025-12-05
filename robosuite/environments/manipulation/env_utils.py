@@ -450,40 +450,25 @@ def get_camera_pose(view_direction, table_offset):
     # Initialize with identity quaternion (WXYZ format for Mujoco)
     cam_quat = np.array([0, 0, 0, 1])
 
-    if view_direction == 'real_calib':
-        # Use calibrated camera pose from real-world setup
-        T_calib = np.array([
-            [-0.0316973, 0.324984, -0.945188, 0.626136],
-            [0.997814, 0.0651524, -0.0110608, 0.634053],
-            [0.0579867, -0.943473, -0.326339, 0.494569],
-            [0, 0, 0, 1],
-        ])
-        R_calib = T_calib[:3, :3]
-        t_calib = T_calib[:3, 3]
-
-        # Convert between coordinate systems
-        # In real-world calibration, we get the camera frame in right-down-forward,
-        # But, in simulation, we have right-up-backward
-        change_R_axis2 = np.array([
-            [1, 0, 0],
-            [0, 0, -1],
-            [0, 1, 0],
-        ])
-        change_R_axis = np.array([
-            [0, 1, 0],
-            [1, 0, 0],
-            [0, 0, -1],
-        ])
-
-        T = np.eye(4)
-        T[:3, 3] = t_calib
-        T[:3, :3] = change_R_axis2 @ R_calib @ change_R_axis
-        cam_pos = T[:3, 3]
-        cam_quat = mat2quat(T[:3, :3])
-    elif view_direction == 'real_0714':
-        cam_pos = np.array([0.5637, 0.5992, 0.4519])
-        cam_quat = np.array([-0.38293, 0.59401, 0.6192, -0.34221])
+    if view_direction == 'real_0801':
+        cam_pos = np.array([0.497684, 0.660777, 0.541988])
+        cam_quat = np.array([-0.272603, 0.637648, 0.661787, -0.284834])
         cam_quat = quat_multiply(cam_quat, np.array([0, 1, 0, 0]))
+    elif view_direction == 'real_0807_d405':
+        cam_pos = np.array([0.271233, 0.461096, 0.292791])
+        cam_quat = np.array([-0.461784, 0.779215, 0.359905, -0.223714])
+        cam_quat = quat_multiply(np.array([0, 1, 0, 0]), cam_quat)
+        cam_quat = quat_multiply(np.array([1, 0, 0, 0]), cam_quat)
+    elif view_direction == 'real_0807_d435':
+        cam_pos = np.array([0.425442, 0.626776, 0.408199])
+        cam_quat = np.array([-0.296421, 0.625465, 0.652314, -0.308892])
+        cam_quat = quat_multiply(np.array([0, 1, 0, 0]), cam_quat)
+        cam_quat = quat_multiply(np.array([1, 0, 0, 0]), cam_quat)
+    elif view_direction == 'real_0904_d415':
+        cam_pos = np.array([0.443744, 0.650226, 0.423445])
+        cam_quat = np.array([-0.306215, 0.623489, 0.659918, -0.28636])
+        cam_quat = quat_multiply(np.array([0, 1, 0, 0]), cam_quat)
+        cam_quat = quat_multiply(np.array([1, 0, 0, 0]), cam_quat)
     elif view_direction == "close":
         # A close view from the side (the robot base at left)
         cam_quat = quat_multiply(axisangle2quat([0, 0, np.pi / 2]), cam_quat)
@@ -500,7 +485,7 @@ def get_camera_pose(view_direction, table_offset):
         cam_quat = quat_multiply(axisangle2quat([0, 0, np.pi / 2]), cam_quat)
         cam_quat = quat_multiply(axisangle2quat([0, np.pi / 2, 0]), cam_quat)
         cam_quat = quat_multiply(axisangle2quat([0, 0, -np.pi / 6]), cam_quat)
-        cam_pos = np.array([0.6, 0, 0.25]) + table_offset
+        cam_pos = np.array([0.6, 0, 0.5]) + table_offset
     elif view_direction == "right":
         # Look from side (the robot base at right)
         cam_quat = quat_multiply(axisangle2quat([0, 0, np.pi / 2]), cam_quat)
@@ -515,6 +500,36 @@ def get_camera_pose(view_direction, table_offset):
             f"Invalid view direction: {view_direction}. Expected one of [real_calib, close, front, left, right, top]")
 
     return cam_pos, cam_quat
+
+
+def randomize_spring_params(robot_body, spring_cfg):
+    rxry_stiffness = spring_cfg['rxry_stiffness']
+    rxry_damping = spring_cfg['rxry_damping']
+    z_stiffness = spring_cfg['z_stiffness']
+    z_damping = spring_cfg['z_damping']
+    assert len(rxry_stiffness) == 2 and len(rxry_damping) == 2, \
+        "rxry_stiffness and rxry_damping must be lists of two values each"
+    assert len(z_stiffness) == 2 and len(z_damping) == 2, \
+        "z_stiffness and z_damping must be lists of two values each"
+
+    joints = robot_body.findall('.//joint')
+    rxy_joints = [joint for joint in joints
+                  if any(keyword in joint.attrib.get('name', '') for keyword in ['flex_wrist_rx', 'flex_wrist_ry'])]
+    z_joints = [joint for joint in joints if 'flex_wrist_rz' in joint.attrib.get('name', '')]
+    assert rxy_joints, "No flex_wrist_rx or flex_wrist_ry joints found in the robot body"
+    assert z_joints, "No flex_wrist_rz joint found in the robot body"
+    z_joint = z_joints[0]
+
+    stiffness = np.random.uniform(rxry_stiffness[0], rxry_stiffness[1])
+    damping = np.random.uniform(rxry_damping[0], rxry_damping[1])
+    for joint in rxy_joints:
+        if 'stiffness' in joint.attrib:
+            joint.attrib['stiffness'] = f'{stiffness:.4f}'
+        if 'damping' in joint.attrib:
+            joint.attrib['damping'] = f'{damping:.4f}'
+
+    z_joint.attrib['stiffness'] = f'{np.random.uniform(z_stiffness[0], z_stiffness[1]):.4f}'
+    z_joint.attrib['damping'] = f'{np.random.uniform(z_damping[0], z_damping[1]):.4f}'
 
 
 def scale_peg_and_hole(peg_wrapper, asset, hole, peg_size_range, curriculum_variance_coef):
@@ -549,10 +564,9 @@ def scale_peg_and_hole(peg_wrapper, asset, hole, peg_size_range, curriculum_vari
                 mesh.attrib['scale'] = array_to_string([sx, sy, 1.0])
 
     # Scale hole with additional clearance based on curriculum
-    # Add more clearance when curriculum_variance_coef is lower
-    # 25% more clearance when curriculum_variance_coef is 0
-    hole_sx = sx * (1 + (1 - curriculum_variance_coef) * 0.25)
-    hole_sy = sy * (1 + (1 - curriculum_variance_coef) * 0.25)
+    # Add more clearance when curriculum_variance_coef is low
+    hole_sx = sx * (1 + (1 - curriculum_variance_coef) * 0.10)
+    hole_sy = sy * (1 + (1 - curriculum_variance_coef) * 0.10)
 
     for mesh in hole.asset.findall('mesh'):
         mesh.attrib['scale'] = array_to_string([hole_sx, hole_sy, 1.0])
@@ -683,12 +697,12 @@ def clear_xml_model_cache():
     return count
 
 
-def setup_peg_and_hole(
-    xml_root, robot_configs, hole, shape, shape_type, peg_size_range, curriculum_variance_coef,
-    color_cfg=None
+def update_xml(
+    xml_root, robot_configs, hole, peg_size_range, curriculum_variance_coef,
+    color_cfg=None, spring_cfg=None
 ):
     """
-    Set up the peg and hole in the MuJoCo model.
+    Update the MuJoCo model.
 
     Args:
         xml_root (ET.Element): The XML root element
@@ -699,6 +713,7 @@ def setup_peg_and_hole(
         peg_size_range (np.ndarray): Range of allowed peg sizes [min, max]
         curriculum_variance_coef (float): Curriculum coefficient for variance (0-1)
         color_cfg (dict, optional): Configuration for peg and hole colors, if None uses default colors
+        spring_cfg (dict, optional): Configuration for spring parameters, if None no springs are randomized
 
     Returns:
         None
@@ -723,9 +738,11 @@ def setup_peg_and_hole(
         if peg_wrapper is None:
             raise ValueError(f"Peg wrapper not found for prefix: {prefix}")
 
-        # Scale the peg and hole based on curriculum - this is always done dynamically
         scale_peg_and_hole(peg_wrapper, asset, hole, peg_size_range, curriculum_variance_coef)
         set_peg_and_hole_color(peg_wrapper, hole, color_cfg)
+
+    if spring_cfg is not None:
+        randomize_spring_params(robot_body, spring_cfg)
 
 
 def get_peg_shape(shape_type, shape=None):

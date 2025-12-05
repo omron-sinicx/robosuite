@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
+import torch
 
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import TableArena
@@ -16,7 +17,7 @@ from robosuite.utils.transform_utils import *
 from robosuite.environments.manipulation.env_utils import (
     get_peg_shape, get_hole_object,
     get_peg_point_cloud,
-    get_camera_pose, setup_peg_and_hole, compute_domain_randomization_range,
+    get_camera_pose, update_xml, compute_domain_randomization_range,
     PegObject,
 )
 
@@ -37,7 +38,7 @@ class SoftPegInHole(ManipulationEnv):
         controller_configs=None,
         gripper_types="default",
         initialization_noise={"magnitude": 0.002, "type": "gaussian"},
-        table_full_size=(0.65, 0.65, 0.025),
+        table_full_size=(0.65, 0.65, 0.001),
         table_friction=(1.0, 5e-3, 1e-4),
         use_camera_obs=True,
         use_object_obs=False,
@@ -71,7 +72,7 @@ class SoftPegInHole(ManipulationEnv):
         peg_friction_range=[1., 1.],
         peg_size_range=[1., 1.],
         peg_mass_range=[0.03, 0.03],
-        initial_pose=np.array([0.0, 0.65, 0.26, 1.0, 0.0, 0.0, 0.0]),
+        initial_pose=np.array([0.040, 0.662, 0.46, 1.0, 0.0, 0.0, 0.0]),
         camera_view_direction="left",
         use_proprio_names=None,
         depth_mode='norm',
@@ -85,19 +86,19 @@ class SoftPegInHole(ManipulationEnv):
         shape=None,
         shape_type='basic',
         force_termination_threshold=50.,
+        peg_tilted_threshold=None,
         peg_distance_weights=np.array([1.0, 1.0, 10.0]),
         obs_pose_scale=1.0,
         obs_force_scale=1.0,
         obs_torque_scale=1.0,
         translation_control_only=True,
         peg_and_hole_color=None,
-        going_away_from_goal_threshold=1.2,
-        out_of_playground_threshold=0.14,
+        spring_cfg=None,
+        controller_kp_range=np.array([4.0, 4.5]),
+        controller_kd_range=np.array([0.5, 1.5]),
     ):
         self.gripper_inertial_properties = None
         self.gripper_name = gripper_types
-        self.going_away_from_goal_threshold = going_away_from_goal_threshold
-        self.out_of_playground_threshold = out_of_playground_threshold
 
         # settings for table top
         self.table_full_size = table_full_size
@@ -133,16 +134,18 @@ class SoftPegInHole(ManipulationEnv):
             controller_configs['body_parts']['right']['default_orientation'] = None
 
         # goal settings
-        INSERT_Z_OFFSET = -0.035
-        PEG_Z_SIZE = 0.075
-        HOLE_Z_SIZE = 0.14
-        self.insertion_offset = np.array([0., 0., INSERT_Z_OFFSET])
+        self.SPRING_LENGTH = 0.013
+        self.GRIP_TO_WRIST = 0.0  # 0.200 + self.SPRING_LENGTH  # stiff mode, add spring length for the soft mode
+        self.PEG_Z_SIZE = 0.075
+        self.HOLE_Z_SIZE = 0.140
+        self.INSERT_Z_OFFSET = -0.035
 
         # curriculum learning
         self.curriculum_coef = 1.0
         self.curriculum_variance_coef = 1.0
-        self.hole_edge_z_height = self.table_offset[2] + HOLE_Z_SIZE + PEG_Z_SIZE
-        self.initial_z_height = 0.01 + self.hole_edge_z_height + self.insertion_offset[2]
+        self.hole_edge_z_height = self.table_offset[2] + self.HOLE_Z_SIZE + self.PEG_Z_SIZE + self.GRIP_TO_WRIST
+        self.initial_z_height = 0.01 + self.hole_edge_z_height + self.INSERT_Z_OFFSET
+
         self.max_z_height = copy.copy(initial_pose[2])
 
         # env variance
@@ -165,6 +168,9 @@ class SoftPegInHole(ManipulationEnv):
         self.peg_size_range = np.array(peg_size_range)
         self.peg_mass_range = np.array(peg_mass_range)
         self.peg_and_hole_color = peg_and_hole_color
+        self.spring_cfg = spring_cfg
+        self.controller_kp_range = np.array(controller_kp_range)
+        self.controller_kd_range = np.array(controller_kd_range)
 
         # observation
         assert use_proprio_names is not None and type(use_proprio_names) == list, \
@@ -249,6 +255,7 @@ class SoftPegInHole(ManipulationEnv):
         assert reward_type, 'Must provide reward type'
         self.reward_type = reward_type
         self.force_termination_threshold = force_termination_threshold
+        self.peg_tilted_threshold = peg_tilted_threshold
         self.peg_distance_weights = peg_distance_weights
 
         # TODO: do not hard code the condition
@@ -316,19 +323,29 @@ class SoftPegInHole(ManipulationEnv):
         if self.reward_type == 'baseline':
             # progress reward
             progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
-            progress_reward = max(0.0, progress_reward)
+            progress_reward = min(0.0, progress_reward)
             # action smoothness reward
-            action_smoothness_reward = np.linalg.norm(action - self.action_prev) ** 2.0
-            action_smoothness_reward = - min(1.0, action_smoothness_reward)
+            action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
             step_reward = -0.1  # encourage early termination
             reward = progress_reward + action_smoothness_reward + step_reward
-            self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
+        elif self.reward_type == 'previous':
+            # progress
+            progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
+            # action
+            PEG_ALIGNMENT_THRESHOLD = 0.005
+            peg_pos, hole_pos = self.get_peg_and_hole_pos()
+            peg_error = peg_pos - hole_pos
+            is_aligned = np.linalg.norm(peg_error[:2]) < PEG_ALIGNMENT_THRESHOLD
+            action_reward = - (action[2] ** 2) * (0.001 if is_aligned else 1.0)
+            # action smooth
+            action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
+            reward = progress_reward + action_reward + action_smoothness_reward
         else:
             raise ValueError(f'Invalid reward type {self.reward_type}')
 
+        self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
+
         if self._check_success():
-            # scale down the reward when using curriculum from 75% to 100%
-            # reward += self.success_reward * min(self.curriculum_coef + 0.75, 1.0)
             reward += self.success_reward
         elif self._check_failure():
             reward += -self.success_reward
@@ -424,17 +441,13 @@ class SoftPegInHole(ManipulationEnv):
         else:
             # NOTE: Randomizing the hole position can make the visualization misleading, suggesting the hole's position is unknown.
             # Apply the randomization based on the initial wrist position to keep the visualization accurate and the proprioception consistent.
-            # hole_range_in_m = self.hole_pos_var * 0.001
             self.placement_initializer = CurriculumUniformRandomSampler(
                 name="ObjectSampler",
                 mujoco_objects=self.hole,
-                # x_range=[-hole_range_in_m, hole_range_in_m],
-                # y_range=[-hole_range_in_m, hole_range_in_m],
                 x_range=[0, 0],
                 y_range=[0, 0],
                 # TODO: randomize rotation as well, but this I need to take observations relative to hole quaternions then
                 rotation=0.0,
-                # rotation=np.pi / 2.0,
                 ensure_object_boundary_in_range=False,
                 ensure_valid_placement=True,
                 reference_pos=self.table_offset,
@@ -449,15 +462,14 @@ class SoftPegInHole(ManipulationEnv):
         )
 
         # TODO: do this before the model is initialized
-        setup_peg_and_hole(
+        update_xml(
             xml_root=self.model.root,
             robot_configs=self.robot_configs,
             hole=self.hole,
-            shape=self.shape,
-            shape_type=self.shape_type,
             peg_size_range=self.peg_size_range,
             curriculum_variance_coef=self.curriculum_variance_coef,
             color_cfg=self.peg_and_hole_color,
+            spring_cfg=self.spring_cfg
         )
 
         self.init_peg_pos = None
@@ -473,7 +485,7 @@ class SoftPegInHole(ManipulationEnv):
 
     def get_peg_and_hole_pos(self):
         peg_pos = self.sim.data.get_site_xpos("gripper0_right_peg_ft_frame").copy()
-        hole_pos = self.sim.data.body_xpos[self.hole_body_id].copy() + self.insertion_offset
+        hole_pos = self.sim.data.body_xpos[self.hole_body_id].copy() + np.array([0., 0., self.INSERT_Z_OFFSET])
         return peg_pos, hole_pos
 
     def _setup_references(self):
@@ -486,27 +498,24 @@ class SoftPegInHole(ManipulationEnv):
 
         # Additional object references from this env
         self.hole_body_id = self.sim.model.body_name2id(self.hole.root_body)
-        # self.box_body_id = self.sim.model.body_name2id(self.box.root_body)
 
     def wrist_pos_rel(self, obs_cache):
-        NORMALIZE_OFFSET = np.array([0.0, 0.0, -0.27])
+        NORMALIZE_OFFSET = self.INSERT_Z_OFFSET - (self.GRIP_TO_WRIST + self.PEG_Z_SIZE)
         wrist_pos = self.sim.data.get_body_xpos("gripper0_right_gripper_base")
         # We get the actual relative pose between the wrist and the hole
         # and use corrupter to handle the uncertainty in real-world
         _, hole_pos = self.get_peg_and_hole_pos()
-        # NOTE: [previous work] offset is a heuristic value that make the z-axis of the wrist approximately equal 0 when the insertion success
-        offset = NORMALIZE_OFFSET
-        # NOTE: [previous work] possible reasons: adjust the scale to make the NN easier to learn
+        offset = np.array([0.0, 0.0, NORMALIZE_OFFSET])
         return ((wrist_pos - hole_pos + offset) / self.obs_pose_scale).astype(np.float32)
 
     def wrist_force(self, obs_cache):
         wrist_force = self.get_force_torque()[:3]
-        # NOTE: [previous work] possible reasons: adjust the scale to make the NN easier to learn
-        return (wrist_force / self.obs_force_scale).astype(np.float32)
+        # Zero the force reading
+        offset = np.array([0.0, 0.0, -1.92])
+        return ((wrist_force + offset) / self.obs_force_scale).astype(np.float32)
 
     def wrist_torque(self, obs_cache):
         wrist_torque = self.get_force_torque()[3:]
-        # NOTE: [previous work] possible reasons: adjust the scale to make the NN easier to learn
         return (wrist_torque / self.obs_torque_scale).astype(np.float32)
 
     def wrist_rot6d(self, obs_cache):
@@ -517,11 +526,10 @@ class SoftPegInHole(ManipulationEnv):
 
     def peg_pos_rel(self, obs_cache):
         peg_pos, hole_pos = self.get_peg_and_hole_pos()
-        # NOTE: [previous work] possible reasons: adjust the scale to make the NN easier to learn
         return ((peg_pos - hole_pos) / self.obs_pose_scale).astype(np.float32)
 
     def peg_alignment(self, obs_cache):
-        PEG_ALIGNMENT_THRESHOLD = 0.007
+        PEG_ALIGNMENT_THRESHOLD = 0.005
         peg_pos, hole_pos = self.get_peg_and_hole_pos()
         peg_error = peg_pos - hole_pos
         aligned = np.linalg.norm(peg_error[:2]) < PEG_ALIGNMENT_THRESHOLD
@@ -529,13 +537,6 @@ class SoftPegInHole(ManipulationEnv):
 
     def peg_vel(self, obs_cache):
         return self.sim.data.get_site_xvelp("gripper0_right_peg_ft_frame").copy().astype(np.float32)
-
-    def peg_to_straight_angle(self, obs_cache):
-        nominal_mat = np.array([[0, 1, 0], [1, 0, 0], [0, 0, -1]])
-        peg_mat = self.sim.data.get_site_xmat("gripper0_right_peg_ft_frame").copy()
-        angle_diff_rad = np.linalg.norm(quat2axisangle(mat2quat(peg_mat @ nominal_mat.T)))
-        angle_diff_01 = angle_diff_rad / np.pi
-        return angle_diff_01.astype(np.float32)
 
     def peg_hole_contact(self, obs_cache):
         raise NotImplementedError
@@ -563,7 +564,6 @@ class SoftPegInHole(ManipulationEnv):
         return obs_cache['peg_pcd']
 
     def peg_bps_gt(self, obs_cache):
-        import torch
         # TODO: how to determine this dim automatically?
         bps_feature = np.zeros([self.bps_helper.bps.shape[1],], dtype=np.float32)
         if self.use_peg_bps:
@@ -625,77 +625,6 @@ class SoftPegInHole(ManipulationEnv):
         shape_emb = self.shape_emb
         peg_bps_gt = self.peg_bps_gt
         peg_pcd = self.peg_pcd
-
-        # @sensor(modality=modality)
-        # def wrist_wrench(obs_cache):
-        #     # NOTE self.sim.data.get_sensor doesn't seem to obtain the full sensor vector
-        #     wrist_wrench = np.hstack(
-        #         (
-        #             self.sim.data._data.sensor("gripper0_force_ee").data,
-        #             self.sim.data._data.sensor("gripper0_torque_ee").data,
-        #         )
-        #     )
-        #     return wrist_wrench
-
-        # @sensor(modality=modality)
-        # def spring_angle(obs_cache):
-        #     return np.array(
-        #         [
-        #             self.sim.data.get_joint_qpos("gripper0_flex_wrist_rx"),
-        #             self.sim.data.get_joint_qpos("gripper0_flex_wrist_ry"),
-        #             self.sim.data.get_joint_qpos("gripper0_flex_wrist_rz"),
-        #         ]
-        #     )
-
-        # @sensor(modality=modality)
-        # def peg_torque(obs_cache):
-        #     return self.sim.data._data.sensor("gripper0_torque_peg").data
-
-        # @sensor(modality=modality)
-        # def joint_gains(obs_cache):
-        #     # assume that all gains are common across joints
-        #     assert np.linalg.norm(np.diff(self.robots[0].controller.kp)) < 10e-6
-        #     assert np.linalg.norm(np.diff(self.robots[0].controller.kd)) < 10e-6
-
-        #     raw_gains = np.array([self.robots[0].controller.kp[0], self.robots[0].controller.kd[0]])
-        #     scale = np.array([5.0, 3.0])
-        #     return np.log10(raw_gains) / scale
-
-        # @sensor(modality=modality)
-        # def hole_offset(obs_cache):
-        #     hole_pos = self.sim.data.body_xpos[self.hole_body_id].copy()
-        #     hole_pos[2] -= 0.015
-
-        #     hole_pos_nominal = np.array([0.0, 0.65, 0.15])
-        #     scale = 0.01
-        #     return (hole_pos - hole_pos_nominal) / scale
-
-        # @sensor(modality=modality)
-        # def peg_angle(obs_cache):
-        #     return self.peg_angle / (5.0 * np.pi / 180.0)
-
-        # @sensor(modality=modality)
-        # def wrist_vel(obs_cache):
-        #     return self.sim.data.get_body_xvelp("gripper0_gripper_base")
-
-        # @sensor(modality=modality)
-        # def peg_omega(obs_cache):
-        #     return self.sim.data.get_site_xvelr("gripper0_right_peg_ft_frame")
-
-        # @sensor(modality=modality)
-        # def wrist_omega(obs_cache):
-        #     return self.sim.data.get_body_xvelr("gripper0_gripper_base")
-
-        # # time phase
-        # # this isn't really proprioception, but whatever...
-        # @sensor(modality=modality)
-        # def time_phase(obs_cache):
-        #     return np.array(
-        #         [
-        #             np.cos(2.0 * np.pi * self.timestep / self.horizon),
-        #             np.sin(2.0 * np.pi * self.timestep / self.horizon),
-        #         ]
-        #     )
 
         proprio_sensor_list = [
             [f"wrist_pos_rel", wrist_pos_rel, non_priv_modality],
@@ -822,6 +751,7 @@ class SoftPegInHole(ManipulationEnv):
                             position_threshold=0.001,
                             rotation_threshold=0.01,
                             time_limit=0.1)
+        # print(f"init_wrist_pos: {init_wrist_pos}")
         result = ik.solve_ik(target_pos=init_wrist_pos,
                              target_rot=quat2mat(self.initial_quat),
                              initial_guess=init_qpos_guess)
@@ -907,13 +837,8 @@ class SoftPegInHole(ManipulationEnv):
         self.reset_counter += 1
 
     def visualize(self, vis_settings):
-        """
-        TODO
-        """
         # Run superclass method first
         super().visualize(vis_settings=vis_settings)
-
-        # TODO: additional visualization
 
     def _check_success(self):
         SUCCESS_THRESHOLD = 0.005
@@ -925,23 +850,30 @@ class SoftPegInHole(ManipulationEnv):
         return False
 
     def _check_failure(self):
+        # FIXME: hardcoded value
+        OUT_OF_PLAYGROUND_THRESHOLD = 0.14
+        GOING_AWAY_FROM_GOAL_RATIO = 1.2
         # kinematic singularity termination
         is_singularity = np.linalg.det(self.robots[0].composite_controller.part_controllers['right'].J_full) < 0.01
         # Moving in the peg in the opposite direction to the goal
-        is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * self.going_away_from_goal_threshold
+        is_going_away_from_goal = self.weighted_peg_dist > self.weighted_peg_dist_init * GOING_AWAY_FROM_GOAL_RATIO
         # Moving the wrist out of a safe zone even though the peg is stuck in the hole
         hole_pose = self.sim.data.body_xpos[self.hole_body_id][:2]  # ignore z
-        is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > self.out_of_playground_threshold
+        is_out_of_playground = np.linalg.norm(self.eef_pos[:2] - hole_pose) > OUT_OF_PLAYGROUND_THRESHOLD
         # Contact force is to high, particularly between the wrist and the gripper (pushing down too hard)
         is_colliding = np.linalg.norm(self.get_force_torque()[:3]) > self.force_termination_threshold \
             if self.force_termination_threshold is not None else False
+        # Peg is tilted too much, cause damage the spring
+        is_peg_tilted = self.peg_to_straight_angle() > self.peg_tilted_threshold if self.peg_tilted_threshold is not None else False
 
         if is_singularity:
             return "singularity"
-        elif is_going_away_from_goal:
-            return "going_away_from_goal"
         elif is_colliding:
             return "collision"
+        elif is_peg_tilted:
+            return "peg_tilted"
+        elif is_going_away_from_goal:
+            return "going_away_from_goal"
         elif is_out_of_playground:
             return "out_of_playground"
         return None
@@ -959,18 +891,11 @@ class SoftPegInHole(ManipulationEnv):
         return self.sim.data.site_xmat[self.robots[0].eef_site_id['right']].reshape(3, 3)
 
     def get_force_torque(self):
-        ctrl = self.robots[0].composite_controller.part_controllers['right']
-        wrench_props = ["current_wrench", "base_wrench", "eef_wrench", "world_wrench"]
-        for prop in wrench_props:
-            if hasattr(ctrl, prop):
-                attr = getattr(ctrl, prop)
-                try:
-                    wrench = attr() if callable(attr) else attr
-                    if wrench is not None:
-                        # Check for correct type and shape (should be array-like, length 6)
-                        arr = np.asarray(wrench)
-                        if arr.shape == (6,):
-                            return arr
-                except Exception:
-                    continue
-        raise AttributeError("Controller does not provide a valid 6D wrench property (current_wrench, base_wrench, eef_wrench, or world_wrench)")
+        return self.robots[0].composite_controller.part_controllers['right'].eef_wrench
+
+    def peg_to_straight_angle(self):
+        nominal_mat = np.array([[-1, 0, 0], [0, 1, 0], [0, 0, -1]])
+        peg_mat = self.sim.data.get_site_xmat("gripper0_right_peg_ft_frame").copy()
+        angle_diff_rad = np.linalg.norm(quat2axisangle(mat2quat(peg_mat @ nominal_mat.T)))
+        angle_diff_deg = np.rad2deg(angle_diff_rad)
+        return angle_diff_deg.astype(np.float32)
