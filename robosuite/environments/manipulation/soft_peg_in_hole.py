@@ -312,18 +312,19 @@ class SoftPegInHole(ManipulationEnv):
 
         if x < 0.5:
             self.curriculum_variance_coef = 0.0  # No variations until the first phase of the curriculum is complete
-            self.curriculum_height_coef = min(x * 2.0, 1.0)  # from 0 to 0.5 increase height
+            curriculum_height_coef = min(x * 2.0, 1.0)  # from 0 to 0.5 increase height
             self.hole_pose[2] = self.hole_min_z_height
             # Always below the hole edge
-            self.initial_pos[2] = self.hole_pose[2] + self.peg_to_wrist_pos + (self.INSERT_Z_OFFSET * (1 - self.curriculum_height_coef))
+            self.initial_pos[2] = self.hole_pose[2] + self.peg_to_wrist_pos + (self.INSERT_Z_OFFSET * (1 - curriculum_height_coef))
         else:
             # only after the peg is out of the hole, increase the variance of the hole pose and peg angle
             # interpolate the variance coef from 0.5 to 1.0
             self.curriculum_variance_coef = np.interp(x, (0.5, 1.0), (0.0, 1.0))
-            self.hole_pose[2] = np.random.uniform(low=self.hole_min_z_height, high=self.hole_max_z_height)
+            hole_max_z_height = self.hole_min_z_height + (self.hole_max_z_height * self.curriculum_variance_coef)
+            self.hole_pose[2] = np.random.uniform(low=self.hole_min_z_height, high=hole_max_z_height)
             # Always above the hole edge
             min_z_height = self.hole_pose[2] + self.peg_to_wrist_pos
-            max_z_height = min_z_height + self.wrist_max_z_height
+            max_z_height = min_z_height + (self.wrist_max_z_height * self.curriculum_variance_coef)
             self.initial_pos[2] = np.random.uniform(low=min_z_height, high=max_z_height)
 
     def reward(self, action=None):
