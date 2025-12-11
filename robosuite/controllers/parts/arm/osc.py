@@ -281,6 +281,8 @@ class OperationalSpaceController(Controller):
         else:
             raise ValueError(f"Unsupport input_type {self.input_type}")
 
+        self.fixed_goal_pos = self.goal_pos.copy()
+
         if self.interpolator_pos is not None:
             self.interpolator_pos.set_goal(self.goal_pos)
 
@@ -318,9 +320,9 @@ class OperationalSpaceController(Controller):
         if self.goal_pos is None:
             # if goal is not already set, set it to current position (in controller ref frame)
             if self.input_ref_frame == "base":
-                self.goal_pos = self.world_to_origin_frame(self.ref_pos)
+                self.goal_pos = self.world_to_origin_frame(self.fixed_goal_pos)
             elif self.input_ref_frame == "world":
-                self.goal_pos = self.ref_pos
+                self.goal_pos = self.fixed_goal_pos
             else:
                 raise ValueError
 
@@ -330,9 +332,9 @@ class OperationalSpaceController(Controller):
         elif goal_update_mode == "achieved":
             # update new goal wrt current achieved position
             if self.input_ref_frame == "base":
-                goal_pos = self.world_to_origin_frame(self.ref_pos) + delta
+                goal_pos = self.world_to_origin_frame(self.fixed_goal_pos) + delta
             elif self.input_ref_frame == "world":
-                goal_pos = self.ref_pos + delta
+                goal_pos = self.fixed_goal_pos + delta
             else:
                 raise ValueError
 
@@ -522,6 +524,7 @@ class OperationalSpaceController(Controller):
         self.goal_ori = np.array(self.ref_ori_mat)
         self.goal_pos = np.array(self.ref_pos)
         self.fixed_goal_ori = np.array(self.ref_ori_mat)
+        self.fixed_goal_pos = np.array(self.ref_pos)
 
         assert goal_update_mode in ["achieved", "desired"]
         self._goal_update_mode = goal_update_mode
