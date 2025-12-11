@@ -289,7 +289,8 @@ def get_arm_action_simple(robot, arm, norm_delta):
                                                 ComplianceController)):
         arm_controller = robot.part_controllers[arm]
         control_dim = 6 if arm_controller.use_ori else 3
-        delta_action = arm_controller.scale_action(norm_delta.copy()[:control_dim])
+        # delta_action = arm_controller.scale_action(norm_delta.copy()[:control_dim])
+        delta_action = norm_delta.copy()[:control_dim]
         abs_action = arm_controller.delta_to_abs_action(delta_action, goal_update_mode=None) if hasattr(arm_controller, 'delta_to_abs_action') else None
         # For compliance controllers, the keyboard device expects 6D delta in the return dict
         # The wrench will be appended as zeros when creating the final action vector

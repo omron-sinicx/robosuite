@@ -177,6 +177,7 @@ def main(args):
         peg_size_range=args.peg_size,
         peg_mass_range=[args.peg_mass, args.peg_mass],
         peg_distance_weights=np.ones(3),
+        hard_reset_every_n_episodes=1,
         # obs_pose_scale=0.1,
         # obs_force_scale=50.0,
         # obs_torque_scale=5.0,
@@ -213,7 +214,7 @@ def main(args):
     # initialize device
     from robosuite.devices import Keyboard
 
-    device = Keyboard(env, pos_sensitivity=10.0, rot_sensitivity=1.0)
+    device = Keyboard(env, pos_sensitivity=1.0, rot_sensitivity=1.0)
 
     # Wrap the keyboard on_press to capture initial pose at key press for debugging
     _orig_on_press = device.on_press
@@ -340,7 +341,7 @@ def main(args):
 
         env_action = [robot.create_action_vector(all_prev_gripper_actions[i]) for i, robot in enumerate(env.robots)]
         env_action[device.active_robot] = active_robot.create_action_vector(action_dict)
-        env_action = np.concatenate(env_action) * 10
+        env_action = np.concatenate(env_action)
         for gripper_ac in all_prev_gripper_actions[device.active_robot]:
             all_prev_gripper_actions[device.active_robot][gripper_ac] = action_dict[gripper_ac]
 
@@ -479,7 +480,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument('-g', '--gripper', default='85-soft', choices=peg_dict.keys(),
                         help='Select gripper type: 85-soft/85-rigid/hande-soft/hande-rigid')
-    parser.add_argument('-c', '--control', default='OSC_POSE', choices=['OSC_POSITION', 'FDCC'],
+    parser.add_argument('-c', '--control', default='OSC_POSITION', choices=['OSC_POSITION', 'FDCC'],
                         help='Controller to use for the arm')
     parser.add_argument('-s', '--shape', default=None)
     parser.add_argument('-st', '--shape_type', default='basic')
