@@ -72,6 +72,8 @@ class SoftPegInHole(ManipulationEnv):
         peg_friction_range=[1., 1.],
         peg_size_range=[1., 1.],
         peg_mass_range=[0.03, 0.03],
+        hole_max_z_height=0.10,
+        wrist_max_z_height=0.10,  # relative to hole edge
         initial_pose=np.array([0.040, 0.662, 0.46, 1.0, 0.0, 0.0, 0.0]),
         camera_view_direction="left",
         use_proprio_names=None,
@@ -134,19 +136,21 @@ class SoftPegInHole(ManipulationEnv):
             controller_configs['body_parts']['right']['default_orientation'] = None
 
         # goal settings
-        self.SPRING_LENGTH = 0.013
-        self.GRIP_TO_WRIST = 0.0  # 0.200 + self.SPRING_LENGTH  # stiff mode, add spring length for the soft mode
         self.PEG_Z_SIZE = 0.075
         self.HOLE_Z_SIZE = 0.140
-        self.INSERT_Z_OFFSET = -0.035
+        self.INSERT_Z_OFFSET = -0.03
 
         # curriculum learning
         self.curriculum_coef = 1.0
         self.curriculum_variance_coef = 1.0
-        self.hole_edge_z_height = self.table_offset[2] + self.HOLE_Z_SIZE + self.PEG_Z_SIZE + self.GRIP_TO_WRIST
-        self.initial_z_height = 0.01 + self.hole_edge_z_height + self.INSERT_Z_OFFSET
 
         self.max_z_height = copy.copy(initial_pose[2])
+        self.hole_min_z_height = self.table_offset[2] + (self.HOLE_Z_SIZE / 2)
+        self.hole_max_z_height = self.hole_min_z_height + hole_max_z_height
+        self.hole_pose = self.table_offset.copy()
+        self.hole_pose[2] = self.hole_min_z_height
+        self.wrist_max_z_height = wrist_max_z_height
+        self.peg_to_wrist_pos = 0.22  # HARDCODED for now, updated in reset_internal
 
         # env variance
         assert hole_pos_var is not None and hole_pos_var >= 0, f'Must provide hole_pos_var >= 0. Got {hole_pos_var}'
@@ -268,6 +272,8 @@ class SoftPegInHole(ManipulationEnv):
             hard_reset = False
             self.env_hard_reset = False
 
+        self.ik = None
+
         super().__init__(
             robots=robots,
             env_configuration=env_configuration,
@@ -307,14 +313,18 @@ class SoftPegInHole(ManipulationEnv):
         if x < 0.5:
             self.curriculum_variance_coef = 0.0  # No variations until the first phase of the curriculum is complete
             self.curriculum_height_coef = min(x * 2.0, 1.0)  # from 0 to 0.5 increase height
-            self.initial_pos[2] = self.initial_z_height + \
-                (self.hole_edge_z_height - self.initial_z_height) * self.curriculum_height_coef
+            self.hole_pose[2] = self.hole_min_z_height
+            # Always below the hole edge
+            self.initial_pos[2] = self.hole_pose[2] + self.peg_to_wrist_pos + (self.INSERT_Z_OFFSET * (1 - self.curriculum_height_coef))
         else:
             # only after the peg is out of the hole, increase the variance of the hole pose and peg angle
             # interpolate the variance coef from 0.5 to 1.0
             self.curriculum_variance_coef = np.interp(x, (0.5, 1.0), (0.0, 1.0))
-            self.initial_pos[2] = np.random.uniform(low=self.hole_edge_z_height,
-                                                    high=self.max_z_height)
+            self.hole_pose[2] = np.random.uniform(low=self.hole_min_z_height, high=self.hole_max_z_height)
+            # Always above the hole edge
+            min_z_height = self.hole_pose[2] + self.peg_to_wrist_pos
+            max_z_height = min_z_height + self.wrist_max_z_height
+            self.initial_pos[2] = np.random.uniform(low=min_z_height, high=max_z_height)
 
     def reward(self, action=None):
         """
@@ -323,9 +333,9 @@ class SoftPegInHole(ManipulationEnv):
         if self.reward_type == 'baseline':
             # progress reward
             progress_reward = (self.weighted_peg_dist_prev - self.weighted_peg_dist) / 0.001
-            progress_reward = min(0.0, progress_reward)
+            progress_reward = progress_reward
             # action smoothness reward
-            action_smoothness_reward = - np.linalg.norm(action - self.action_prev) ** 2.0
+            action_smoothness_reward = - max(1.0, np.linalg.norm(action - self.action_prev) ** 2.0)
             step_reward = -0.1  # encourage early termination
             reward = progress_reward + action_smoothness_reward + step_reward
         elif self.reward_type == 'previous':
@@ -346,9 +356,9 @@ class SoftPegInHole(ManipulationEnv):
         self.weighted_peg_dist_prev = self.weighted_peg_dist.copy()
 
         if self._check_success():
-            reward += self.success_reward
+            reward = self.success_reward
         elif self._check_failure():
-            reward += -self.success_reward
+            reward = -self.success_reward
 
         self.total_rewards += reward
 
@@ -432,27 +442,8 @@ class SoftPegInHole(ManipulationEnv):
 
         # Use the shape_type directly when creating the hole object
         # This ensures that when peg_shape is "custom", we use the dynamic hole generation
-        self.hole = get_hole_object(self.shape, self.shape_type)
+        self.hole = get_hole_object(self.shape, self.shape_type, self.hole_pose)
         self.peg = PegObject(self.shape, self.shape_type)
-
-        if self.placement_initializer is not None:
-            self.placement_initializer.reset()
-            self.placement_initializer.add_objects(self.hole)
-        else:
-            # NOTE: Randomizing the hole position can make the visualization misleading, suggesting the hole's position is unknown.
-            # Apply the randomization based on the initial wrist position to keep the visualization accurate and the proprioception consistent.
-            self.placement_initializer = CurriculumUniformRandomSampler(
-                name="ObjectSampler",
-                mujoco_objects=self.hole,
-                x_range=[0, 0],
-                y_range=[0, 0],
-                # TODO: randomize rotation as well, but this I need to take observations relative to hole quaternions then
-                rotation=0.0,
-                ensure_object_boundary_in_range=False,
-                ensure_valid_placement=True,
-                reference_pos=self.table_offset,
-                z_offset=0.0,
-            )
 
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
@@ -461,7 +452,6 @@ class SoftPegInHole(ManipulationEnv):
             mujoco_objects_at_body={'gripper0_right_peg_wrapper': [self.peg]},
         )
 
-        # TODO: do this before the model is initialized
         update_xml(
             xml_root=self.model.root,
             robot_configs=self.robot_configs,
@@ -473,6 +463,38 @@ class SoftPegInHole(ManipulationEnv):
         )
 
         self.init_peg_pos = None
+        self.init_xml = self.dump_xml("/root/robosim/model.xml")
+
+    def dump_xml(self, filename=None):
+        """
+        Dumps the current MuJoCo model XML to a file or returns it as a string.
+
+        Args:
+            filename (str or None): If provided, writes the XML to this file path.
+                                    If None, returns the XML string.
+        Returns:
+            str: If filename is None, returns the XML as a string. Otherwise, returns None.
+        """
+        # get mujoco XML as a string from the model
+        import xml.etree.ElementTree as ET
+
+        # Use robosuite's model or arena XML root if available
+        xml_root = getattr(self, 'model', None)
+        if xml_root is not None and hasattr(xml_root, 'root'):
+            root = xml_root.root
+        else:
+            root = None
+
+        if root is None:
+            raise ValueError("No XML model root found to dump.")
+
+        xml_str = ET.tostring(root, encoding="unicode")
+        if filename is not None:
+            with open(filename, "w", encoding="utf-8") as f:
+                f.write(xml_str)
+            return None
+        else:
+            return xml_str
 
     @property
     def peg_pos_error(self):
@@ -482,6 +504,11 @@ class SoftPegInHole(ManipulationEnv):
     @property
     def weighted_peg_dist(self):
         return np.linalg.norm(np.sqrt(self.peg_distance_weights) * self.peg_pos_error)
+
+    def get_peg_to_wrist_pos(self):
+        peg_pos = self.sim.data.get_site_xpos("gripper0_right_peg_ft_frame").copy()
+        wrist_pos = self.sim.data.get_body_xpos("gripper0_right_gripper_base").copy()
+        return abs(peg_pos[2] - wrist_pos[2])
 
     def get_peg_and_hole_pos(self):
         peg_pos = self.sim.data.get_site_xpos("gripper0_right_peg_ft_frame").copy()
@@ -500,13 +527,14 @@ class SoftPegInHole(ManipulationEnv):
         self.hole_body_id = self.sim.model.body_name2id(self.hole.root_body)
 
     def wrist_pos_rel(self, obs_cache):
-        NORMALIZE_OFFSET = self.INSERT_Z_OFFSET - (self.GRIP_TO_WRIST + self.PEG_Z_SIZE)
         wrist_pos = self.sim.data.get_body_xpos("gripper0_right_gripper_base")
         # We get the actual relative pose between the wrist and the hole
         # and use corrupter to handle the uncertainty in real-world
         _, hole_pos = self.get_peg_and_hole_pos()
-        offset = np.array([0.0, 0.0, NORMALIZE_OFFSET])
-        return ((wrist_pos - hole_pos + offset) / self.obs_pose_scale).astype(np.float32)
+        # Offset is the distance between the wrist and the hole
+        # This is used to normalize the observation to the range [-1, 1]
+        offset = np.array([0.0, 0.0, self.get_peg_to_wrist_pos()])
+        return ((wrist_pos - hole_pos - offset) / self.obs_pose_scale).astype(np.float32)
 
     def wrist_force(self, obs_cache):
         wrist_force = self.get_force_torque()[:3]
@@ -518,8 +546,11 @@ class SoftPegInHole(ManipulationEnv):
         wrist_torque = self.get_force_torque()[3:]
         return (wrist_torque / self.obs_torque_scale).astype(np.float32)
 
-    def wrist_rot6d(self, obs_cache):
-        return self.sim.data.get_body_xmat("gripper0_right_gripper_base")[:, :2].flatten().astype(np.float32)
+    def wrist_rot6d_rel(self, obs_cache):
+        # Compute the relative orientation from the initial rotation to current wrist rotation in 6D (ortho6) representation
+        wrist_rot = self.sim.data.get_body_xmat("gripper0_right_gripper_base").reshape(3, 3)
+        rel_rot = np.dot(np.linalg.inv(self.initial_rot), wrist_rot)
+        return mat2ortho6(rel_rot).astype(np.float32)
 
     def peg_rot6d(self, obs_cache):
         return self.sim.data.get_site_xmat("gripper0_right_peg_ft_frame")[:, :2].flatten().astype(np.float32)
@@ -611,6 +642,7 @@ class SoftPegInHole(ManipulationEnv):
 
         # non_privileged modality
         wrist_pos_rel = self.wrist_pos_rel
+        wrist_rot6d = self.wrist_rot6d_rel
         wrist_force = self.wrist_force
         wrist_torque = self.wrist_torque
         # privileged modality
@@ -628,6 +660,7 @@ class SoftPegInHole(ManipulationEnv):
 
         proprio_sensor_list = [
             [f"wrist_pos_rel", wrist_pos_rel, non_priv_modality],
+            [f"wrist_rot6d", wrist_rot6d, non_priv_modality],
             [f"wrist_force", wrist_force, non_priv_modality],
             [f"wrist_torque", wrist_torque, non_priv_modality],
             [f"peg_pos_rel", peg_pos_rel, priv_modality],
@@ -746,30 +779,22 @@ class SoftPegInHole(ManipulationEnv):
             [1.36314954, -1.21917949, 1.32688743, -1.67850362, -1.57077604, -1.77846293]
         )
 
-        ik = MuJoCoIKSolver(self.sim.model.get_xml(), [], "gripper0_right_gripper_eef_site",
-                            joint_indexes=self.robots[0].joint_indexes,
-                            position_threshold=0.001,
-                            rotation_threshold=0.01,
-                            time_limit=0.1)
-        # print(f"init_wrist_pos: {init_wrist_pos}")
-        result = ik.solve_ik(target_pos=init_wrist_pos,
-                             target_rot=quat2mat(self.initial_quat),
-                             initial_guess=init_qpos_guess)
+        if self.ik is None:
+            self.ik = MuJoCoIKSolver(self.sim.model.get_xml(), [], "gripper0_right_ft_frame",
+                                     joint_indexes=self.robots[0].joint_indexes,
+                                     position_threshold=0.001,
+                                     rotation_threshold=0.01,
+                                     time_limit=0.1)
+
+        result = self.ik.solve_ik(target_pos=init_wrist_pos,
+                                  target_rot=quat2mat(self.initial_quat),
+                                  initial_guess=init_qpos_guess)
 
         if result.success:
             self.robots[0].init_qpos = result.joint_angles
         else:
             log.warning(f"IK solution not found, using default init_qpos_guess. Error msg: {result.message}")
             self.robots[0].init_qpos = init_qpos_guess
-
-        # Reset all object positions using initializer sampler
-        # if not self.deterministic_reset:
-        # Sample from the placement initializer for all objects
-        object_placements = self.placement_initializer.sample()
-
-        # Loop through all objects and reset their positions
-        for obj_pos, obj_quat, obj in object_placements.values():
-            self.sim.data.set_joint_qpos(obj.joints[0], np.concatenate([np.array(obj_pos), np.array(obj_quat)]))
 
         # Randomize the peg angle
         peg_wrapper_body = self.sim.model._model.body("gripper0_right_peg_wrapper")
@@ -784,6 +809,10 @@ class SoftPegInHole(ManipulationEnv):
         # mujoco use the wxyz quaternion, so initialize the rotation with (1,0,0,0)
         peg_wrapper_body.quat = quat_multiply(np.array([1.0, 0.0, 0.0, 0.0]), peg_quat_wxyz)
         peg_wrapper_body.pos = self.init_peg_pos + self.peg_pos_offset
+
+        # Randomize the hole position
+        hole_body_body = self.sim.model._model.body("hole_main")
+        hole_body_body.pos = self.hole_pose
 
         # Randomize the peg mass
         min_peg_mass, max_peg_mass = compute_domain_randomization_range(
@@ -834,6 +863,7 @@ class SoftPegInHole(ManipulationEnv):
             controller.kp = np.ones(6) * 10.0 ** np.random.uniform(4.0, 4.5)
             controller.kd = np.sqrt(controller.kp) * np.random.uniform(0.5, 1.5)
 
+        self.peg_to_wrist_pos = self.get_peg_to_wrist_pos()
         self.reset_counter += 1
 
     def visualize(self, vis_settings):

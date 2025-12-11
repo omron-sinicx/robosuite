@@ -14,7 +14,7 @@
   </asset>
   <worldbody>
     <body>
-      <body name="object">
+      <body name="object" pos="0 0 0">
         <geom mesh="hole_collision_top" class="collision" />
         <geom mesh="hole_collision_left" class="collision" />
         <geom mesh="hole_collision_bottom" class="collision" />

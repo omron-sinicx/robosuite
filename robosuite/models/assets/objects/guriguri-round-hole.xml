@@ -23,7 +23,7 @@
   </asset>
   <worldbody>
     <body>
-      <body name="object">
+      <body name="object" pos="0 0 0">
         <geom mesh="guriguri-round-hole_body15_mesh" class="collision" group="0" solref=".004 1"/>
         <geom mesh="guriguri-round-hole_body3_mesh" class="collision" group="0" solref=".004 1"/>
         <geom mesh="guriguri-round-hole_body4_mesh" class="collision" group="0" solref=".004 1"/>

@@ -458,6 +458,19 @@ class Robot(object):
             return T.mat2quat(self.sim.data.site_xmat[self.eef_site_id[arm]].reshape((3, 3)))
 
         @sensor(modality=modality)
+        def eef_rot6d(obs_cache):
+            """
+            Args:
+                obs_cache (dict): A dictionary containing cached observations.
+
+            Returns:
+                numpy.ndarray: The 6D rotation representation of the end effector *site*
+                in the mujoco world coordinate frame.
+
+            """
+            return T.mat2ortho6(self.sim.data.site_xmat[self.eef_site_id[arm]].reshape((3, 3)))
+
+        @sensor(modality=modality)
         def eef_vel_lin(obs_cache):
             return np.array(self.sim.data.get_body_xvelp(self.robot_model.eef_name[arm]))
 
@@ -477,8 +490,8 @@ class Robot(object):
         # only consider prefix if there is more than one arm
         pf = f"{arm}_" if len(self.arms) > 1 else ""
 
-        sensors = [eef_pos, eef_quat, eef_quat_site, eef_vel_lin, eef_vel_ang, eef_force_torque]
-        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site", f"{pf}eef_vel_lin", f"{pf}eef_vel_ang", f"{pf}eef_force_torque"]
+        sensors = [eef_pos, eef_quat, eef_quat_site, eef_rot6d, eef_vel_lin, eef_vel_ang, eef_force_torque]
+        names = [f"{pf}eef_pos", f"{pf}eef_quat", f"{pf}eef_quat_site", f"{pf}eef_rot6d", f"{pf}eef_vel_lin", f"{pf}eef_vel_ang", f"{pf}eef_force_torque"]
 
         # add in gripper sensors if this robot has a gripper
         if self.has_gripper[arm]:

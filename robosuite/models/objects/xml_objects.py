@@ -330,84 +330,71 @@ class SquareHoleObject(MujocoXMLObject):
         )
 
 
-class GuriguriRoundHoleObject(MujocoXMLObject):
-    """
-    for SoftPegInHole
-    TODO: would eventually like to replace this with procedural generation from primitives (maybe with a different class name)
-    """
-
-    def __init__(self, name):
+class HoleObject(MujocoXMLObject):
+    def __init__(self, xml_path, name, pos):
         super().__init__(
-            xml_path_completion("objects/guriguri-round-hole.xml"),
+            xml_path_completion(xml_path),
             name=name,
             joints=None,
             obj_type="all",
             duplicate_collision_geoms=True,
         )
+        main_body = find_elements(root=self.root, attribs={"name": "hole_main"}, tags="body")
+        main_body.set("pos", pos)
 
 
-class GuriguriLargeSquareHoleObject(MujocoXMLObject):
+class GuriguriRoundHoleObject(HoleObject):
     """
     for SoftPegInHole
     TODO: would eventually like to replace this with procedural generation from primitives (maybe with a different class name)
     """
 
-    def __init__(self, name):
-        super().__init__(
-            xml_path_completion("objects/guriguri-large-square-hole.xml"),
-            name=name,
-            joints=[dict(type="free", damping="0.0005")],
-            obj_type="all",
-            duplicate_collision_geoms=True,
-        )
+    def __init__(self, name, pos="0 0 0.35"):
+        super().__init__(xml_path="objects/guriguri-round-hole.xml", name=name, pos=pos)
 
 
-class GuriguriLargeRoundHoleObject(MujocoXMLObject):
+class GuriguriLargeSquareHoleObject(HoleObject):
     """
     for SoftPegInHole
     TODO: would eventually like to replace this with procedural generation from primitives (maybe with a different class name)
     """
 
-    def __init__(self, name):
+    def __init__(self, name, pos="0 0 0"):
         super().__init__(
-            xml_path_completion("objects/guriguri-large-round-hole.xml"),
-            name=name,
-            joints=[dict(type="free", damping="0.0005")],
-            obj_type="all",
-            duplicate_collision_geoms=True,
-        )
+            xml_path="objects/guriguri-large-square-hole.xml", name=name, pos=pos)
 
 
-class GuriguriLargeRectangleHoleObject(MujocoXMLObject):
+class GuriguriLargeRoundHoleObject(HoleObject):
     """
     for SoftPegInHole
     TODO: would eventually like to replace this with procedural generation from primitives (maybe with a different class name)
     """
 
-    def __init__(self, name):
+    def __init__(self, name, pos="0 0 0"):
         super().__init__(
-            xml_path_completion("objects/guriguri-large-rectangle-hole.xml"),
-            name=name,
-            joints=[dict(type="free", damping="0.0005")],
-            obj_type="all",
-            duplicate_collision_geoms=True,
-        )
+            xml_path="objects/guriguri-large-round-hole.xml", name=name, pos=pos)
 
 
-class GuriguriLargeTriangleHoleObject(MujocoXMLObject):
+class GuriguriLargeRectangleHoleObject(HoleObject):
     """
     for SoftPegInHole
     TODO: would eventually like to replace this with procedural generation from primitives (maybe with a different class name)
     """
 
-    def __init__(self, name):
+    def __init__(self, name, pos="0 0 0"):
         super().__init__(
-            xml_path_completion("objects/guriguri-large-triangle-hole.xml"),
-            name=name,
-            joints=[dict(type="free", damping="0.0005")],
-            obj_type="all",
-            duplicate_collision_geoms=True,
-        )
+            xml_path="objects/guriguri-large-rectangle-hole.xml", name=name, pos=pos)
+
+
+class GuriguriLargeTriangleHoleObject(HoleObject):
+    """
+    for SoftPegInHole
+    TODO: would eventually like to replace this with procedural generation from primitives (maybe with a different class name)
+    """
+
+    def __init__(self, name, pos="0 0 0"):
+        super().__init__(
+            xml_path="objects/guriguri-large-triangle-hole.xml", name=name, pos=pos)
 
 
 class AlanCharHoleObjectBase(MujocoXMLObject):
@@ -415,11 +402,10 @@ class AlanCharHoleObjectBase(MujocoXMLObject):
         super().__init__(
             xml_path_completion(xml_path),
             name=name,
-            joints=[dict(type="free", damping="0.0005")],
+            joints=None,
             obj_type="all",
             duplicate_collision_geoms=True,
         )
-
 
 
 class MortarObject(MujocoXMLObject):

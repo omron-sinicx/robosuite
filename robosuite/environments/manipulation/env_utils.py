@@ -11,6 +11,7 @@ import yaml
 import robosuite
 from robosuite.models.grippers.gripper_model import GripperModel
 from robosuite.models.objects.objects import MujocoXMLObject
+from robosuite.models.objects.xml_objects import HoleObject
 from robosuite.utils.mjcf_utils import array_to_string
 from robosuite.utils.transform_utils import *
 from robosuite.models.objects import (
@@ -116,12 +117,12 @@ def get_random_shape_from_dir(path: str) -> str:
     return random.choice(shape_dirs)
 
 
-class DynamicHoleObject(MujocoXMLObject):
+class DynamicHoleObject(HoleObject):
     """
     Dynamically generated hole object based on mesh parts in the hole directory.
     """
 
-    def __init__(self, name, shape, shape_type, mesh_dir=None):
+    def __init__(self, name, shape, shape_type, mesh_dir=None, hole_pose="0 0 0"):
         """
         Initialize the dynamic hole object.
 
@@ -146,9 +147,7 @@ class DynamicHoleObject(MujocoXMLObject):
         super().__init__(
             xml_path,
             name=name,
-            joints=[dict(type="free", damping="0.0005")],
-            obj_type="all",
-            duplicate_collision_geoms=True,
+            pos=hole_pose,
         )
 
     def _generate_xml_model(self, shape, shape_type, mesh_dir=None):
@@ -799,7 +798,7 @@ def get_peg_point_cloud(shape, shape_type) -> np.ndarray:
         raise ValueError(f'Invalid shape type {shape_type}')
 
 
-def get_hole_object(shape, shape_type) -> MujocoXMLObject:
+def get_hole_object(shape, shape_type, hole_pose) -> MujocoXMLObject:
     """
     Get the hole object for the given shape.
 
@@ -819,11 +818,11 @@ def get_hole_object(shape, shape_type) -> MujocoXMLObject:
         if set_type == 'single_mesh':
             # Use basic hole objects from predefined dictionary
             hole_class = BASIC_HOLES.get(shape, BASIC_HOLES["round"])  # Default to round if shape not found
-            return hole_class(name="hole")
+            return hole_class(name="hole", pos=array_to_string(hole_pose))
         elif set_type == 'custom':
             # For custom shape type, use the dynamically generated hole object
             mesh_dir = set_config['mesh_dir']
-            return DynamicHoleObject(name="hole", shape=shape, shape_type=shape_type, mesh_dir=mesh_dir)
+            return DynamicHoleObject(name="hole", shape=shape, shape_type=shape_type, mesh_dir=mesh_dir, hole_pose=array_to_string(hole_pose))
         else:
             raise ValueError(f'Invalid set type {set_type} for hole set {shape_type}')
     else:

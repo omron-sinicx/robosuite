@@ -22,7 +22,7 @@
   </asset>
   <worldbody>
     <body>
-      <body name="object">
+      <body name="object" pos="0 0 0">
         <geom mesh="hole_collision_11" class="collision" />
         <geom mesh="hole_collision_12" class="collision" />
         <geom mesh="hole_collision_13" class="collision" />
