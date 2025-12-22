@@ -124,6 +124,7 @@ class MujocoEnv(metaclass=EnvMeta):
         self.render_visual_mesh = render_visual_mesh
         self.render_gpu_device_id = render_gpu_device_id
         self.viewer = None
+        self.render_context = None
 
         # Simulation-specific attributes
         self._observables = {}  # Maps observable names to observable objects
@@ -275,14 +276,16 @@ class MujocoEnv(metaclass=EnvMeta):
         # Use hard reset if requested
 
         if self.hard_reset and not self.deterministic_reset:
+            if self.viewer is not None and self.renderer == "mujoco":
+                del self.viewer.sim
+
             if self.renderer == "mjviewer":
                 self._destroy_viewer()
 
             self._load_model()
             self._initialize_sim()
-            if self.renderer == "mujoco":
-                # Reuse renderer
-                self.viewer.reset(self.sim)
+            if self.viewer is not None and self.renderer == "mujoco":
+                self.viewer.sim = self.sim
         # Else, we only reset the sim internally
         else:
             self.sim.reset()
@@ -342,8 +345,12 @@ class MujocoEnv(metaclass=EnvMeta):
                 self.initialize_renderer()
 
         if self.has_offscreen_renderer:
+            if self.render_context is None:
+                self.render_context = MjRenderContextOffscreen(self.sim, device_id=self.render_gpu_device_id)
+
             if self.sim._render_context_offscreen is None:
-                render_context = MjRenderContextOffscreen(self.sim, device_id=self.render_gpu_device_id)
+                self.render_context.set_sim(self.sim)
+
             self.sim._render_context_offscreen.vopt.geomgroup[0] = 1 if self.render_collision_mesh else 0
             self.sim._render_context_offscreen.vopt.geomgroup[1] = 1 if self.render_visual_mesh else 0
 
@@ -527,6 +534,8 @@ class MujocoEnv(metaclass=EnvMeta):
         """
         Renders to an on-screen window.
         """
+        if self.viewer is None:
+            return
         self.viewer.render()
 
     def get_pixel_obs(self):

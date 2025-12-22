@@ -1356,3 +1356,87 @@ def logmap2mat(rotation_vector):
          (1 - np.cos(angle)) * (K @ K))
 
     return R
+
+
+def transform_inertia(inertia, mass, displacement, rotation=None):
+    """
+    Transform inertia tensor using parallel axis theorem and rotation.
+
+    Args:
+        inertia: [3] array of principal moments or [3,3] inertia tensor
+        mass: float, mass of the body
+        displacement: [3] array, displacement vector from original COM
+        rotation: [3,3] array, rotation matrix (optional)
+
+    Returns:
+        [3,3] array: Transformed inertia tensor
+    """
+    # Convert diagonal inertia to full tensor if necessary
+    if inertia.shape == (3,):
+        inertia_tensor = np.diag(inertia)
+    else:
+        inertia_tensor = inertia.copy()
+
+    # Apply parallel axis theorem
+    r = np.array(displacement)
+    r_squared = np.sum(r * r)
+    parallel_axis_term = mass * (r_squared * np.eye(3) - np.outer(r, r))
+    inertia_tensor += parallel_axis_term
+
+    # Apply rotation if provided
+    if rotation is not None:
+        inertia_tensor = rotation @ inertia_tensor @ rotation.T
+
+    return inertia_tensor
+
+
+def combine_inertial_properties(props1, props2, transform=None):
+    """
+    Combine inertial properties of two bodies.
+
+    Args:
+        props1, props2: dictionaries containing mass, COM, and inertia
+        transform: [4,4] transformation matrix from props2 frame to props1 frame
+
+    Returns:
+        dict: Combined inertial properties
+    """
+    mass_total = props1['mass'] + props2['mass']
+
+    # Combine centers of mass
+    com1 = np.array(props1['local_com'])
+    com2 = np.array(props2['local_com'])
+
+    if transform is not None:
+        # Transform COM2 to props1 frame
+        com2_homog = np.append(com2, 1)
+        com2 = (transform @ com2_homog)[:3]
+
+    com_combined = (props1['mass'] * com1 + props2['mass'] * com2) / mass_total
+
+    # Transform and combine inertias
+    inertia1 = transform_inertia(props1['inertia'], props1['mass'],
+                                 com_combined - com1)
+
+    if transform is not None:
+        rotation = transform[:3, :3]
+        inertia2 = transform_inertia(props2['inertia'], props2['mass'],
+                                     com_combined - com2, rotation)
+    else:
+        inertia2 = transform_inertia(props2['inertia'], props2['mass'],
+                                     com_combined - com2)
+
+    inertia_combined = inertia1 + inertia2
+
+    # Calculate principal moments and orientation
+    eigenvalues, eigenvectors = np.linalg.eigh(inertia_combined)
+    principal_inertia = eigenvalues
+    R = eigenvectors
+    quat_combined = mat2quat(R)
+
+    return {
+        'mass': mass_total,
+        'inertia': principal_inertia,
+        'local_com': com_combined,
+        'inertial_frame_quat': quat_combined
+    }

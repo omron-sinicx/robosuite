@@ -17,6 +17,8 @@ from threading import Lock
 import mujoco
 import numpy as np
 
+from robosuite.utils.transform_utils import combine_inertial_properties
+
 _MjSim_render_lock = Lock()
 
 
@@ -71,26 +73,13 @@ class MjRenderContext:
                 from robosuite.renderers.context.glfw_context import GLFWGLContext as GLContext
 
         assert offscreen, "only offscreen supported for now"
-        self.sim = sim
+        # self.sim = sim
         self.offscreen = offscreen
         self.device_id = device_id
 
         # setup GL context with defaults for now
         self.gl_ctx = GLContext(max_width=max_width, max_height=max_height, device_id=self.device_id)
         self.gl_ctx.make_current()
-
-        # Ensure the model data has been updated so that there
-        # is something to render
-        sim.forward()
-        # make sure sim has this context
-        sim.add_render_context(self)
-
-        self.model = sim.model
-        self.data = sim.data
-
-        # create default scene
-        # set maxgeom to 10k to support large-scale scenes
-        self.scn = mujoco.MjvScene(sim.model._model, maxgeom=10000)
 
         # camera
         self.cam = mujoco.MjvCamera()
@@ -108,6 +97,19 @@ class MjRenderContext:
         # self._markers = []
         # self._overlay = {}
 
+    def set_sim(self, sim):
+        # Ensure the model data has been updated so that there
+        # is something to render
+        sim.forward()
+        # make sure sim has this context
+        sim.add_render_context(self)
+
+        self.model = sim.model
+        self.data = sim.data
+
+        # create default scene
+        # set maxgeom to 10k to support large-scale scenes
+        self.scn = mujoco.MjvScene(sim.model._model, maxgeom=10000)
         self._set_mujoco_context_and_buffers()
 
     def _set_mujoco_context_and_buffers(self):
@@ -1061,8 +1063,8 @@ class MjSim:
             model: should be an MjModel instance created via a factory function
                 such as mujoco.MjModel.from_xml_string(xml)
         """
-        self.model: MjModel = MjModel(model)
-        self.data: MjData = MjData(self.model)
+        self.model = MjModel(model)
+        self.data = MjData(self.model)
 
         # offscreen render context object
         self._render_context_offscreen = None
@@ -1082,6 +1084,11 @@ class MjSim:
     def reset(self):
         """Reset simulation."""
         mujoco.mj_resetData(self.model._model, self.data._data)
+
+    def hard_reset(self, xml):
+        self.model = MjModel(mujoco.MjModel.from_xml_string(xml))
+        self.data = MjData(self.model)
+        self.reset()
 
     def forward(self):
         """Forward call to synchronize derived quantities."""
@@ -1186,44 +1193,61 @@ class MjSim:
 
     def get_body_inertial_properties(self, body_name):
         """
-        Get inertial properties of a specified body in MuJoCo.
+        Get inertial properties of a specified body and all its children in MuJoCo.
 
         Args:
-            model: MuJoCo model object
-            data: MuJoCo data object
             body_name: String name of the body
 
         Returns:
-            dict: Dictionary containing inertial properties
+            dict: Dictionary containing combined inertial properties
         """
         # Get body ID from name
         body_id = self.model.body_name2id(body_name)
-
         if body_id == -1:
             raise ValueError(f"Body '{body_name}' not found in the model")
 
-        # Get inertial properties
-        mass = self.model._model.body_mass[body_id]
-        inertia = self.model._model.body_inertia[body_id].copy()  # Principal moments of inertia [ixx, iyy, izz]
-
-        # Get center of mass position in body frame
-        com = self.model._model.body_ipos[body_id].copy()
-
-        # Get inertial frame orientation (quaternion)
-        quat = self.model._model.body_iquat[body_id].copy()
-
-        # Get current position and orientation in world frame
-        pos = self.data.get_body_xpos(body_name)
-        rot_mat = self.data.get_body_xmat(body_name).reshape(3, 3)
-
-        return {
-            'mass': mass,
-            'inertia': inertia,
-            'local_com': com,
-            'inertial_frame_quat': quat,
-            'world_pos': pos,
-            'world_rot_mat': rot_mat
+        # Get initial properties of the body itself
+        props = {
+            'mass': self.model._model.body_mass[body_id],
+            'inertia': self.model._model.body_inertia[body_id].copy(),
+            'local_com': self.model._model.body_ipos[body_id].copy(),
+            'inertial_frame_quat': self.model._model.body_iquat[body_id].copy(),
+            'world_pos': self.data.get_body_xpos(body_name),
+            'world_rot_mat': self.data.get_body_xmat(body_name).reshape(3, 3)
         }
+
+        # Find all child bodies
+        children = []
+        for i in range(self.model.nbody):
+            if self.model._model.body_parentid[i] == body_id:
+                children.append(i)
+
+        # Recursively combine properties with children
+        for child_id in children:
+            child_name = self.model.body_names[child_id]
+            child_props = self.get_body_inertial_properties(child_name)
+
+            # Get transform from child to parent
+            parent_pos = self.data.get_body_xpos(body_name)
+            parent_rot = self.data.get_body_xmat(body_name).reshape(3, 3)
+            child_pos = self.data.get_body_xpos(child_name)
+            child_rot = self.data.get_body_xmat(child_name).reshape(3, 3)
+
+            # Calculate relative transform
+            rel_rot = parent_rot.T @ child_rot
+            rel_pos = parent_rot.T @ (child_pos - parent_pos)
+            transform = np.eye(4)
+            transform[:3, :3] = rel_rot
+            transform[:3, 3] = rel_pos
+
+            # Combine properties
+            props = combine_inertial_properties(props, child_props, transform)
+
+        # Add world frame properties
+        props['world_pos'] = self.data.get_body_xpos(body_name)
+        props['world_rot_mat'] = self.data.get_body_xmat(body_name).reshape(3, 3)
+
+        return props
 
 
 class MjSimInteractive(MjSim):
