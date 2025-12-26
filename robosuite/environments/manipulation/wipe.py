@@ -244,8 +244,8 @@ class Wipe(ManipulationEnv):
         self.two_clusters = self.task_config["two_clusters"]
         self.coverage_factor = self.task_config["coverage_factor"]
         self.num_markers = self.task_config["num_markers"]
-        self.marker_pressure_threshold = self.task_config["marker_pressure_threshold"]
-        self.randomize_dirt_threshold = self.task_config["randomize_dirt_threshold"]
+        self.marker_pressure_threshold = self.task_config.get("marker_pressure_threshold", 0.0)
+        self.randomize_dirt_threshold = self.task_config.get("randomize_dirt_threshold", False)
 
         # settings for thresholds
         self.contact_threshold = self.task_config["contact_threshold"]
@@ -308,10 +308,15 @@ class Wipe(ManipulationEnv):
         self.ee_torque_bias = {arm: np.zeros(3) for arm in self.robots[0].arms}
 
     def step(self, raw_action):
-        if len(raw_action) == 9:
+        controller = self.robots[0].part_controllers[self.robots[0].arms[0]]
+        if controller.use_ori and len(raw_action) == 9:
             action = np.zeros(self.robots[0].dof)
             action[:3] = raw_action[:3]
             action[3:] = T.ortho62axisangle(raw_action[3:])
+        elif not controller.use_ori and len(raw_action) == 9:
+            action = np.zeros(self.robots[0].dof)
+            action[:3] = raw_action[:3]
+            action[3:] = raw_action[3:6]
         else:
             action = raw_action
         return super().step(action)
@@ -390,7 +395,7 @@ class Wipe(ManipulationEnv):
                         )
                         # Check if marker is within the tool center:
                         if PointInRectangle(pp[0], pp[1], pp[2], pp[3], pp_2):
-                            if total_force_ee > self.marker_pressure_threshold:
+                            if self.marker_pressure_threshold == 0.0 or total_force_ee > self.marker_pressure_threshold:
                                 active_markers.append(marker)
         return active_markers
 

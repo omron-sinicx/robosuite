@@ -296,10 +296,10 @@ class ForwardDynamicsComplianceController(Controller):
 
         if self.compliance_mode == "variable_stiffness":
             delta, stiffness = action[:self.control_pose_dim], action[self.control_pose_dim:]
-            self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
+            stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
         elif self.compliance_mode == "variable_stiffness_and_p_gains":
             delta, stiffness, kp = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:18]
-            self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
+            stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
         elif self.compliance_mode == "virtual_force":
             delta, desired_ft = action[:self.control_pose_dim], action[self.control_pose_dim:]
@@ -308,6 +308,11 @@ class ForwardDynamicsComplianceController(Controller):
             self.desired_force_torque = desired_ft
         else:  # This is case "fixed"
             delta = action[:self.control_pose_dim]
+
+        if len(stiffness) == 6:
+            self.stiffness = stiffness
+        else:
+            self.stiffness = np.tile(stiffness, 2)[:6]
 
         # If we're using deltas, interpret actions as such
         if self.use_delta:
@@ -520,13 +525,9 @@ class ForwardDynamicsComplianceController(Controller):
             pose_error_sel = pose_error
             wrench_error_sel = wrench_error
 
-        if len(self.stiffness) == 6:
-            stiffness = self.stiffness
-        else:
-            stiffness = np.tile(self.stiffness, 2)[:6]
 
         # base frame error
-        net_force = stiffness * pose_error_sel + wrench_error_sel
+        net_force = self.stiffness * pose_error_sel + wrench_error_sel
 
         return net_force, eef_to_base
 

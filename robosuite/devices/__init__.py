@@ -19,11 +19,3 @@ except ImportError:
         Install the additional requirements with \n
         `pip install -r requirements-extra.txt`"""
     )
-try:
-    from .gello import GELLO
-except ImportError:
-    print(
-        """Unable to load module dynamixel_sdk, required to interface with GELLO. \n
-        Install the additional requirements with \n
-        `pip install -r requirements-extra.txt`"""
-    )
