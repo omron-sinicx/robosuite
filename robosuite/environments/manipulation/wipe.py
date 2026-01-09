@@ -643,6 +643,20 @@ class Wipe(ManipulationEnv):
                     sensors += marker_sensors
                     names += marker_sensor_names
 
+            # proprioceptive features
+            @sensor(modality=modality)
+            def force_norm(obs_cache):
+                total_force_ee = max(
+                    [
+                        np.linalg.norm(np.array(self.robots[0].recent_ee_forcetorques[arm].current[:3]))
+                        for arm in self.robots[0].arms
+                    ]
+                )
+                return total_force_ee
+
+            sensors.append(force_norm)
+            names.append("force_norm")
+
             # Create observables
             for name, s in zip(names, sensors):
                 observables[name] = Observable(
