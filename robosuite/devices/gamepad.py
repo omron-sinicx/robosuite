@@ -181,16 +181,26 @@ class GamePad(Device):
         if len(devices.gamepads) == 0:
             raise UnpluggedError("No gamepad found.")
 
-        device_index = -1
+        # device_index = -1
+        # for device in devices.gamepads:
+        #     if device.name == device_name:
+        #         print(f"Connecting to device: {device.name}")
+        #         device_index = device.get_number()
+
+        # if device_index == -1:
+        #     raise ValueError(f"Gamepad '{device_name}' not found. Input a valid name.")
+
+        # self.gamepad = devices.gamepads[device_index]
+
+        self.gamepad = None
         for device in devices.gamepads:
             if device.name == device_name:
                 print(f"Connecting to device: {device.name}")
-                device_index = device.get_number()
+                self.gamepad = device
+                break
 
-        if device_index == -1:
+        if self.gamepad is None:
             raise ValueError(f"Gamepad '{device_name}' not found. Input a valid name.")
-
-        self.gamepad = devices.gamepads[device_index]
 
         self.pos_sensitivity = pos_sensitivity
         self.rot_sensitivity = rot_sensitivity
