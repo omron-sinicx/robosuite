@@ -654,8 +654,15 @@ class Wipe(ManipulationEnv):
                 )
                 return total_force_ee
 
+            # task progress
+            @sensor(modality=modality)
+            def task_progress(obs_cache):
+                return len(self.wiped_markers) / self.num_markers
+
             sensors.append(force_norm)
             names.append("force_norm")
+            sensors.append(task_progress)
+            names.append("task_progress")
 
             # Create observables
             for name, s in zip(names, sensors):
