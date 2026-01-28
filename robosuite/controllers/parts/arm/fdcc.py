@@ -320,7 +320,7 @@ class ForwardDynamicsComplianceController(Controller):
                 set_pos = delta[:3]
             if set_ori is None:
                 if self.use_ori:
-                    set_ori = (T.quat2mat(delta[3:7]))
+                    set_ori = (T.quat2mat(T.axisangle2quat(delta[3:])))
                 else:
                     set_ori = self.fixed_goal_ori
             # No scaling of values since these are absolute values
@@ -335,13 +335,13 @@ class ForwardDynamicsComplianceController(Controller):
             current_pos = self.goal_pos
             current_ori = self.goal_ori
 
-        if np.sum(np.abs(scaled_delta[3:])) > 1e-6:
+        if not self.use_delta or np.any(scaled_delta[3:]):
             # We only want to update goal orientation if there is a valid delta ori value OR if we're using absolute ori
             self.goal_ori = set_goal_orientation(
                 scaled_delta[3:], current_ori, orientation_limit=self.orientation_limits, set_ori=set_ori
             )
 
-        if np.sum(np.abs(scaled_delta[:3])) > 1e-6:
+        if not self.use_delta or np.any(scaled_delta[:3]):
             self.goal_pos = set_goal_position(
                 scaled_delta[:3], current_pos, position_limit=self.position_limits, set_pos=set_pos
             )
