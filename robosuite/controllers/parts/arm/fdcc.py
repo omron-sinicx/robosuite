@@ -18,7 +18,7 @@ except ImportError:
 
 
 # Supported impedance modes
-COMPLIANCE_MODES = {"fixed", "variable_stiffness", "variable_stiffness_and_p_gains", "virtual_force"}
+COMPLIANCE_MODES = {"fixed", "variable_kp", "variable_kp_and_p_gains", "virtual_force"}
 
 
 class ForwardDynamicsComplianceController(Controller):
@@ -60,8 +60,8 @@ class ForwardDynamicsComplianceController(Controller):
 
         compliance_mode (str): Mode of compliance control. One of:
             :`'fixed'`: Fixed stiffness values
-            :`'variable_stiffness'`: Variable diagonal stiffness matrix
-            :`'variable_stiffness_and_p_gains'`: Variable stiffness and P gains
+            :`'variable_kp'`: Variable diagonal stiffness matrix
+            :`'variable_kp_and_p_gains'`: Variable stiffness and P gains
 
         policy_freq (int): Control policy frequency in Hz (default: 20)
 
@@ -212,9 +212,9 @@ class ForwardDynamicsComplianceController(Controller):
         self.stiffness_max = self.nums2array(stiffness_limits[1], self.control_pose_dim)
 
         # Add to control dim based on compliance_mode
-        if self.compliance_mode == "variable_stiffness":
+        if self.compliance_mode == "variable_kp":
             self.control_dim += self.control_pose_dim
-        elif self.compliance_mode == "variable_stiffness_and_p_gains":
+        elif self.compliance_mode == "variable_kp_and_p_gains":
             self.control_dim += 12
         elif self.compliance_mode == "virtual_force":
             self.control_dim += 6  # + force/torque
@@ -280,8 +280,8 @@ class ForwardDynamicsComplianceController(Controller):
         Args:
             action (np.array): Control action array with format depending on compliance_mode:
                 - 'fixed': [delta_pose (6), desired_wrench (6)]
-                - 'variable_stiffness': [delta_pose (6), desired_wrench (6), stiffness (6)]
-                - 'variable_stiffness_and_p_gains': [delta_pose (6), desired_wrench (6), stiffness (6), kp (6)]
+                - 'variable_kp': [delta_pose (6), desired_wrench (6), stiffness (6)]
+                - 'variable_kp_and_p_gains': [delta_pose (6), desired_wrench (6), stiffness (6), kp (6)]
 
             set_pos (np.array, optional): If provided, directly sets the absolute goal position, overriding action
             set_ori (np.array, optional): If provided, directly sets the absolute goal orientation as a rotation matrix
@@ -294,10 +294,10 @@ class ForwardDynamicsComplianceController(Controller):
         # Update state
         self.update()
 
-        if self.compliance_mode == "variable_stiffness":
+        if self.compliance_mode == "variable_kp":
             delta, stiffness = action[:self.control_pose_dim], action[self.control_pose_dim:]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
-        elif self.compliance_mode == "variable_stiffness_and_p_gains":
+        elif self.compliance_mode == "variable_kp_and_p_gains":
             delta, stiffness, kp = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:18]
             self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
@@ -611,10 +611,10 @@ class ForwardDynamicsComplianceController(Controller):
                 - (np.array) minimum action values
                 - (np.array) maximum action values
         """
-        if self.compliance_mode == "variable_stiffness":
+        if self.compliance_mode == "variable_kp":
             low = np.concatenate([self.input_min, self.stiffness_min])
             high = np.concatenate([self.input_max, self.stiffness_max])
-        elif self.compliance_mode == "variable_stiffness_p_gains":
+        elif self.compliance_mode == "variable_kp_p_gains":
             low = np.concatenate([self.input_min,  self.stiffness_min, self.kp_min])
             high = np.concatenate([self.input_max, self.stiffness_max, self.kp_max])
         elif self.compliance_mode == "virtual_force":

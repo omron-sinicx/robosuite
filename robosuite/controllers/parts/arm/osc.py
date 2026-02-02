@@ -178,14 +178,14 @@ class OperationalSpaceController(Controller):
         self.output_min = self.nums2array(output_min, self.control_dim)
 
         # kp kd
-        self.kp = self.nums2array(kp, 6)
+        self.kp = self.nums2array(kp, self.control_dim)
         self.kd = 2 * np.sqrt(self.kp) * damping_ratio
 
         # kp and kd limits
-        self.kp_min = self.nums2array(kp_limits[0], 6)
-        self.kp_max = self.nums2array(kp_limits[1], 6)
-        self.damping_ratio_min = self.nums2array(damping_ratio_limits[0], 6)
-        self.damping_ratio_max = self.nums2array(damping_ratio_limits[1], 6)
+        self.kp_min = self.nums2array(kp_limits[0], self.control_dim)
+        self.kp_max = self.nums2array(kp_limits[1], self.control_dim)
+        self.damping_ratio_min = self.nums2array(damping_ratio_limits[0], self.control_dim)
+        self.damping_ratio_max = self.nums2array(damping_ratio_limits[1], self.control_dim)
 
         # Verify the proposed impedance mode is supported
         assert impedance_mode in IMPEDANCE_MODES, (
@@ -249,11 +249,11 @@ class OperationalSpaceController(Controller):
 
         # Parse action based on the impedance mode, and update kp / kd as necessary
         if self.impedance_mode == "variable":
-            damping_ratio, kp, goal_update = action[:6], action[6:12], action[12:]
+            goal_update, damping_ratio, kp = action[:6], action[6:12], action[12:]
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
             self.kd = 2 * np.sqrt(self.kp) * np.clip(damping_ratio, self.damping_ratio_min, self.damping_ratio_max)
         elif self.impedance_mode == "variable_kp":
-            kp, goal_update = action[:6], action[6:]
+            goal_update, kp = action[:6], action[6:]
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
             self.kd = 2 * np.sqrt(self.kp)  # critically damped
         else:  # This is case "fixed"
@@ -556,11 +556,11 @@ class OperationalSpaceController(Controller):
                 - (np.array) maximum action values
         """
         if self.impedance_mode == "variable":
-            low = np.concatenate([self.damping_ratio_min, self.kp_min, self.input_min])
-            high = np.concatenate([self.damping_ratio_max, self.kp_max, self.input_max])
+            low = np.concatenate([self.input_min, self.damping_ratio_min, self.kp_min])
+            high = np.concatenate([self.input_max, self.damping_ratio_max, self.kp_max])
         elif self.impedance_mode == "variable_kp":
-            low = np.concatenate([self.kp_min, self.input_min])
-            high = np.concatenate([self.kp_max, self.input_max])
+            low = np.concatenate([self.input_min, self.kp_min])
+            high = np.concatenate([self.input_max, self.kp_max])
         else:  # This is case "fixed"
             low, high = self.input_min, self.input_max
         return low, high
