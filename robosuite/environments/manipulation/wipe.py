@@ -654,6 +654,18 @@ class Wipe(ManipulationEnv):
                 )
                 return total_force_ee
 
+            # proprioceptive features
+            @sensor(modality=modality)
+            def force_direction(obs_cache):
+                default_direction = np.array([0.0, 0.0, -1.0])  # Z-down TODO: what is the right direction?
+                eps = 1e-6
+                f = np.array(self.robots[0].recent_ee_forcetorques['right'].current[:3])
+                if np.linalg.norm(f) > eps:
+                    force_direction = f / np.linalg.norm(f)
+                else:
+                    force_direction = default_direction
+                return force_direction
+
             # task progress
             @sensor(modality=modality)
             def task_progress(obs_cache):
@@ -661,6 +673,8 @@ class Wipe(ManipulationEnv):
 
             sensors.append(force_norm)
             names.append("force_norm")
+            sensors.append(force_direction)
+            names.append("force_direction")
             sensors.append(task_progress)
             names.append("task_progress")
 
