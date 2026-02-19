@@ -275,8 +275,8 @@ class GamePad(Device):
         Returns:
             dict: A dictionary containing dpos, orn, unmodified orn, grasp, and reset
         """
-        dpos = self.control[:3] * 0.05 * self.pos_sensitivity
-        roll, pitch, yaw = self.control[3:] * 0.05 * self.rot_sensitivity
+        dpos = self.control[:3] * self.pos_sensitivity
+        roll, pitch, yaw = self.control[3:] * self.rot_sensitivity
 
         # convert RPY to an absolute orientation
         drot1 = rotation_matrix(angle=-pitch, direction=[1.0, 0, 0], point=None)[:3, :3]

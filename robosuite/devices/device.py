@@ -186,7 +186,7 @@ class Device(metaclass=abc.ABCMeta):
         return ac_dict
 
     def get_arm_action(self, robot, arm, norm_delta, goal_update_mode="target"):
-        assert np.all(norm_delta <= 1.0) and np.all(norm_delta >= -1.0)
+        norm_delta = np.clip(norm_delta, -1, 1)
 
         assert goal_update_mode in [
             "achieved",
@@ -201,8 +201,6 @@ class Device(metaclass=abc.ABCMeta):
             )
 
             delta_action = norm_delta.copy()
-            delta_action[0:3] *= 0.05
-            delta_action[3:6] *= 0.15
 
             # general case
             if goal_update_mode == "achieved" or self._prev_target[arm] is None:
@@ -276,7 +274,9 @@ def get_arm_action_simple(robot, arm, norm_delta):
     if isinstance(robot.part_controllers[arm], (OperationalSpaceController, ForwardDynamicsComplianceController)):
         arm_controller = robot.part_controllers[arm]
         sl = 6 if arm_controller.use_ori else 3
-        delta_action = arm_controller.scale_action(norm_delta[:sl])
+        delta_action = norm_delta[:sl].copy()
+        # dont scale here
+        # delta_action = arm_controller.scale_action(norm_delta[:sl])
         abs_action = arm_controller.delta_to_abs_action(delta_action[:sl], goal_update_mode=None)
         return {
             "delta": delta_action[:sl],
