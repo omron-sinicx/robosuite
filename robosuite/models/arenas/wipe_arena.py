@@ -32,6 +32,7 @@ class WipeArena(TableArena):
         line_width=0.02,
         two_clusters=False,
         dirt_texture="Dirt",
+        center_offset_range=0.10,
     ):
         # Tactile table-specific features
         self.table_friction_std = table_friction_std
@@ -41,7 +42,7 @@ class WipeArena(TableArena):
         self.num_markers = num_markers
         self.two_clusters = two_clusters
         self.dirt_texture = dirt_texture
-
+        self.center_offset_range = center_offset_range
         # Attribute to hold current direction of sampled dirt path
         self.direction = None
 
@@ -113,7 +114,11 @@ class WipeArena(TableArena):
         """
         # Sample new initial position and direction for generated marker paths
         if not deterministic:
+            center_offset = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
             pos = self.sample_start_pos()
+            if self.two_clusters:
+                center_offset2 = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
+                pos2 = self.sample_start_pos()
 
         # Loop through all visual markers
         for i, marker in enumerate(self.markers):
@@ -130,9 +135,10 @@ class WipeArena(TableArena):
             if not deterministic:
                 # If we're using two clusters, we resample the starting position and direction at the halfway point
                 if self.two_clusters and i == int(np.floor(self.num_markers / 2)):
-                    pos = self.sample_start_pos()
+                    pos = pos2.copy()
+                    center_offset = center_offset2.copy()
                 # Determine new position for this marker
-                position = np.array([pos[0], pos[1], self.table_half_size[2]])
+                position = np.array([pos[0] + center_offset[0], pos[1] + center_offset[1], self.table_half_size[2]])
                 sim.model.body_pos[body_id] = position
                 # Sample next values in local marker trajectory
                 pos = self.sample_path_pos(pos)

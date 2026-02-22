@@ -6,6 +6,7 @@ from robosuite.utils import transform_utils as T
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import WipeArena
 from robosuite.models.tasks import ManipulationTask
+from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.observables import Observable, sensor
 
 # Default Wipe environment configuration
@@ -28,6 +29,7 @@ DEFAULT_WIPE_CONFIG = {
     "line_width": 0.04,  # Width of the line to wipe (diameter of the pegs)
     "two_clusters": False,  # if the dirt to wipe is one continuous line or two
     "coverage_factor": 0.6,  # how much of the table surface we cover
+    "center_offset_range": 0.10,  # range of the center offset for the dirt
     "num_markers": 100,  # How many particles of dirt to generate in the environment
     "marker_pressure_threshold": 0.0,  # maximum force allowed (N)
     "randomize_dirt_threshold": False,  # whether to randomize the dirt threshold
@@ -42,6 +44,15 @@ DEFAULT_WIPE_CONFIG = {
     "use_contact_obs": True,  # if we use a binary observation for whether robot is in contact or not
     "early_terminations": True,  # Whether we allow for early terminations or not
     "use_condensed_obj_obs": True,  # Whether to use condensed object observation representation (only applicable if obj obs is active)
+
+    # Start pose settings
+    "init_qpos": [-0.47, -1.735, 2.48, -2.275, -1.59, -1.991],
+    "initial_pos": [-0.07103, -0.02465,  1.09657],
+    "initial_rot": [[0.04936,  0.99776, -0.04505],
+                    [0.99878, -0.04935,  0.00135],
+                    [-0.00088, -0.04506, -0.99898]],
+    "randomize_initial_pose": False,
+    "randomize_initial_pose_range": [0.05, 0.05, 0.1],
 }
 
 
@@ -242,6 +253,7 @@ class Wipe(ManipulationEnv):
         self.table_friction_std = self.task_config["table_friction_std"]
         self.line_width = self.task_config["line_width"]
         self.two_clusters = self.task_config["two_clusters"]
+        self.center_offset_range = self.task_config["center_offset_range"]
         self.coverage_factor = self.task_config["coverage_factor"]
         self.num_markers = self.task_config["num_markers"]
         self.marker_pressure_threshold = self.task_config["marker_pressure_threshold"]
@@ -274,6 +286,14 @@ class Wipe(ManipulationEnv):
 
         # whether to include and use ground-truth object states
         self.use_object_obs = use_object_obs
+
+        # Start pose settings
+        self.init_qpos = self.task_config["init_qpos"]
+        self.initial_pos = self.task_config["initial_pos"]
+        self.initial_rot = self.task_config["initial_rot"]
+        self.randomize_initial_pose = self.task_config["randomize_initial_pose"]
+        self.randomize_initial_pose_range = self.task_config["randomize_initial_pose_range"]
+        self.ik = None
 
         super().__init__(
             robots=robots,
@@ -562,6 +582,7 @@ class Wipe(ManipulationEnv):
             line_width=self.line_width,
             two_clusters=self.two_clusters,
             dirt_texture=self.marker_texture,
+            center_offset_range=self.center_offset_range,
         )
 
         # Arena always gets set to zero origin
@@ -571,6 +592,18 @@ class Wipe(ManipulationEnv):
         self.model = ManipulationTask(
             mujoco_arena=mujoco_arena,
             mujoco_robots=[robot.robot_model for robot in self.robots],
+        )
+
+        # Initialize IK solver
+        self.ik = MuJoCoIKSolver(
+            self.model.get_xml(),
+            self._xml_processors,
+            "gripper0_right_grip_site",
+            joint_indexes=np.arange(6),
+            position_threshold=0.0001,
+            rotation_threshold=0.0001,
+            time_limit=0.5,
+            base_body_name="robot0_base"
         )
 
     def _setup_observables(self):
@@ -729,6 +762,20 @@ class Wipe(ManipulationEnv):
         return sensors, names
 
     def _reset_internal(self):
+
+        if not self.deterministic_reset and self.randomize_initial_pose:
+            x_random = np.random.uniform(low=-self.randomize_initial_pose_range[0], high=self.randomize_initial_pose_range[0])
+            y_random = np.random.uniform(low=-self.randomize_initial_pose_range[1], high=self.randomize_initial_pose_range[1])
+            z_random = np.random.uniform(low=0, high=self.randomize_initial_pose_range[2])
+            initial_pos = [self.initial_pos[0] + x_random, self.initial_pos[1] + y_random, self.initial_pos[2] + z_random]
+            result = self.ik.solve_ik(target_pos=initial_pos,
+                                      target_rot=self.initial_rot,
+                                      initial_guess=self.init_qpos)
+            if result.success:
+                self.robots[0].init_qpos = result.joint_angles
+            else:
+                print("IK failed, using default init_qpos")
+                self.robots[0].init_qpos = self.init_qpos
         super()._reset_internal()
 
         # inherited class should reset positions of objects (only if we're not using a deterministic reset)
@@ -766,26 +813,30 @@ class Wipe(ManipulationEnv):
         """
 
         terminated = False
+        reason = ""
 
         # Prematurely terminate if contacting the table with the arm
         if self.check_contact(self.robots[0].robot_model):
             if self.print_results:
                 print(40 * "-" + " COLLIDED " + 40 * "-")
+            reason = "COLLIDED"
             terminated = True
 
         # Prematurely terminate if task is success
         if self._check_success():
             if self.print_results:
                 print(40 * "+" + " FINISHED WIPING " + 40 * "+")
+            reason = "FINISHED WIPING"
             terminated = True
 
         # Prematurely terminate if contacting the table with the arm
         if self.robots[0].check_q_limits():
             if self.print_results:
                 print(40 * "-" + " JOINT LIMIT " + 40 * "-")
+            reason = "JOINT LIMIT"
             terminated = True
 
-        return terminated
+        return terminated, reason
 
     def _post_action(self, action):
         """
@@ -817,7 +868,12 @@ class Wipe(ManipulationEnv):
 
         # allow episode to finish early if allowed
         if self.early_terminations:
-            done = done or self._check_terminated()
+            terminated, reason = self._check_terminated()
+            if terminated:
+                info["termination_reason"] = reason
+            elif done:
+                info["termination_reason"] = "truncated"
+            done = done or terminated
 
         return reward, done, info
 
