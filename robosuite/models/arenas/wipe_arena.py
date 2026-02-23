@@ -114,10 +114,16 @@ class WipeArena(TableArena):
         """
         # Sample new initial position and direction for generated marker paths
         if not deterministic:
-            center_offset = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
+            if self.center_offset_range > 0:
+                center_offset = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
+            else:
+                center_offset = [0, 0]
             pos = self.sample_start_pos()
             if self.two_clusters:
-                center_offset2 = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
+                if self.center_offset_range > 0:
+                    center_offset2 = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
+                else:
+                    center_offset2 = [0, 0]
                 pos2 = self.sample_start_pos()
 
         # Loop through all visual markers

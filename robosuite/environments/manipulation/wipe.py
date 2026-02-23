@@ -29,7 +29,7 @@ DEFAULT_WIPE_CONFIG = {
     "line_width": 0.04,  # Width of the line to wipe (diameter of the pegs)
     "two_clusters": False,  # if the dirt to wipe is one continuous line or two
     "coverage_factor": 0.6,  # how much of the table surface we cover
-    "center_offset_range": 0.10,  # range of the center offset for the dirt
+    "center_offset_range": 0.0,  # range of the center offset for the dirt
     "num_markers": 100,  # How many particles of dirt to generate in the environment
     "marker_pressure_threshold": 0.0,  # maximum force allowed (N)
     "randomize_dirt_threshold": False,  # whether to randomize the dirt threshold
@@ -220,7 +220,13 @@ class Wipe(ManipulationEnv):
         ), "Tried to specify gripper other than WipingGripper in Wipe environment!"
 
         # Get config
-        self.task_config = task_config if task_config is not None else DEFAULT_WIPE_CONFIG
+        if task_config is None:
+            self.task_config = DEFAULT_WIPE_CONFIG
+        else:
+            # Copy to avoid mutating the input
+            merged_config = DEFAULT_WIPE_CONFIG.copy()
+            merged_config.update(task_config)
+            self.task_config = merged_config
 
         # Set task-specific parameters
 
