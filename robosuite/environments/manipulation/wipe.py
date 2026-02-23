@@ -1,12 +1,14 @@
 import multiprocessing
 from collections import OrderedDict
 
+import xml.etree.ElementTree as ET
 import numpy as np
 from robosuite.utils import transform_utils as T
 from robosuite.environments.manipulation.manipulation_env import ManipulationEnv
 from robosuite.models.arenas import WipeArena
 from robosuite.models.tasks import ManipulationTask
 from robosuite.utils.ik_solver import MuJoCoIKSolver
+from robosuite.utils.mjcf_utils import array_to_string
 from robosuite.utils.observables import Observable, sensor
 
 # Default Wipe environment configuration
@@ -53,6 +55,8 @@ DEFAULT_WIPE_CONFIG = {
                     [-0.00088, -0.04506, -0.99898]],
     "randomize_initial_pose": False,
     "randomize_initial_pose_range": [0.05, 0.05, 0.1],
+    "camera_eye_in_hand_pos": [0.05, 0, 0],
+    "camera_eye_in_hand_fovy": 75,
 }
 
 
@@ -300,6 +304,10 @@ class Wipe(ManipulationEnv):
         self.randomize_initial_pose = self.task_config["randomize_initial_pose"]
         self.randomize_initial_pose_range = self.task_config["randomize_initial_pose_range"]
         self.ik = None
+
+        # camera settings
+        self.camera_eye_in_hand_pos = self.task_config["camera_eye_in_hand_pos"]
+        self.camera_eye_in_hand_fovy = self.task_config["camera_eye_in_hand_fovy"]
 
         super().__init__(
             robots=robots,
@@ -565,6 +573,16 @@ class Wipe(ManipulationEnv):
         Loads an xml model, puts it in self.model
         """
         super()._load_model()
+
+        robot_model_root: ET.Element = self.robots[0].robot_model.root
+        # Find camera at any depth: .// = descendant-or-self, then filter by name
+        # Before merge the name is "eye_in_hand"; after merge it becomes "robot0_eye_in_hand"
+        robot_camera = robot_model_root.find(".//camera[@name='robot0_eye_in_hand']")
+
+        robot_camera.set("pos", array_to_string(self.camera_eye_in_hand_pos))
+        robot_camera.set("fovy", str(self.camera_eye_in_hand_fovy))
+        # print(ET.tostring(robot_camera, encoding='unicode'))
+        # input("Press Enter to continue")
 
         # Adjust base pose accordingly
         xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
