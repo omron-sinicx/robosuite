@@ -1,5 +1,4 @@
 # required for GymWrapper
-gym
 gymnasium
 
 # macOS only
@@ -20,4 +19,3 @@ robosuite-models==1.0.0
 # required for gamepad
 inputs
 numpy-quaternion
-numpy==1.25.2
