@@ -897,6 +897,7 @@ class Wipe(ManipulationEnv):
                 info["termination_reason"] = reason
             elif done:
                 info["termination_reason"] = "truncated"
+            info["task_progress"] = len(self.wiped_markers) / self.num_markers
             done = done or terminated
 
         return reward, done, info
