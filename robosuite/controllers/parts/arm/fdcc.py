@@ -18,7 +18,7 @@ except ImportError:
 
 
 # Supported impedance modes
-COMPLIANCE_MODES = {"fixed", "variable_kp", "variable_kp_and_p_gains", "virtual_force"}
+COMPLIANCE_MODES = {"fixed", "variable_kp", "variable_kp_and_p_gains", "virtual_force", "kp_and_virtual_force"}
 
 
 class ForwardDynamicsComplianceController(Controller):
@@ -222,6 +222,12 @@ class ForwardDynamicsComplianceController(Controller):
             self.force_max = self.nums2array(force_limits[1], 3)
             self.torque_min = self.nums2array(torque_limits[0], 3)
             self.torque_max = self.nums2array(torque_limits[1], 3)
+        elif self.compliance_mode == "kp_and_virtual_force":
+            self.control_dim += 12
+            self.force_min = self.nums2array(force_limits[0], 3)
+            self.force_max = self.nums2array(force_limits[1], 3)
+            self.torque_min = self.nums2array(torque_limits[0], 3)
+            self.torque_max = self.nums2array(torque_limits[1], 3)
 
         self.kp = self.nums2array(kp, 6)
         self.kd = self.nums2array(kd, 6)
@@ -303,6 +309,12 @@ class ForwardDynamicsComplianceController(Controller):
             self.kp = np.clip(kp, self.kp_min, self.kp_max)
         elif self.compliance_mode == "virtual_force":
             delta, desired_ft = action[:self.control_pose_dim], action[self.control_pose_dim:]
+            desired_ft[:3] = np.clip(desired_ft[:3], self.force_min, self.force_max)
+            desired_ft[3:] = np.clip(desired_ft[3:], self.torque_min, self.torque_max)
+            self.desired_force_torque = desired_ft
+        elif self.compliance_mode == "kp_and_virtual_force":
+            delta, stiffness, desired_ft = action[:self.control_pose_dim], action[self.control_pose_dim:12], action[12:]
+            self.stiffness = np.clip(stiffness, self.stiffness_min, self.stiffness_max)
             desired_ft[:3] = np.clip(desired_ft[:3], self.force_min, self.force_max)
             desired_ft[3:] = np.clip(desired_ft[3:], self.torque_min, self.torque_max)
             self.desired_force_torque = desired_ft
@@ -555,6 +567,7 @@ class ForwardDynamicsComplianceController(Controller):
         self.fixed_goal_ori = np.array(self.ref_ori_mat)
 
         self.virtual_force = np.zeros(6)
+        self.desired_force_torque = np.zeros(6)
 
         # Also reset interpolators if required
 
@@ -620,6 +633,9 @@ class ForwardDynamicsComplianceController(Controller):
         elif self.compliance_mode == "virtual_force":
             low = np.concatenate([self.input_min, self.force_min, self.torque_min])
             high = np.concatenate([self.input_max, self.force_max, self.torque_max])
+        elif self.compliance_mode == "kp_and_virtual_force":
+            low = np.concatenate([self.input_min, self.stiffness_min, self.force_min, self.torque_min])
+            high = np.concatenate([self.input_max, self.stiffness_max, self.force_max, self.torque_max])
         else:  # This is case "fixed"
             low, high = self.input_min, self.input_max
         return low, high

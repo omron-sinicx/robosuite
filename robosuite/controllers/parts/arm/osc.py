@@ -371,10 +371,10 @@ class OperationalSpaceController(Controller):
         quat_error = T.axisangle2quat(delta)
         rotation_mat_error = T.quat2mat(quat_error)
 
-        if self._goal_update_mode == "desired":
+        if goal_update_mode == "desired":
             # update new goal wrt current desired goal
             goal_ori = np.dot(rotation_mat_error, self.goal_ori)
-        elif self._goal_update_mode == "achieved":
+        elif goal_update_mode == "achieved":
             # update new goal wrt current achieved orientation
             if self.input_ref_frame == "base":
                 curr_goal_ori = self.goal_origin_to_eef_pose()[:3, :3]
