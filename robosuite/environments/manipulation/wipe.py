@@ -11,6 +11,10 @@ from robosuite.utils.ik_solver import MuJoCoIKSolver
 from robosuite.utils.mjcf_utils import array_to_string
 from robosuite.utils.observables import Observable, sensor
 
+
+import logging
+logger = logging.getLogger(__name__)
+
 # Default Wipe environment configuration
 DEFAULT_WIPE_CONFIG = {
     # settings for reward
@@ -39,6 +43,8 @@ DEFAULT_WIPE_CONFIG = {
     "contact_threshold": 1.0,  # Minimum eef force to qualify as contact [N]
     "pressure_threshold": 0.5,  # force threshold (N) to overcome to get increased contact wiping reward
     "pressure_threshold_max": 60.0,  # maximum force allowed (N)
+    "eval_marker_pressure_threshold": None,  # maximum force allowed (N) for evaluation
+
     # misc settings
     "print_results": False,  # Whether to print results or not
     "get_info": False,  # Whether to grab info after each env step if not
@@ -267,6 +273,7 @@ class Wipe(ManipulationEnv):
         self.coverage_factor = self.task_config["coverage_factor"]
         self.num_markers = self.task_config["num_markers"]
         self.marker_pressure_threshold = self.task_config["marker_pressure_threshold"]
+        self.eval_marker_pressure_threshold = self.task_config["eval_marker_pressure_threshold"]
         self.randomize_dirt_threshold = self.task_config["randomize_dirt_threshold"]
 
         # settings for thresholds
@@ -370,6 +377,8 @@ class Wipe(ManipulationEnv):
         corner4_id = self.sim.model.geom_name2id(c_geoms[3])
         corner4_pos = np.array(self.sim.data.geom_xpos[corner4_id])
 
+        marker_pressure_threshold = self.eval_marker_pressure_threshold if self.eval_marker_pressure_threshold is not None else self.marker_pressure_threshold
+
         # Unit vectors on my plane
         v1 = corner1_pos - corner2_pos
         v1 /= np.linalg.norm(v1)
@@ -424,7 +433,7 @@ class Wipe(ManipulationEnv):
                         )
                         # Check if marker is within the tool center:
                         if PointInRectangle(pp[0], pp[1], pp[2], pp[3], pp_2):
-                            if total_force_ee > self.marker_pressure_threshold:
+                            if total_force_ee > marker_pressure_threshold:
                                 active_markers.append(marker)
         return active_markers
 
@@ -558,7 +567,7 @@ class Wipe(ManipulationEnv):
                     fe=self.f_excess,
                 )
             )
-            print(string_to_print)
+            logger.info(string_to_print)
 
         # If we're scaling our reward, we normalize the per-step rewards given the theoretical best episode return
         # This is equivalent to scaling the reward by:
@@ -581,7 +590,7 @@ class Wipe(ManipulationEnv):
 
         robot_camera.set("pos", array_to_string(self.camera_eye_in_hand_pos))
         robot_camera.set("fovy", str(self.camera_eye_in_hand_fovy))
-        # print(ET.tostring(robot_camera, encoding='unicode'))
+        # logger.info(ET.tostring(robot_camera, encoding='unicode'))
         # input("Press Enter to continue")
 
         # Adjust base pose accordingly
@@ -798,7 +807,7 @@ class Wipe(ManipulationEnv):
             if result.success:
                 self.robots[0].init_qpos = result.joint_angles
             else:
-                print("IK failed, using default init_qpos")
+                logger.info("IK failed, using default init_qpos")
                 self.robots[0].init_qpos = self.init_qpos
         super()._reset_internal()
 
@@ -842,21 +851,21 @@ class Wipe(ManipulationEnv):
         # Prematurely terminate if contacting the table with the arm
         if self.check_contact(self.robots[0].robot_model):
             if self.print_results:
-                print(40 * "-" + " COLLIDED " + 40 * "-")
+                logger.info(40 * "-" + " COLLIDED " + 40 * "-")
             reason = "COLLIDED"
             terminated = True
 
         # Prematurely terminate if task is success
         if self._check_success():
             if self.print_results:
-                print(40 * "+" + " FINISHED WIPING " + 40 * "+")
+                logger.info(40 * "+" + " FINISHED WIPING " + 40 * "+")
             reason = "FINISHED WIPING"
             terminated = True
 
         # Prematurely terminate if contacting the table with the arm
         if self.robots[0].check_q_limits():
             if self.print_results:
-                print(40 * "-" + " JOINT LIMIT " + 40 * "-")
+                logger.info(40 * "-" + " JOINT LIMIT " + 40 * "-")
             reason = "JOINT LIMIT"
             terminated = True
 
@@ -956,7 +965,7 @@ class Wipe(ManipulationEnv):
             self.marker_texture = "Dirt"
         else:
             self.marker_texture = "WoodDark"
-        print(f"marker_texture: {self.marker_texture} {self.marker_pressure_threshold}")
+        logger.info(f"marker_texture: {self.marker_texture} {self.marker_pressure_threshold}")
 
     @property
     def _has_gripper_contact(self):
