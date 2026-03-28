@@ -33,6 +33,7 @@ class WipeArena(TableArena):
         two_clusters=False,
         dirt_texture="Dirt",
         center_offset_range=0.10,
+        center_offset=(0, 0),
     ):
         # Tactile table-specific features
         self.table_friction_std = table_friction_std
@@ -43,6 +44,8 @@ class WipeArena(TableArena):
         self.two_clusters = two_clusters
         self.dirt_texture = dirt_texture
         self.center_offset_range = center_offset_range
+        self.center_offset = np.array(center_offset)
+
         # Attribute to hold current direction of sampled dirt path
         self.direction = None
 
@@ -118,12 +121,14 @@ class WipeArena(TableArena):
                 center_offset = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
             else:
                 center_offset = [0, 0]
+            center_offset += self.center_offset
             pos = self.sample_start_pos()
             if self.two_clusters:
                 if self.center_offset_range > 0:
                     center_offset2 = [np.random.uniform(-self.center_offset_range, self.center_offset_range), np.random.uniform(-self.center_offset_range, self.center_offset_range)]
                 else:
                     center_offset2 = [0, 0]
+                    center_offset2 += self.center_offset
                 pos2 = self.sample_start_pos()
 
         # Loop through all visual markers

@@ -36,6 +36,7 @@ DEFAULT_WIPE_CONFIG = {
     "two_clusters": False,  # if the dirt to wipe is one continuous line or two
     "coverage_factor": 0.6,  # how much of the table surface we cover
     "center_offset_range": 0.0,  # range of the center offset for the dirt
+    "center_offset": [0.0, 0.0],  # center offset for the dirt
     "num_markers": 100,  # How many particles of dirt to generate in the environment
     "marker_pressure_threshold": 0.0,  # maximum force allowed (N)
     "randomize_dirt_threshold": False,  # whether to randomize the dirt threshold
@@ -270,6 +271,7 @@ class Wipe(ManipulationEnv):
         self.line_width = self.task_config["line_width"]
         self.two_clusters = self.task_config["two_clusters"]
         self.center_offset_range = self.task_config["center_offset_range"]
+        self.center_offset = self.task_config["center_offset"]
         self.coverage_factor = self.task_config["coverage_factor"]
         self.num_markers = self.task_config["num_markers"]
         self.marker_pressure_threshold = self.task_config["marker_pressure_threshold"]
@@ -616,6 +618,7 @@ class Wipe(ManipulationEnv):
             two_clusters=self.two_clusters,
             dirt_texture=self.marker_texture,
             center_offset_range=self.center_offset_range,
+            center_offset=self.center_offset,
         )
 
         # Arena always gets set to zero origin
@@ -965,7 +968,7 @@ class Wipe(ManipulationEnv):
             self.marker_texture = "Dirt"
         else:
             self.marker_texture = "WoodDark"
-        logger.info(f"marker_texture: {self.marker_texture} {self.marker_pressure_threshold}")
+        print(f"marker_texture: {self.marker_texture} {self.marker_pressure_threshold}")
 
     @property
     def _has_gripper_contact(self):
