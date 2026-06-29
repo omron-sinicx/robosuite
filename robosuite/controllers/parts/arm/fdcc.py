@@ -492,12 +492,22 @@ class ForwardDynamicsComplianceController(Controller):
 
     def compute_force_error(self):
         """
-        Computes the wrench error between desired and measured forces/torques.
+        Computes the wrench error between desired and measured forces/torques
+        in the robot base frame.
 
         Returns:
-            np.array: 6D wrench error vector [force_error (3), torque_error (3)]
+            np.array: 6D wrench error vector [force_error (3), torque_error (3)] in base frame
         """
-        return self.desired_force_torque - self.eef_wrench
+        eef_to_base = self.pose_in_base_from_name(f"{self.ft_prefix}_eef")[:3, :3]
+
+        if self.frame_of_reference == "eef":
+            desired_wrench_base = T.rotate_by_transformation(self.desired_force_torque, eef_to_base)
+        elif self.frame_of_reference == "robot_base":
+            desired_wrench_base = self.desired_force_torque
+        else:
+            raise ValueError("Unsupported frame of reference. Only 'eef' and 'robot_base' are supported.")
+
+        return desired_wrench_base - self.base_wrench
 
     def compute_compliance_error(self):
         """

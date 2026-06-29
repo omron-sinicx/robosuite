@@ -260,11 +260,11 @@ class Controller(object, metaclass=abc.ABCMeta):
                                                  self.gripper_inertial_properties['local_com'],
                                                  self.gripper_inertial_properties['world_rot_mat'],
                                                  self.sim.model._model.opt.gravity)
-        world_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], world_pose)
-        base_wrench_force = T.force_in_A_to_force_in_B(wrench_force[:3], wrench_force[3:], gripper_in_robot_base)
+        world_wrench_force = T.convert_wrench_to_frame(wrench_force, world_pose)
+        base_wrench_force = T.convert_wrench_to_frame(wrench_force, gripper_in_robot_base)
 
-        self.wrench_in_base_frame_buf.push(np.concatenate(base_wrench_force).flat)
-        self.wrench_in_world_frame_buf.push(np.concatenate(world_wrench_force).flat)
+        self.wrench_in_base_frame_buf.push(base_wrench_force)
+        self.wrench_in_world_frame_buf.push(world_wrench_force)
         self.wrench_in_eef_frame_buf.push(wrench_force)
 
     def get_wrench(self):

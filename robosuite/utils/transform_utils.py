@@ -660,6 +660,14 @@ def force_in_A_to_force_in_B(force_A, torque_A, pose_A_in_B):
     return force_B, torque_B
 
 
+def convert_wrench_to_frame(wrench_force, transform_matrix):
+    # # # Wrench force transformation
+    wFtS = force_frame_transform(transform_matrix)
+    transformed_wrench = np.dot(wFtS, wrench_force)
+
+    return transformed_wrench
+
+
 def rotation_matrix(angle, direction, point=None):
     """
     Returns matrix to rotate about axis defined by point and direction.
