@@ -1,7 +1,7 @@
 <mujoco model="wiping_hand">
     <worldbody>
         <body name="wiping_gripper" pos="0 0 0.015" quat="0.707107 0 0 -0.707107" >
-            <site name="ft_frame" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1"/>
+            <site name="ft_frame" pos="0 0 0" quat="0 0 1 0" size="0.01 0.01 0.01" rgba="1 0 0 1" type="sphere" group="1"/>
             <inertial pos="0 0 0" mass="3e-2" diaginertia="1e-2 1e-2 1e-2"/>
 
             <geom type="box" pos="0 0 0.0" size="0.06 0.025 0.015" name="wiping_surface_vis" contype="0" conaffinity="0" group="1" rgba="0.25 0.25 0.25 1" />
@@ -54,9 +54,9 @@
             <!-- This site was added for visualization. -->
             <body name="eef" pos="0 0 0.015" quat="1 0 0 0">
                 <site name="grip_site" pos="0 0 0" size="0.01 0.01 0.01" rgba="1 0 0 0.5" type="sphere" group="1"/>
-                <site name="ee_x" pos="0.1 0 0" size="0.005 .1"  quat="0.707105  0 0.707108 0 " rgba="1 0 0 0" type="cylinder" group="1"/>
-                <site name="ee_y" pos="0 0.1 0" size="0.005 .1" quat="0.707105 0.707108 0 0" rgba="0 1 0 0" type="cylinder" group="1"/>
-                <site name="ee_z" pos="0 0 0.1" size="0.005 .1" quat="1 0 0 0" rgba="0 0 1 0" type="cylinder" group="1"/>
+                <site name="ee_x" pos="0.1 0 0" size="0.005 .1"  quat="0.707105  0 0.707108 0 " rgba="1 0 0 1" type="cylinder" group="1"/>
+                <site name="ee_y" pos="0 0.1 0" size="0.005 .1" quat="0.707105 0.707108 0 0" rgba="0 1 0 1" type="cylinder" group="1"/>
+                <site name="ee_z" pos="0 0 0.1" size="0.005 .1" quat="1 0 0 0" rgba="0 0 1 1" type="cylinder" group="1"/>
                 <!-- This site was added for visualization. -->
                 <site name="grip_site_cylinder" pos="0 0 0" size="0.005 10" rgba="0 1 0 0.0" type="cylinder" group="1"/>
             </body>
